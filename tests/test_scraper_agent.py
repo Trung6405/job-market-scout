@@ -28,3 +28,19 @@ def test_build_scraper_agent_outputs_listing_list():
     agent = build_scraper_agent(Settings())
 
     assert agent.output_schema == list[Listing]
+
+
+def test_build_scraper_agent_interpolates_search_settings_into_instruction():
+    settings = Settings(
+        search_roles=["backend engineer", "platform engineer"],
+        search_locations=["Sydney, AU", "Remote"],
+        results_wanted=15,
+        hours_old=48,
+    )
+
+    agent = build_scraper_agent(settings)
+
+    assert "backend engineer, platform engineer" in agent.instruction
+    assert "Sydney, AU, Remote" in agent.instruction
+    assert "15" in agent.instruction
+    assert "48" in agent.instruction
