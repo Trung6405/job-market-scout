@@ -1,0 +1,214 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/28.2.8 Chrome/140.0.7339.240 Electron/38.4.0 Safari/537.36" version="28.2.8" pages="3">
+  <diagram id="simple-arch" name="1. High-Level Architecture">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="1200" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="a_title" value="Job Market Scout — how the pieces fit together" style="text;html=1;align=center;verticalAlign=middle;fontSize=15;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="400" y="20" width="500" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="a_colh_agents" value="Agents (do the work)" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#666666;" parent="1" vertex="1">
+          <mxGeometry x="350" y="110" width="180" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="a_colh_modules" value="Modules (parts of the app)" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#666666;" parent="1" vertex="1">
+          <mxGeometry x="590" y="110" width="220" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="a_colh_ext" value="Outside services" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#666666;" parent="1" vertex="1">
+          <mxGeometry x="920" y="110" width="220" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="a_seeker" value="&lt;b&gt;Job Seeker&lt;/b&gt;&lt;br&gt;provides resume, roles, preferences" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" parent="1" vertex="1">
+          <mxGeometry x="60" y="160" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="a_scheduler" value="&lt;b&gt;Scheduler&lt;/b&gt;&lt;br&gt;runs it once a day&lt;br&gt;(planned)" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 8;strokeColor=#999999;fillColor=#f5f5f5;fontColor=#666666;" parent="1" vertex="1">
+          <mxGeometry x="60" y="300" width="180" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="a_app" value="&lt;b&gt;Scout App&lt;/b&gt; (runs in a Docker container)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;fontStyle=0;spacingTop=6;" parent="1" vertex="1">
+          <mxGeometry x="320" y="140" width="520" height="500" as="geometry" />
+        </mxCell>
+        <mxCell id="a_scraper" value="&lt;b&gt;🤖 Scraper&lt;/b&gt;&lt;br&gt;agent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=0;" parent="1" vertex="1">
+          <mxGeometry x="350" y="170" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_scorer" value="&lt;b&gt;🤖 Scorer&lt;/b&gt;&lt;br&gt;agent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=0;" parent="1" vertex="1">
+          <mxGeometry x="350" y="290" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_tracker" value="&lt;b&gt;🤖 Tracker&lt;/b&gt;&lt;br&gt;agent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=0;" parent="1" vertex="1">
+          <mxGeometry x="350" y="410" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_briefing" value="&lt;b&gt;🤖 Briefing&lt;/b&gt;&lt;br&gt;agent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=0;" parent="1" vertex="1">
+          <mxGeometry x="350" y="530" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_m_crawl" value="&lt;b&gt;Crawling module&lt;/b&gt;&lt;br&gt;gets job listings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="1" vertex="1">
+          <mxGeometry x="590" y="170" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_m_integ" value="&lt;b&gt;Integration module&lt;/b&gt;&lt;br&gt;calls the LLM (DeepSeek)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="1" vertex="1">
+          <mxGeometry x="590" y="290" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_m_store" value="&lt;b&gt;Storage module&lt;/b&gt;&lt;br&gt;saves &amp; reads jobs&lt;br&gt;(Scraper writes · Tracker reads)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="1" vertex="1">
+          <mxGeometry x="590" y="405" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="a_m_notif" value="&lt;b&gt;Notification module&lt;/b&gt;&lt;br&gt;builds &amp; sends the email" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="1" vertex="1">
+          <mxGeometry x="590" y="530" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_boards" value="&lt;b&gt;Job Boards + Web&lt;/b&gt;&lt;br&gt;LinkedIn, Seek, career pages" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" parent="1" vertex="1">
+          <mxGeometry x="920" y="170" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_deepseek" value="&lt;b&gt;DeepSeek AI&lt;/b&gt;&lt;br&gt;rates how well a job matches" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" parent="1" vertex="1">
+          <mxGeometry x="920" y="290" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_db" value="&lt;b&gt;PostgreSQL&lt;/b&gt;&lt;br&gt;stores all job data" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="950" y="395" width="160" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="a_gmail" value="&lt;b&gt;Gmail&lt;/b&gt;&lt;br&gt;delivers the daily email" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" parent="1" vertex="1">
+          <mxGeometry x="920" y="530" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_legend" value="&lt;b&gt;Legend&lt;/b&gt;&lt;br&gt;Solid = built · Dashed = planned&lt;br&gt;Green = agent (does the work)&lt;br&gt;Purple = module (part of the app)&lt;br&gt;Blue = our app / database&lt;br&gt;Orange = person · White = outside service" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;align=left;verticalAlign=top;fontSize=11;spacingLeft=6;" parent="1" vertex="1">
+          <mxGeometry x="40" y="430" width="250" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="a_p1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="a_scraper" target="a_scorer" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a_p2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="a_scorer" target="a_tracker" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a_p3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="a_tracker" target="a_briefing" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a_e_seeker" value="config" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" parent="1" source="a_seeker" target="a_app" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a_e_sched" value="triggers daily run" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;dashPattern=8 8;strokeColor=#999999;" parent="1" source="a_scheduler" target="a_app" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a_u1" value="uses" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="a_scraper" target="a_m_crawl" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a_u2" value="uses" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="a_scorer" target="a_m_integ" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a_u3" value="uses" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="a_tracker" target="a_m_store" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a_u4" value="uses" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="a_briefing" target="a_m_notif" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a_x1" value="fetch listings" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="a_m_crawl" target="a_boards" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a_x2" value="score match" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="a_m_integ" target="a_deepseek" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a_x3" value="read / write" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;startArrow=classic;startFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="a_m_store" target="a_db" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a_x4" value="send email" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="a_m_notif" target="a_gmail" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="simple-journey" name="2. User Journey (Daily Run)">
+    <mxGraphModel dx="1000" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="j_title" value="A day in the life — what happens on each daily run (top → bottom)" style="text;html=1;align=center;verticalAlign=middle;fontSize=15;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="250" y="20" width="500" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="j1" value="&lt;b&gt;1. Scheduler&lt;/b&gt; starts the daily run  (planned)" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 8;strokeColor=#999999;fillColor=#f5f5f5;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="330" y="70" width="360" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="j2" value="&lt;b&gt;2. Scraper&lt;/b&gt; finds new job listings  (Job Boards + Web)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="330" y="155" width="360" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="j3" value="&lt;b&gt;3.&lt;/b&gt; New listings are saved to the database  (duplicates skipped)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="330" y="240" width="360" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="j4" value="&lt;b&gt;4. Scorer&lt;/b&gt; rates each job against your resume  (DeepSeek)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="330" y="325" width="360" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="j5" value="&lt;b&gt;5. Tracker&lt;/b&gt; marks each job: new / changed / closed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="330" y="410" width="360" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="j6" value="&lt;b&gt;6. Briefing&lt;/b&gt; writes the summary and emails it  (Gmail)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="330" y="495" width="360" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="j7" value="&lt;b&gt;7. Job Seeker&lt;/b&gt; reads the daily briefing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="330" y="580" width="360" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="j_legend" value="&lt;b&gt;Legend&lt;/b&gt;  Solid = built · Dashed = planned · Blue = our app · Orange = person" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;align=left;fontSize=11;spacingLeft=6;" vertex="1" parent="1">
+          <mxGeometry x="330" y="665" width="360" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="j_e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="j1" target="j2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="j_e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="j2" target="j3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="j_e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="j3" target="j4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="j_e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="j4" target="j5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="j_e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="j5" target="j6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="j_e6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="j6" target="j7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="simple-deploy" name="3. Deployment">
+    <mxGraphModel dx="1306" dy="930" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="d_title" value="How the app gets built and where it runs" style="text;html=1;align=center;verticalAlign=middle;fontSize=15;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="300" y="20" width="500" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="d_github" value="&lt;b&gt;GitHub&lt;/b&gt;&lt;br&gt;source code" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" parent="1" vertex="1">
+          <mxGeometry x="70" y="120" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="d_actions" value="&lt;b&gt;GitHub Actions&lt;/b&gt;&lt;br&gt;builds &amp; deploys the image (CI/CD)&lt;br&gt;(planned)" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 8;strokeColor=#999999;fillColor=#f5f5f5;fontColor=#666666;" parent="1" vertex="1">
+          <mxGeometry x="70" y="250" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="d_scheduler" value="&lt;b&gt;Scheduler&lt;/b&gt;&lt;br&gt;triggers the daily run&lt;br&gt;(planned)" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 8;strokeColor=#999999;fillColor=#f5f5f5;fontColor=#666666;" parent="1" vertex="1">
+          <mxGeometry x="70" y="410" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="d_host" value="&lt;b&gt;Cloud host — Azure (planned)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 8;strokeColor=#999999;fillColor=#f5f5f5;fontColor=#666666;verticalAlign=top;spacingTop=6;" parent="1" vertex="1">
+          <mxGeometry x="440" y="100" width="500" height="440" as="geometry" />
+        </mxCell>
+        <mxCell id="d_container" value="&lt;b&gt;Docker container&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;spacingTop=6;" parent="1" vertex="1">
+          <mxGeometry x="480" y="156" width="420" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="d_app" value="&lt;b&gt;Scout App&lt;/b&gt;&lt;br&gt;the 4 agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="590" y="190" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="d_db" value="&lt;b&gt;PostgreSQL&lt;/b&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=default;strokeColor=#666666;fontColor=#333333;" parent="1" vertex="1">
+          <mxGeometry x="600" y="360" width="180" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="d_legend" value="&lt;b&gt;Legend&lt;/b&gt;&lt;br&gt;Solid = built (Dockerfile + code in repo)&lt;br&gt;Dashed = planned (CI, scheduler, host, and Postgres not set up yet)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;align=left;verticalAlign=top;fontSize=11;spacingLeft=6;" parent="1" vertex="1">
+          <mxGeometry x="70" y="560" width="540" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="d_appdb" value="reads / writes (SQL over network)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;startArrow=classic;startFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="d_app" target="d_db" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d_e1" value="push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" parent="1" source="d_github" target="d_actions" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d_e2" value="build &amp; deploy image" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;dashPattern=8 8;strokeColor=#999999;" parent="1" source="d_actions" target="d_container" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d_e3" value="triggers daily run" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;dashPattern=8 8;strokeColor=#999999;exitX=1.006;exitY=0.578;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.117;entryY=0.979;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="d_scheduler" target="d_container" edge="1">
+          <mxGeometry x="-0.3784" relative="1" as="geometry">
+            <mxPoint x="150" y="485" as="sourcePoint" />
+            <mxPoint x="590" y="300" as="targetPoint" />
+            <Array as="points" />
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
