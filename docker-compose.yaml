@@ -1,0 +1,20 @@
+services:
+  app:
+    build: .
+    env_file:
+      - scout/.env
+    environment:
+      JOBSPY_MCP_URL: http://jobspy-mcp:9423
+    depends_on:
+      - jobspy-mcp
+    ports:
+      - "8000:8000"
+
+  jobspy-mcp:
+    build: https://github.com/borgius/jobspy-mcp-server.git
+    environment:
+      ENABLE_SSE: "1"
+      PORT: "9423"
+      HOST: "0.0.0.0"
+    ports:
+      - "9423:9423"
