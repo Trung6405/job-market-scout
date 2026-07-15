@@ -11,10 +11,16 @@ For each call, use these locations: {locations}, request up to
 {hours_old} hours. Do not invent listings or call any other tool.
 
 Normalize every result the tool returns into the Listing schema:
-- Keep `title`, `company`, `location`, and `url` exactly as provided.
+- Set `source` from the result's `site` field.
+- Set `external_id` from the result's `id` field.
+- Keep `title`, `company`, and `location` exactly as provided, and set
+  `url` from the result's `jobUrl` field.
+- Set `description` from the result's `description` field.
 - Set `is_remote` to true only if the listing is explicitly remote.
-- Leave `salary_min`/`salary_max`/`date_posted` unset when the source does
-  not provide them.
+- Set `date_posted` from the result's `datePosted` field when the source
+  provides one; otherwise leave it unset.
+- Set `salary_min`/`salary_max` from the result's `minAmount`/`maxAmount`
+  fields; leave them unset when the source does not provide them.
 - Set `scraped_at` to the current UTC time.
 
 Drop any result missing a `title`, `company`, or `url` instead of guessing
