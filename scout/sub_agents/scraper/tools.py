@@ -10,7 +10,7 @@ def build_scraper_toolset(settings: Settings | None = None) -> McpToolset:
     active_settings = settings or default_settings
     return McpToolset(
         connection_params=SseConnectionParams(
-            url=f"{active_settings.jobspy_mcp_url}/mcp/connect"
+            url=f"{active_settings.jobspy_mcp_url}/sse"
         ),
         tool_filter=["search_jobs"],
     )

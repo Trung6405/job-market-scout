@@ -16,4 +16,4 @@ def test_build_scraper_toolset_targets_configured_mcp_url():
     toolset = build_scraper_toolset(settings)
 
     assert isinstance(toolset.connection_params, SseConnectionParams)
-    assert toolset.connection_params.url == "http://test-jobspy:9423/mcp/connect"
+    assert toolset.connection_params.url == "http://test-jobspy:9423/sse"
