@@ -10,11 +10,37 @@ services:
     ports:
       - "8000:8000"
 
+  # Built once so the `jobspy` image is available in the host Docker daemon
+  # for jobspy-mcp to `docker run --rm jobspy ...` per search (see below).
+  jobspy-scraper:
+    build:
+      context: ./vendor/jobspy-mcp-server/jobspy
+    image: jobspy
+    command: ["--help"]
+
+  # jobspy-mcp-server doesn't ship a self-contained Docker image: at runtime it
+  # shells out to `docker run --rm jobspy ...` to launch the scraper container
+  # per search. So this container gets the host's Docker socket mounted in,
+  # rather than its own nested Docker daemon.
   jobspy-mcp:
-    build: https://github.com/borgius/jobspy-mcp-server.git
+    build:
+      context: ./vendor/jobspy-mcp-server
+      dockerfile_inline: |
+        FROM node:20-alpine
+        RUN apk add --no-cache docker-cli
+        WORKDIR /app
+        COPY package.json package-lock.json ./
+        RUN npm ci --omit=dev
+        COPY . .
+        EXPOSE 9423
+        CMD ["node", "src/index.js"]
     environment:
       ENABLE_SSE: "1"
-      PORT: "9423"
-      HOST: "0.0.0.0"
+      JOBSPY_PORT: "9423"
+      JOBSPY_HOST: "0.0.0.0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - jobspy-scraper
     ports:
       - "9423:9423"
