@@ -1,3 +1,7 @@
+# NOTE: pywin32 is intentionally excluded even though `pip freeze` on Windows
+# adds it (mcp depends on it via a sys_platform=='win32' marker pip freeze
+# doesn't preserve). The Dockerfile builds on Linux, where pywin32 has no
+# wheel — do not add it back.
 aiohappyeyeballs==2.7.1
 aiohttp==3.13.5
 aiosignal==1.4.0
