@@ -25,3 +25,15 @@ def test_build_scraper_instruction_uses_default_settings_values():
     assert "Remote" in instruction
     assert "20" in instruction
     assert "72" in instruction
+
+
+def test_build_scraper_instruction_maps_every_listing_field():
+    instruction = build_scraper_instruction(Settings())
+
+    assert "`source`" in instruction and "`site`" in instruction
+    assert "`external_id`" in instruction and "`id`" in instruction
+    assert "`url`" in instruction and "`jobUrl`" in instruction
+    assert "`description`" in instruction
+    assert "`date_posted`" in instruction and "`datePosted`" in instruction
+    assert "`salary_min`" in instruction and "`minAmount`" in instruction
+    assert "`salary_max`" in instruction and "`maxAmount`" in instruction
