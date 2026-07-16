@@ -11,7 +11,14 @@
 ## Global Constraints
 
 - Spec: `docs/superpowers/specs/2026-07-15-scorer-agent-design.md` — this plan implements it in full; do not add DB persistence, the briefing agent, root pipeline wiring, or skill/seniority rule-filters (out of scope per that spec).
-- `scout/shared/schemas.py`, `scout/config.py`, and `scout/prompts.py` are currently empty on `main` (the scraper sub-agent's implementation lives in an unmerged worktree). This plan writes `Listing` fresh alongside `MatchResult` so it is self-contained regardless of when that worktree merges. If `Listing` already exists when a task runs, skip re-adding it and only add what's missing.
+- **Update (2026-07-16): the scraper worktree has merged into `main` and this branch.** `scout/shared/schemas.py`, `scout/config.py`, and `scout/prompts.py` are no longer empty — they hold the scraper sub-agent's real implementation. Concretely:
+  - `scout/shared/schemas.py` already defines `Listing` exactly as this plan needs it (`source`, `external_id`, `title`, `company`, `location`, `is_remote`, `url`, `description`, `salary_min`, `salary_max`, `date_posted`, `scraped_at`). Task 1 must **add `MatchResult` to the existing file**, not write `Listing` again.
+  - `scout/config.py` already defines a frozen `Settings` dataclass with scraper fields (`jobspy_mcp_url`, `deepseek_api_key`, `deepseek_model`, `search_roles`, `search_locations`, `results_wanted`, `hours_old`) and a module-level `settings` instance, but **no `__post_init__`**. Task 2 must **extend this existing `Settings`** with the scorer's new fields (`resume_path`, `resume_text`, `preferred_locations`, `remote_only`, `min_salary`, `min_match_score`) and add a `__post_init__` for `resume_text` — do not replace the scraper fields.
+  - `scout/.env.example` already lists the scraper's env vars (`JOBSPY_MCP_URL`, `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`, `SEARCH_ROLES`, `SEARCH_LOCATIONS`, `RESULTS_WANTED`, `HOURS_OLD`). Task 2 appends the scorer's new vars below them.
+  - `scout/prompts.py` already defines `build_scraper_instruction`. Task 5 appends `build_scorer_instruction` alongside it (as originally planned — no change needed there).
+  - `tests/test_config.py` and `tests/test_schemas.py` already contain passing tests for the scraper's `Settings` and `Listing`. Task 1/2 must **add** new test functions for `MatchResult` / the scorer's settings fields, not overwrite these files wholesale as the original step-by-step content below shows — treat those code blocks as "these tests must exist," inserted alongside the scraper's existing tests, not a full-file replacement.
+  - `pytest==9.1.1` is already installed and pinned in `requirements.txt` (merged from the scraper branch). Task 1 Step 1 (`pip install pytest`) is a no-op now — skip straight to writing tests.
+  - `scout/sub_agents/scorer/agent.py` and `scout/sub_agents/scorer/tools.py` are still empty stubs, as expected — nothing to reconcile there.
 - `google-adk==2.4.0` is already installed; do not change its version.
 - All new Python dependencies are installed into the existing project venv at `.venv` and captured in `requirements.txt` via `pip freeze`, not hand-typed version guesses.
 - Run all commands from the repository root: `c:\Users\trung\OneDrive\Documents\FPT Internship\job-market-scout`.
@@ -32,22 +39,13 @@
 - Produces: `scout.shared.schemas.Listing` — `pydantic.BaseModel` with fields `source: str`, `external_id: str`, `title: str`, `company: str`, `location: str`, `is_remote: bool`, `url: HttpUrl`, `description: str`, `salary_min: float | None = None`, `salary_max: float | None = None`, `date_posted: datetime | None = None`, `scraped_at: datetime`.
 - Produces: `scout.shared.schemas.MatchResult` — `pydantic.BaseModel` with fields `listing: Listing`, `score: int`, `reasoning: str`. Later tasks import both as `from scout.shared.schemas import Listing, MatchResult`.
 
-- [ ] **Step 1: Install pytest and record it in requirements.txt**
-
-Run:
-```bash
-./.venv/Scripts/python.exe -m pip install pytest==9.1.1
-./.venv/Scripts/python.exe -m pip freeze > requirements.txt
-```
-Expected: `pytest==9.1.1` (and its dependencies, e.g. `iniconfig`, `pluggy`) now appear in `requirements.txt`; no existing pinned versions change.
+- [ ] **Step 1: (skip — already done)** `pytest==9.1.1` is already installed and in `requirements.txt` from the merged scraper branch. No action needed.
 
 - [ ] **Step 2: Write the failing tests**
 
-Replace the contents of `tests/test_schemas.py`:
+`tests/test_schemas.py` already contains three passing tests for `Listing` (`test_listing_accepts_valid_data`, `test_listing_allows_missing_optional_salary_and_date`, `test_listing_requires_title`) — leave them in place. Append a `_make_listing` helper and the `MatchResult` tests below them:
 
 ```python
-from datetime import datetime, timezone
-
 import pytest
 from pydantic import ValidationError
 
@@ -70,32 +68,6 @@ def _make_listing(**overrides):
     return Listing(**defaults)
 
 
-def test_listing_accepts_valid_data():
-    listing = _make_listing(salary_min=100000.0, salary_max=140000.0)
-    assert listing.title == "Backend Engineer"
-    assert listing.is_remote is True
-
-
-def test_listing_allows_missing_optional_salary_and_date():
-    listing = _make_listing(location="Sydney, AU", is_remote=False)
-    assert listing.salary_min is None
-    assert listing.date_posted is None
-
-
-def test_listing_requires_title():
-    with pytest.raises(ValidationError):
-        Listing(
-            source="linkedin",
-            external_id="125",
-            company="Acme Corp",
-            location="Remote",
-            is_remote=True,
-            url="https://www.linkedin.com/jobs/view/125",
-            description="Missing title.",
-            scraped_at=datetime(2026, 7, 15, tzinfo=timezone.utc),
-        )
-
-
 def test_match_result_accepts_valid_data():
     result = MatchResult(
         listing=_make_listing(),
@@ -111,38 +83,18 @@ def test_match_result_requires_score():
         MatchResult(listing=_make_listing(), reasoning="Missing score.")
 ```
 
+Note: `MatchResult` is not yet imported by the file, and `pytest` / `ValidationError` may already be imported — check the existing imports at the top of the file before appending to avoid duplicates.
+
 - [ ] **Step 3: Run tests to verify they fail**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/test_schemas.py -v`
-Expected: FAIL at collection with `ImportError: cannot import name 'Listing' from 'scout.shared.schemas'` (or `MatchResult`, if `Listing` already exists from the scraper worktree merge)
+Expected: the 3 existing `Listing` tests pass; the 2 new `MatchResult` tests FAIL with `ImportError: cannot import name 'MatchResult' from 'scout.shared.schemas'`
 
-- [ ] **Step 4: Implement the schemas**
+- [ ] **Step 4: Implement the schema**
 
-Write `scout/shared/schemas.py`:
+`scout/shared/schemas.py` already defines `Listing` — do not touch it. Append `MatchResult` below it:
 
 ```python
-from __future__ import annotations
-
-from datetime import datetime
-
-from pydantic import BaseModel, HttpUrl
-
-
-class Listing(BaseModel):
-    source: str
-    external_id: str
-    title: str
-    company: str
-    location: str
-    is_remote: bool
-    url: HttpUrl
-    description: str
-    salary_min: float | None = None
-    salary_max: float | None = None
-    date_posted: datetime | None = None
-    scraped_at: datetime
-
-
 class MatchResult(BaseModel):
     listing: Listing
     score: int
@@ -157,8 +109,8 @@ Expected: `5 passed`
 - [ ] **Step 6: Commit**
 
 ```bash
-git add requirements.txt scout/shared/schemas.py tests/test_schemas.py
-git commit -m "feat(scout): add Listing and MatchResult schemas"
+git add scout/shared/schemas.py tests/test_schemas.py
+git commit -m "feat(scout): add MatchResult schema"
 ```
 
 ---
@@ -177,36 +129,21 @@ git commit -m "feat(scout): add Listing and MatchResult schemas"
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `tests/test_config.py`:
+`tests/test_config.py` already contains three passing tests for the scraper's `Settings` fields (`test_settings_uses_defaults_when_env_unset`, `test_settings_reads_env_overrides`, `test_settings_can_be_constructed_with_explicit_overrides`) — leave them in place, but add the scorer's new env vars to the existing `monkeypatch.delenv` loop in `test_settings_uses_defaults_when_env_unset` so scorer env vars don't leak between tests: `RESUME_PATH`, `PREFERRED_LOCATIONS`, `REMOTE_ONLY`, `MIN_SALARY`, `MIN_MATCH_SCORE`. Then append these new tests:
 
 ```python
-from pathlib import Path
-
-import pytest
-
-from scout.config import Settings
-
-ENV_VARS = (
-    "DEEPSEEK_API_KEY",
-    "DEEPSEEK_MODEL",
-    "RESUME_PATH",
-    "PREFERRED_LOCATIONS",
-    "REMOTE_ONLY",
-    "MIN_SALARY",
-    "MIN_MATCH_SCORE",
-)
-
-
-@pytest.fixture(autouse=True)
-def _clear_env(monkeypatch):
-    for var in ENV_VARS:
+def test_settings_uses_scorer_defaults_when_env_unset(monkeypatch):
+    for var in (
+        "RESUME_PATH",
+        "PREFERRED_LOCATIONS",
+        "REMOTE_ONLY",
+        "MIN_SALARY",
+        "MIN_MATCH_SCORE",
+    ):
         monkeypatch.delenv(var, raising=False)
 
-
-def test_settings_uses_defaults_when_env_unset():
     settings = Settings()
 
-    assert settings.deepseek_model == "deepseek/deepseek-chat"
     assert settings.preferred_locations == []
     assert settings.remote_only is False
     assert settings.min_salary is None
@@ -219,7 +156,7 @@ def test_settings_reads_resume_text_from_default_resume_path():
     assert settings.resume_text.strip() != ""
 
 
-def test_settings_reads_env_overrides(monkeypatch, tmp_path):
+def test_settings_reads_scorer_env_overrides(monkeypatch, tmp_path):
     resume_file = tmp_path / "custom_resume.txt"
     resume_file.write_text("Senior backend engineer, 6 years Python.")
     monkeypatch.setenv("RESUME_PATH", str(resume_file))
@@ -242,18 +179,14 @@ def test_settings_raises_when_resume_path_missing(monkeypatch):
 
     with pytest.raises(FileNotFoundError):
         Settings()
-
-
-def test_settings_can_be_constructed_with_explicit_overrides():
-    settings = Settings(min_match_score=90)
-
-    assert settings.min_match_score == 90
 ```
+
+Note: `pytest` is likely not yet imported in `tests/test_config.py` — check the existing imports before appending.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/test_config.py -v`
-Expected: FAIL at collection with `ImportError: cannot import name 'Settings' from 'scout.config'`
+Expected: the 3 existing scraper `Settings` tests pass; the new scorer tests FAIL — `TypeError: Settings.__init__() got an unexpected keyword argument` or `AttributeError: 'Settings' object has no attribute 'resume_text'`
 
 - [ ] **Step 3: Create the default resume fixture file**
 
@@ -265,26 +198,12 @@ Python and Go. Comfortable with distributed systems, REST/gRPC APIs, and
 SQL databases. Looking for backend or platform engineering roles.
 ```
 
-- [ ] **Step 4: Implement config**
+- [ ] **Step 4: Extend config**
 
-Write `scout/config.py`:
+`scout/config.py` already defines `Settings` with the scraper's fields (`jobspy_mcp_url`, `deepseek_api_key`, `deepseek_model`, `search_roles`, `search_locations`, `results_wanted`, `hours_old`), the `_split_csv` helper, `load_dotenv(...)`, and a module-level `settings = Settings()` — do not remove or restructure any of that. Add a `_read_resume_text` helper, a `_DEFAULT_RESUME_PATH` constant, the six new scorer fields on the existing `Settings` dataclass, and a `__post_init__` (the dataclass has none today):
 
 ```python
-from __future__ import annotations
-
-import os
-from dataclasses import dataclass, field
-from pathlib import Path
-
-from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).resolve().parent / ".env")
-
 _DEFAULT_RESUME_PATH = str(Path(__file__).resolve().parent / "resume.txt")
-
-
-def _split_csv(value: str) -> list[str]:
-    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 def _read_resume_text(resume_path: str) -> str:
@@ -292,16 +211,11 @@ def _read_resume_text(resume_path: str) -> str:
     if not path.is_file():
         raise FileNotFoundError(f"resume file not found: {resume_path}")
     return path.read_text(encoding="utf-8")
+```
 
+Add to the `Settings` dataclass body (after the existing `hours_old` field):
 
-@dataclass(frozen=True)
-class Settings:
-    deepseek_api_key: str = field(
-        default_factory=lambda: os.getenv("DEEPSEEK_API_KEY", "")
-    )
-    deepseek_model: str = field(
-        default_factory=lambda: os.getenv("DEEPSEEK_MODEL", "deepseek/deepseek-chat")
-    )
+```python
     resume_path: str = field(
         default_factory=lambda: os.getenv("RESUME_PATH", _DEFAULT_RESUME_PATH)
     )
@@ -324,16 +238,11 @@ class Settings:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "resume_text", _read_resume_text(self.resume_path))
-
-
-settings = Settings()
 ```
 
-Write `scout/.env.example`:
+Append to `scout/.env.example` (below the existing scraper vars):
 
 ```
-DEEPSEEK_API_KEY=
-DEEPSEEK_MODEL=deepseek/deepseek-chat
 RESUME_PATH=scout/resume.txt
 PREFERRED_LOCATIONS=
 REMOTE_ONLY=false
@@ -344,13 +253,13 @@ MIN_MATCH_SCORE=60
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/test_config.py -v`
-Expected: `6 passed`
+Expected: `7 passed`
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add scout/config.py scout/.env.example scout/resume.txt tests/test_config.py
-git commit -m "feat(scout): add scorer config settings"
+git commit -m "feat(scout): extend Settings with scorer config"
 ```
 
 ---
@@ -825,7 +734,7 @@ Expected: `5 passed`
 - [ ] **Step 5: Run the full test suite**
 
 Run: `./.venv/Scripts/python.exe -m pytest -v`
-Expected: all tests across `tests/test_schemas.py`, `tests/test_config.py`, `tests/test_scorer_filters.py`, `tests/test_scorer_callbacks.py`, `tests/test_scorer_agent.py` pass (26 passed)
+Expected: all tests pass, including the merged scraper suite (`tests/test_prompts.py`, `tests/test_scraper_agent.py`, `tests/test_scraper_tools.py` — 10 tests) alongside the scorer suite built in this plan (`tests/test_schemas.py`, `tests/test_config.py`, `tests/test_scorer_filters.py`, `tests/test_scorer_callbacks.py`, `tests/test_scorer_agent.py` — 27 tests): **37 passed**. If the venv is missing dependencies (e.g. a fresh checkout), run `./.venv/Scripts/python.exe -m pip install -r requirements.txt` first.
 
 - [ ] **Step 6: Commit**
 
@@ -839,7 +748,7 @@ git commit -m "feat(scout): build scorer LlmAgent"
 The tasks above are fully unit-testable without a live DeepSeek API key. Before relying on the scorer for real scoring:
 
 1. Set `DEEPSEEK_API_KEY` and a real `RESUME_PATH` in `scout/.env`.
-2. In a Python shell: build some `Listing` objects (or use the scraper's output once that worktree is merged), call `build_scorer_agent(listings)`, and run it via the ADK runner (`adk run` equivalent for a single sub-agent, or a small script using `google.adk.runners.Runner`).
+2. In a Python shell: build some `Listing` objects, or run the now-merged `build_scraper_agent()` (`scout/sub_agents/scraper/agent.py`) to get real scraped output, call `build_scorer_agent(listings)`, and run it via the ADK runner (`adk run` equivalent for a single sub-agent, or a small script using `google.adk.runners.Runner`).
 3. Confirm the returned `MatchResult` list only contains listings that passed both the rule-based filter and the `min_match_score` threshold, with sensible scores/reasoning relative to the resume.
 
 This step needs a live DeepSeek key, so it isn't part of the automated task loop above — do it once after Task 5.
