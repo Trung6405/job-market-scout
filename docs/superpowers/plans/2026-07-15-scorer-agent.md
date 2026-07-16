@@ -1,16 +1,16 @@
-# Matcher Sub-Agent Implementation Plan
+# Scorer Sub-Agent Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a working ADK `LlmAgent` matcher sub-agent that rule-filters listings against preferences, then scores the survivors against a resume with DeepSeek, returning `MatchResult` objects above a minimum score.
+**Goal:** Build a working ADK `LlmAgent` scorer sub-agent that rule-filters listings against preferences, then scores the survivors against a resume with DeepSeek, returning `MatchResult` objects above a minimum score.
 
-**Architecture:** `scout/sub_agents/scorer` (folder name from the existing scaffold; agent `name="matcher"`) is an ADK `LlmAgent` (DeepSeek via LiteLLM) with no tools. A plain Python function, `filters.filter_listings`, runs *before* the agent is built and drops hard-reject listings (remote/location/salary) using `scout.config.Settings`. The survivors are serialized into the agent's instruction alongside resume text, so the LLM only reasons over listings that already passed the deterministic filter. An `after_model_callback` (`callbacks.build_drop_low_scores_callback`) drops any scored result below `min_match_score` from the LLM's JSON response before it's returned, mirroring the scraper sub-agent's `stamp_scraped_at` callback pattern.
+**Architecture:** `scout/sub_agents/scorer` (folder name from the existing scaffold; agent `name="scorer"`) is an ADK `LlmAgent` (DeepSeek via LiteLLM) with no tools. A plain Python function, `filters.filter_listings`, runs *before* the agent is built and drops hard-reject listings (remote/location/salary) using `scout.config.Settings`. The survivors are serialized into the agent's instruction alongside resume text, so the LLM only reasons over listings that already passed the deterministic filter. An `after_model_callback` (`callbacks.build_drop_low_scores_callback`) drops any scored result below `min_match_score` from the LLM's JSON response before it's returned, mirroring the scraper sub-agent's `stamp_scraped_at` callback pattern.
 
 **Tech Stack:** Python 3.12, `google-adk==2.4.0` (`LlmAgent`, `LiteLlm`), `pydantic`, `python-dotenv`, `pytest==9.1.1` (new dev dependency — not yet in `requirements.txt` on `main`).
 
 ## Global Constraints
 
-- Spec: `docs/superpowers/specs/2026-07-15-matcher-agent-design.md` — this plan implements it in full; do not add DB persistence, the briefing agent, root pipeline wiring, or skill/seniority rule-filters (out of scope per that spec).
+- Spec: `docs/superpowers/specs/2026-07-15-scorer-agent-design.md` — this plan implements it in full; do not add DB persistence, the briefing agent, root pipeline wiring, or skill/seniority rule-filters (out of scope per that spec).
 - `scout/shared/schemas.py`, `scout/config.py`, and `scout/prompts.py` are currently empty on `main` (the scraper sub-agent's implementation lives in an unmerged worktree). This plan writes `Listing` fresh alongside `MatchResult` so it is self-contained regardless of when that worktree merges. If `Listing` already exists when a task runs, skip re-adding it and only add what's missing.
 - `google-adk==2.4.0` is already installed; do not change its version.
 - All new Python dependencies are installed into the existing project venv at `.venv` and captured in `requirements.txt` via `pip freeze`, not hand-typed version guesses.
@@ -163,7 +163,7 @@ git commit -m "feat(scout): add Listing and MatchResult schemas"
 
 ---
 
-### Task 2: Matcher config settings
+### Task 2: Scorer config settings
 
 **Files:**
 - Modify: `scout/config.py` (currently empty)
@@ -350,7 +350,7 @@ Expected: `6 passed`
 
 ```bash
 git add scout/config.py scout/.env.example scout/resume.txt tests/test_config.py
-git commit -m "feat(scout): add matcher config settings"
+git commit -m "feat(scout): add scorer config settings"
 ```
 
 ---
@@ -503,7 +503,7 @@ Expected: `6 passed`
 
 ```bash
 git add scout/sub_agents/scorer/filters.py tests/test_scorer_filters.py
-git commit -m "feat(scout): add matcher rule-based pre-filter"
+git commit -m "feat(scout): add scorer rule-based pre-filter"
 ```
 
 ---
@@ -645,12 +645,12 @@ Expected: `4 passed`
 
 ```bash
 git add scout/sub_agents/scorer/callbacks.py tests/test_scorer_callbacks.py
-git commit -m "feat(scout): add matcher score-threshold callback"
+git commit -m "feat(scout): add scorer score-threshold callback"
 ```
 
 ---
 
-### Task 5: Matcher LlmAgent
+### Task 5: Scorer LlmAgent
 
 **Files:**
 - Modify: `scout/prompts.py` (currently empty)
@@ -659,7 +659,7 @@ git commit -m "feat(scout): add matcher score-threshold callback"
 
 **Interfaces:**
 - Consumes: `scout.config.Settings`, `scout.config.settings` (Task 2); `scout.shared.schemas.Listing`, `scout.shared.schemas.MatchResult` (Task 1); `scout.sub_agents.scorer.filters.filter_listings` (Task 3); `scout.sub_agents.scorer.callbacks.build_drop_low_scores_callback` (Task 4).
-- Produces: `scout.prompts.build_matcher_instruction(settings: Settings, listings: list[Listing]) -> str`. Produces `scout.sub_agents.scorer.agent.build_matcher_agent(listings: list[Listing], settings: Settings | None = None) -> LlmAgent`. `build_matcher_agent` takes `listings` explicitly (rather than reading from session state) because root pipeline wiring — how the scraper's output reaches this agent inside a `SequentialAgent` — is out of scope per the spec; a future session will decide that wiring and can adapt this signature then.
+- Produces: `scout.prompts.build_scorer_instruction(settings: Settings, listings: list[Listing]) -> str`. Produces `scout.sub_agents.scorer.agent.build_scorer_agent(listings: list[Listing], settings: Settings | None = None) -> LlmAgent`. `build_scorer_agent` takes `listings` explicitly (rather than reading from session state) because root pipeline wiring — how the scraper's output reaches this agent inside a `SequentialAgent` — is out of scope per the spec; a future session will decide that wiring and can adapt this signature then.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -672,9 +672,9 @@ from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
 
 from scout.config import Settings
-from scout.prompts import build_matcher_instruction
+from scout.prompts import build_scorer_instruction
 from scout.shared.schemas import Listing, MatchResult
-from scout.sub_agents.scorer.agent import build_matcher_agent
+from scout.sub_agents.scorer.agent import build_scorer_agent
 
 
 def _make_listing(**overrides):
@@ -693,47 +693,47 @@ def _make_listing(**overrides):
     return Listing(**defaults)
 
 
-def test_build_matcher_instruction_includes_resume_and_listing_titles():
+def test_build_scorer_instruction_includes_resume_and_listing_titles():
     settings = Settings()
     listings = [_make_listing(title="Platform Engineer")]
 
-    instruction = build_matcher_instruction(settings, listings)
+    instruction = build_scorer_instruction(settings, listings)
 
     assert settings.resume_text in instruction
     assert "Platform Engineer" in instruction
 
 
-def test_build_matcher_agent_uses_configured_model():
+def test_build_scorer_agent_uses_configured_model():
     settings = Settings(deepseek_model="deepseek/deepseek-reasoner")
 
-    agent = build_matcher_agent([_make_listing()], settings)
+    agent = build_scorer_agent([_make_listing()], settings)
 
     assert isinstance(agent, LlmAgent)
     assert isinstance(agent.model, LiteLlm)
     assert agent.model.model == "deepseek/deepseek-reasoner"
 
 
-def test_build_matcher_agent_outputs_match_result_list():
-    agent = build_matcher_agent([_make_listing()], Settings())
+def test_build_scorer_agent_outputs_match_result_list():
+    agent = build_scorer_agent([_make_listing()], Settings())
 
     assert agent.output_schema == list[MatchResult]
 
 
-def test_build_matcher_agent_excludes_rule_filtered_listings_from_instruction():
+def test_build_scorer_agent_excludes_rule_filtered_listings_from_instruction():
     settings = Settings(remote_only=True)
     listings = [
         _make_listing(external_id="1", title="Remote Role", is_remote=True),
         _make_listing(external_id="2", title="Onsite Role", is_remote=False),
     ]
 
-    agent = build_matcher_agent(listings, settings)
+    agent = build_scorer_agent(listings, settings)
 
     assert "Remote Role" in agent.instruction
     assert "Onsite Role" not in agent.instruction
 
 
-def test_build_matcher_agent_registers_no_tools():
-    agent = build_matcher_agent([_make_listing()], Settings())
+def test_build_scorer_agent_registers_no_tools():
+    agent = build_scorer_agent([_make_listing()], Settings())
 
     assert agent.tools == []
 ```
@@ -741,7 +741,7 @@ def test_build_matcher_agent_registers_no_tools():
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/test_scorer_agent.py -v`
-Expected: FAIL at collection with `ImportError: cannot import name 'build_matcher_instruction' from 'scout.prompts'`
+Expected: FAIL at collection with `ImportError: cannot import name 'build_scorer_instruction' from 'scout.prompts'`
 
 - [ ] **Step 3: Implement the prompt and the agent**
 
@@ -756,7 +756,7 @@ from scout.config import Settings
 from scout.shared.schemas import Listing
 
 
-def build_matcher_instruction(settings: Settings, listings: list[Listing]) -> str:
+def build_scorer_instruction(settings: Settings, listings: list[Listing]) -> str:
     listings_json = json.dumps(
         [listing.model_dump(mode="json") for listing in listings], indent=2
     )
@@ -793,21 +793,21 @@ from google.adk.models.lite_llm import LiteLlm
 
 from scout.config import Settings
 from scout.config import settings as default_settings
-from scout.prompts import build_matcher_instruction
+from scout.prompts import build_scorer_instruction
 from scout.shared.schemas import Listing, MatchResult
 from scout.sub_agents.scorer.callbacks import build_drop_low_scores_callback
 from scout.sub_agents.scorer.filters import filter_listings
 
 
-def build_matcher_agent(
+def build_scorer_agent(
     listings: list[Listing], settings: Settings | None = None
 ) -> LlmAgent:
     active_settings = settings or default_settings
     survivors = filter_listings(listings, active_settings)
     return LlmAgent(
-        name="matcher",
+        name="scorer",
         model=LiteLlm(model=active_settings.deepseek_model),
-        instruction=build_matcher_instruction(active_settings, survivors),
+        instruction=build_scorer_instruction(active_settings, survivors),
         output_schema=list[MatchResult],
         after_model_callback=build_drop_low_scores_callback(
             active_settings.min_match_score
@@ -815,7 +815,7 @@ def build_matcher_agent(
     )
 ```
 
-Note: unlike the scraper (which exposes a module-level `root_agent` built from `default_settings` for `adk` CLI discovery), the matcher has no `root_agent` in this task — it requires `listings` as an argument that isn't available at import time, and root pipeline wiring is out of scope per the spec.
+Note: unlike the scraper (which exposes a module-level `root_agent` built from `default_settings` for `adk` CLI discovery), the scorer has no `root_agent` in this task — it requires `listings` as an argument that isn't available at import time, and root pipeline wiring is out of scope per the spec.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -831,15 +831,15 @@ Expected: all tests across `tests/test_schemas.py`, `tests/test_config.py`, `tes
 
 ```bash
 git add scout/prompts.py scout/sub_agents/scorer/agent.py tests/test_scorer_agent.py
-git commit -m "feat(scout): build matcher LlmAgent"
+git commit -m "feat(scout): build scorer LlmAgent"
 ```
 
 ## Manual Verification (post-plan, not part of TDD loop)
 
-The tasks above are fully unit-testable without a live DeepSeek API key. Before relying on the matcher for real scoring:
+The tasks above are fully unit-testable without a live DeepSeek API key. Before relying on the scorer for real scoring:
 
 1. Set `DEEPSEEK_API_KEY` and a real `RESUME_PATH` in `scout/.env`.
-2. In a Python shell: build some `Listing` objects (or use the scraper's output once that worktree is merged), call `build_matcher_agent(listings)`, and run it via the ADK runner (`adk run` equivalent for a single sub-agent, or a small script using `google.adk.runners.Runner`).
+2. In a Python shell: build some `Listing` objects (or use the scraper's output once that worktree is merged), call `build_scorer_agent(listings)`, and run it via the ADK runner (`adk run` equivalent for a single sub-agent, or a small script using `google.adk.runners.Runner`).
 3. Confirm the returned `MatchResult` list only contains listings that passed both the rule-based filter and the `min_match_score` threshold, with sensible scores/reasoning relative to the resume.
 
 This step needs a live DeepSeek key, so it isn't part of the automated task loop above — do it once after Task 5.

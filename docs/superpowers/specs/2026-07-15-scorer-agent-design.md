@@ -1,13 +1,13 @@
-# Matcher Sub-Agent Design
+# Scorer Sub-Agent Design
 
 Date: 2026-07-15
 Status: Approved
 
 ## Context
 
-`job-market-scout` is a multi-agent job search pipeline (Scraper → Matcher → Briefing, plus a Tracker tool) built on Google ADK, LiteLLM, and DeepSeek, deployed via Docker. The scraper sub-agent (previous session) fetches `Listing` objects from job boards via an MCP server. This session covers the **matcher sub-agent** (folder: `scout/sub_agents/scorer`, per the existing scaffold; agent name: `matcher`) — the second pipeline stage, responsible for scoring listings against the job seeker's resume and preferences.
+`job-market-scout` is a multi-agent job search pipeline (Scraper → Scorer → Briefing, plus a Tracker tool) built on Google ADK, LiteLLM, and DeepSeek, deployed via Docker. The scraper sub-agent (previous session) fetches `Listing` objects from job boards via an MCP server. This session covers the **scorer sub-agent** (folder: `scout/sub_agents/scorer`, per the existing scaffold; agent name: `scorer`) — the second pipeline stage, responsible for scoring listings against the job seeker's resume and preferences.
 
-The system-context diagram labels this stage "Matcher" and describes its job as "LLM Inference: Infers Context, Match Scoring."
+The system-context diagram labels this stage "Scorer" and describes its job as "LLM Inference: Infers Context, Match Scoring."
 
 ## Goals
 
@@ -18,7 +18,7 @@ The system-context diagram labels this stage "Matcher" and describes its job as 
 
 ## Out of Scope
 
-- Database persistence — `scout/shared/db.py` and `scout/tools/tracker.py` stay empty stubs. The matcher takes `list[Listing]` in-memory (from the scraper stage) and returns `list[MatchResult]`; it doesn't read/write the DB. This mirrors the scraper session's deferral of DB wiring.
+- Database persistence — `scout/shared/db.py` and `scout/tools/tracker.py` stay empty stubs. The scorer takes `list[Listing]` in-memory (from the scraper stage) and returns `list[MatchResult]`; it doesn't read/write the DB. This mirrors the scraper session's deferral of DB wiring.
 - Briefing sub-agent (stays an empty stub).
 - Root pipeline wiring (`scout/agent.py` `SequentialAgent` stays empty).
 - Skill/seniority/keyword rule-filters — only location, remote, and salary are hard-filtered rule-side; everything else (skills fit, seniority nuance, career trajectory) is left to the LLM's holistic scoring against resume text.
@@ -27,7 +27,7 @@ The system-context diagram labels this stage "Matcher" and describes its job as 
 
 ```
 scout/agent.py (root, untouched this session)
-  └── matcher (LlmAgent, DeepSeek/LiteLLM)
+  └── scorer (LlmAgent, DeepSeek/LiteLLM)
         input:  list[Listing]  (from scraper stage)
         step 1: filters.filter_listings(listings, settings) — plain Python, runs BEFORE the LLM
         step 2: LlmAgent scores survivors against resume text + preferences
@@ -62,16 +62,16 @@ Document the new vars: `RESUME_PATH`, `PREFERRED_LOCATIONS`, `REMOTE_ONLY`, `MIN
 Plain function `filter_listings(listings: list[Listing], settings: Settings) -> list[Listing]`. Hard-rejects a listing if: `remote_only` is set and `listing.is_remote` is `False`; `preferred_locations` is non-empty and none match `listing.location`; `min_salary` is set and `listing.salary_max` (or `salary_min` if max is `None`) is below it, when salary data exists (missing salary data does not cause rejection — insufficient info to hard-filter on). Filtered-out listings are dropped entirely, not included in output with a zero score.
 
 ### `scout/sub_agents/scorer/agent.py`
-Constructs the `LlmAgent` (`name="matcher"`): DeepSeek model via LiteLLM, no tools, `output_schema=list[MatchResult]`, instruction built from resume text + preferences + the pre-filtered listings (filtering happens before agent invocation, likely via a wrapper function `build_matcher_agent` that reads settings, runs `filter_listings`, and threshold-drops low scores after the LLM call completes — exact glue mechanism, e.g. `after_model_callback`, decided during implementation).
+Constructs the `LlmAgent` (`name="scorer"`): DeepSeek model via LiteLLM, no tools, `output_schema=list[MatchResult]`, instruction built from resume text + preferences + the pre-filtered listings (filtering happens before agent invocation, likely via a wrapper function `build_scorer_agent` that reads settings, runs `filter_listings`, and threshold-drops low scores after the LLM call completes — exact glue mechanism, e.g. `after_model_callback`, decided during implementation).
 
 ### `scout/prompts.py`
-Add `build_matcher_instruction(settings)` — instructs the LLM to score each provided listing 0–100 against the resume text and preferences, with brief reasoning, per the project's existing convention of centralizing prompts.
+Add `build_scorer_instruction(settings)` — instructs the LLM to score each provided listing 0–100 against the resume text and preferences, with brief reasoning, per the project's existing convention of centralizing prompts.
 
 ## Data Flow
 
-1. Matcher receives `list[Listing]` (from the scraper stage, in-memory — no DB read).
+1. Scorer receives `list[Listing]` (from the scraper stage, in-memory — no DB read).
 2. `filter_listings()` drops hard rejects based on `remote_only` / `preferred_locations` / `min_salary`.
-3. Surviving listings, resume text, and preferences are formatted into the matcher's prompt.
+3. Surviving listings, resume text, and preferences are formatted into the scorer's prompt.
 4. DeepSeek LLM scores each survivor 0–100 with reasoning, returned as `list[MatchResult]`.
 5. Results with `score < min_match_score` are dropped from the final output.
 6. Agent returns `list[MatchResult]` for the future briefing stage to consume.
