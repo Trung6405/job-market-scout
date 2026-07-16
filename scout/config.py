@@ -64,6 +64,9 @@ class Settings:
     min_match_score: int = field(
         default_factory=lambda: int(os.getenv("MIN_MATCH_SCORE", "60"))
     )
+    description_char_limit: int = field(
+        default_factory=lambda: int(os.getenv("DESCRIPTION_CHAR_LIMIT", "1500"))
+    )
     resume_text: str = field(init=False)
 
     def __post_init__(self) -> None:

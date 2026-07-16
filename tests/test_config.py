@@ -48,6 +48,7 @@ def test_settings_uses_scorer_defaults_when_env_unset(monkeypatch):
         "REMOTE_ONLY",
         "MIN_SALARY",
         "MIN_MATCH_SCORE",
+        "DESCRIPTION_CHAR_LIMIT",
     ):
         monkeypatch.delenv(var, raising=False)
 
@@ -57,6 +58,7 @@ def test_settings_uses_scorer_defaults_when_env_unset(monkeypatch):
     assert settings.remote_only is False
     assert settings.min_salary is None
     assert settings.min_match_score == 60
+    assert settings.description_char_limit == 1500
 
 
 def test_settings_reads_resume_text_from_default_resume_path():
@@ -72,6 +74,7 @@ def test_settings_reads_scorer_env_overrides(monkeypatch, tmp_path):
     monkeypatch.setenv("REMOTE_ONLY", "true")
     monkeypatch.setenv("MIN_SALARY", "120000")
     monkeypatch.setenv("MIN_MATCH_SCORE", "75")
+    monkeypatch.setenv("DESCRIPTION_CHAR_LIMIT", "800")
 
     settings = Settings()
 
@@ -80,6 +83,7 @@ def test_settings_reads_scorer_env_overrides(monkeypatch, tmp_path):
     assert settings.remote_only is True
     assert settings.min_salary == 120000.0
     assert settings.min_match_score == 75
+    assert settings.description_char_limit == 800
 
 def test_settings_raises_when_resume_path_missing(monkeypatch):
     monkeypatch.setenv("RESUME_PATH", "does/not/exist.txt")
