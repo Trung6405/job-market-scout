@@ -1,0 +1,3 @@
+[submodule "vendor/jobspy-mcp-server"]
+	path = vendor/jobspy-mcp-server
+	url = https://github.com/borgius/jobspy-mcp-server.git
