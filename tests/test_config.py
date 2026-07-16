@@ -1,5 +1,6 @@
 from scout.config import Settings
 
+import pytest
 
 def test_settings_uses_defaults_when_env_unset(monkeypatch):
     for var in (
@@ -39,3 +40,49 @@ def test_settings_can_be_constructed_with_explicit_overrides():
     settings = Settings(jobspy_mcp_url="http://test-jobspy:9423")
 
     assert settings.jobspy_mcp_url == "http://test-jobspy:9423"
+
+def test_settings_uses_scorer_defaults_when_env_unset(monkeypatch):
+    for var in (
+        "RESUME_PATH",
+        "PREFERRED_LOCATIONS",
+        "REMOTE_ONLY",
+        "MIN_SALARY",
+        "MIN_MATCH_SCORE",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+    settings = Settings()
+
+    assert settings.preferred_locations == []
+    assert settings.remote_only is False
+    assert settings.min_salary is None
+    assert settings.min_match_score == 60
+
+
+def test_settings_reads_resume_text_from_default_resume_path():
+    settings = Settings()
+
+    assert settings.resume_text.strip() != ""
+
+def test_settings_reads_scorer_env_overrides(monkeypatch, tmp_path):
+    resume_file = tmp_path / "custom_resume.txt"
+    resume_file.write_text("Senior backend engineer, 6 years Python.")
+    monkeypatch.setenv("RESUME_PATH", str(resume_file))
+    monkeypatch.setenv("PREFERRED_LOCATIONS", "Sydney, Remote")
+    monkeypatch.setenv("REMOTE_ONLY", "true")
+    monkeypatch.setenv("MIN_SALARY", "120000")
+    monkeypatch.setenv("MIN_MATCH_SCORE", "75")
+
+    settings = Settings()
+
+    assert settings.resume_text == "Senior backend engineer, 6 years Python."
+    assert settings.preferred_locations == ["Sydney", "Remote"]
+    assert settings.remote_only is True
+    assert settings.min_salary == 120000.0
+    assert settings.min_match_score == 75
+
+def test_settings_raises_when_resume_path_missing(monkeypatch):
+    monkeypatch.setenv("RESUME_PATH", "does/not/exist.txt")
+
+    with pytest.raises(FileNotFoundError):
+        Settings()
