@@ -18,3 +18,8 @@ class Listing(BaseModel):
     salary_max: float | None = None
     date_posted: datetime | None = None
     scraped_at: datetime
+
+class MatchResult(BaseModel):
+    listing: Listing
+    score: int
+    reasoning: str

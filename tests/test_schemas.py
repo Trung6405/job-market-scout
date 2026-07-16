@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
-from scout.shared.schemas import Listing
+from scout.shared.schemas import Listing, MatchResult
 
 
 def test_listing_accepts_valid_data():
@@ -53,3 +53,31 @@ def test_listing_requires_title():
             description="Missing title.",
             scraped_at=datetime(2026, 7, 15, tzinfo=timezone.utc),
         )
+
+def _make_listing(**overrides):
+    defaults = dict(
+        source="linkedin",
+        external_id="123",
+        title="Backend Engineer",
+        company="Acme Corp",
+        location="Remote",
+        is_remote=True,
+        url="https://www.linkedin.com/jobs/view/123",
+        description="Build backend systems.",
+        scraped_at=datetime(2026, 7, 15, tzinfo=timezone.utc),
+    )
+    defaults.update(overrides)
+    return Listing(**defaults)
+
+def test_match_result_accepts_valid_data():
+    result = MatchResult(
+        listing=_make_listing(),
+        score=82,
+        reasoning="Strong backend overlap with resume experience",
+    )
+    assert result.score == 82
+    assert result.listing.title == "Backend Engineer"
+
+def test_match_result_require_score():
+    with pytest.raises(ValidationError):
+        MatchResult(listing=_make_listing(), reasoning="Missing score.")
