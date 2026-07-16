@@ -45,3 +45,44 @@ def test_filter_listings_keeps_listing_with_no_salary_data():
     result = filter_listings(listings, settings)
 
     assert [listing.external_id for listing in result] == ["1"]
+
+def test_filter_listings_drops_location_mismatch():
+    settings = Settings(preferred_locations=["Melbourne"])
+    listings = [
+        _make_listing(external_id="1", location="Melbourne, AU"),
+        _make_listing(external_id="2", location="Sydney, AU"),
+    ]
+
+    result = filter_listings(listings, settings)
+
+    assert [listing.external_id for listing in result] == ["1"]
+
+def test_filter_listings_drops_below_min_salary_using_salary_max():
+    settings = Settings(min_salary=100000)
+    listings = [
+        _make_listing(external_id="1", salary_max=120000),
+        _make_listing(external_id="2", salary_max=80000),
+    ]
+
+    result = filter_listings(listings, settings)
+
+    assert [listing.external_id for listing in result] == ["1"]
+
+def test_filter_listings_falls_back_to_salary_min_when_max_missing():
+    settings = Settings(min_salary=100000)
+    listings = [_make_listing(external_id="1", salary_min=110000, salary_max=None)]
+
+    result = filter_listings(listings, settings)
+
+    assert [listing.external_id for listing in result] == ["1"]
+
+def test_filter_listings_remote_listing_bypasses_location_mismatch():
+    settings = Settings(preferred_locations=["Melbourne"])
+    listings = [
+        _make_listing(external_id="1", location="Remote (AUS)", is_remote=True),
+        _make_listing(external_id="2", location="Sydney, AU", is_remote=False),
+    ]
+
+    result = filter_listings(listings, settings)
+
+    assert [listing.external_id for listing in result] == ["1"]

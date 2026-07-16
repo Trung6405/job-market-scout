@@ -8,9 +8,13 @@ def filter_listings(listings: list[Listing], settings: Settings) -> list[Listing
     for listing in listings:
         if settings.remote_only and not listing.is_remote:
             continue
-        if settings.preferred_locations and not any(
-            preferred.lower() in listings.location.lower()
-            for preferred in settings.preferred_locations
+        if (
+            settings.preferred_locations
+            and not listing.is_remote
+            and not any(
+                preferred.lower() in listing.location.lower()
+                for preferred in settings.preferred_locations
+            )
         ):
             continue
         if settings.min_salary is not None:
