@@ -52,9 +52,9 @@ Explicitly **not** adopted from that review, with reasoning:
 - Produces: `scout.shared.schemas.Listing` — `pydantic.BaseModel` with fields `source: str`, `external_id: str`, `title: str`, `company: str`, `location: str`, `is_remote: bool`, `url: HttpUrl`, `description: str`, `salary_min: float | None = None`, `salary_max: float | None = None`, `date_posted: datetime | None = None`, `scraped_at: datetime`.
 - Produces: `scout.shared.schemas.MatchResult` — `pydantic.BaseModel` with fields `listing: Listing`, `score: int`, `reasoning: str`. Later tasks import both as `from scout.shared.schemas import Listing, MatchResult`.
 
-- [ ] **Step 1: (skip — already done)** `pytest==9.1.1` is already installed and in `requirements.txt` from the merged scraper branch. No action needed.
+- [x] **Step 1: (skip — already done)** `pytest==9.1.1` is already installed and in `requirements.txt` from the merged scraper branch. No action needed.
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 `tests/test_schemas.py` already contains three passing tests for `Listing` (`test_listing_accepts_valid_data`, `test_listing_allows_missing_optional_salary_and_date`, `test_listing_requires_title`) — leave them in place. Append a `_make_listing` helper and the `MatchResult` tests below them:
 
@@ -98,12 +98,12 @@ def test_match_result_requires_score():
 
 Note: `MatchResult` is not yet imported by the file, and `pytest` / `ValidationError` may already be imported — check the existing imports at the top of the file before appending to avoid duplicates.
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/test_schemas.py -v`
 Expected: the 3 existing `Listing` tests pass; the 2 new `MatchResult` tests FAIL with `ImportError: cannot import name 'MatchResult' from 'scout.shared.schemas'`
 
-- [ ] **Step 4: Implement the schema**
+- [x] **Step 4: Implement the schema**
 
 `scout/shared/schemas.py` already defines `Listing` — do not touch it. Append `MatchResult` below it:
 
@@ -114,12 +114,12 @@ class MatchResult(BaseModel):
     reasoning: str
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/test_schemas.py -v`
 Expected: `5 passed`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add scout/shared/schemas.py tests/test_schemas.py
@@ -140,7 +140,7 @@ git commit -m "feat(scout): add MatchResult schema"
 - Consumes: nothing from earlier tasks.
 - Produces: `scout.config.Settings` — a frozen dataclass with fields `deepseek_api_key: str`, `deepseek_model: str`, `resume_path: str`, `resume_text: str` (read from `resume_path` at construction time; raises `FileNotFoundError` if the file doesn't exist), `preferred_locations: list[str]`, `remote_only: bool`, `min_salary: float | None`, `min_match_score: int`, each read from an env var of the same name (upper-cased) with a default, evaluated fresh on each `Settings()` construction. Also produces `scout.config.settings` — a module-level `Settings()` instance. Later tasks import `from scout.config import Settings, settings`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/test_config.py` already contains three passing tests for the scraper's `Settings` fields (`test_settings_uses_defaults_when_env_unset`, `test_settings_reads_env_overrides`, `test_settings_can_be_constructed_with_explicit_overrides`) — leave them in place, but add the scorer's new env vars to the existing `monkeypatch.delenv` loop in `test_settings_uses_defaults_when_env_unset` so scorer env vars don't leak between tests: `RESUME_PATH`, `PREFERRED_LOCATIONS`, `REMOTE_ONLY`, `MIN_SALARY`, `MIN_MATCH_SCORE`. Then append these new tests:
 
@@ -196,12 +196,12 @@ def test_settings_raises_when_resume_path_missing(monkeypatch):
 
 Note: `pytest` is likely not yet imported in `tests/test_config.py` — check the existing imports before appending.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/test_config.py -v`
 Expected: the 3 existing scraper `Settings` tests pass; the new scorer tests FAIL — `TypeError: Settings.__init__() got an unexpected keyword argument` or `AttributeError: 'Settings' object has no attribute 'resume_text'`
 
-- [ ] **Step 3: Create the default resume fixture file**
+- [x] **Step 3: Create the default resume fixture file**
 
 Write `scout/resume.txt`:
 
@@ -211,7 +211,7 @@ Python and Go. Comfortable with distributed systems, REST/gRPC APIs, and
 SQL databases. Looking for backend or platform engineering roles.
 ```
 
-- [ ] **Step 4: Extend config**
+- [x] **Step 4: Extend config**
 
 `scout/config.py` already defines `Settings` with the scraper's fields (`jobspy_mcp_url`, `deepseek_api_key`, `deepseek_model`, `search_roles`, `search_locations`, `results_wanted`, `hours_old`), the `_split_csv` helper, `load_dotenv(...)`, and a module-level `settings = Settings()` — do not remove or restructure any of that. Add a `_read_resume_text` helper, a `_DEFAULT_RESUME_PATH` constant, the six new scorer fields on the existing `Settings` dataclass, and a `__post_init__` (the dataclass has none today):
 
@@ -263,12 +263,12 @@ MIN_SALARY=
 MIN_MATCH_SCORE=60
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/test_config.py -v`
 Expected: `7 passed`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add scout/config.py scout/.env.example scout/resume.txt tests/test_config.py
@@ -287,7 +287,7 @@ git commit -m "feat(scout): extend Settings with scorer config"
 - Consumes: `scout.config.Settings` (Task 2), `scout.shared.schemas.Listing` (Task 1).
 - Produces: `scout.sub_agents.scorer.filters.filter_listings(listings: list[Listing], settings: Settings) -> list[Listing]`. Later tasks call this as `filter_listings(listings, active_settings)`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_scorer_filters.py`:
 
@@ -378,12 +378,12 @@ def test_filter_listings_keeps_listing_with_no_salary_data():
     assert [listing.external_id for listing in result] == ["1"]
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/test_scorer_filters.py -v`
 Expected: FAIL at collection with `ModuleNotFoundError: No module named 'scout.sub_agents.scorer.filters'`
 
-- [ ] **Step 3: Implement the filter**
+- [x] **Step 3: Implement the filter**
 
 Write `scout/sub_agents/scorer/filters.py`:
 
@@ -416,12 +416,12 @@ def filter_listings(listings: list[Listing], settings: Settings) -> list[Listing
     return survivors
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/test_scorer_filters.py -v`
 Expected: `6 passed`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scout/sub_agents/scorer/filters.py tests/test_scorer_filters.py
@@ -449,7 +449,7 @@ Resolved by dropping this task. The Scorer (Task 5) returns the full `list[Match
 - Consumes: `scout.config.Settings`, `scout.config.settings` (Task 2); `scout.shared.schemas.Listing`, `scout.shared.schemas.MatchResult` (Task 1); `scout.sub_agents.scorer.filters.filter_listings` (Task 3).
 - Produces: `scout.prompts.build_scorer_instruction(settings: Settings, listings: list[Listing]) -> str`. Produces `scout.sub_agents.scorer.agent.build_scorer_agent(listings: list[Listing], settings: Settings | None = None) -> LlmAgent`. `build_scorer_agent` takes `listings` explicitly (rather than reading from session state) because root pipeline wiring — how the scraper's output reaches this agent inside a `SequentialAgent` — is out of scope per the spec; a future session will decide that wiring and can adapt this signature then. The agent has no `after_model_callback` — it returns every scored survivor, unfiltered by `min_match_score` (see Task 4 note above).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_scorer_agent.py`:
 
@@ -532,12 +532,12 @@ def test_build_scorer_agent_has_no_score_threshold_callback():
     assert agent.after_model_callback is None
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/test_scorer_agent.py -v`
 Expected: FAIL at collection with `ImportError: cannot import name 'build_scorer_instruction' from 'scout.prompts'`
 
-- [ ] **Step 3: Implement the prompt and the agent**
+- [x] **Step 3: Implement the prompt and the agent**
 
 Append to `scout/prompts.py`:
 
@@ -607,19 +607,19 @@ def build_scorer_agent(
 
 Note: unlike the scraper (which exposes a module-level `root_agent` built from `default_settings` for `adk` CLI discovery), the scorer has no `root_agent` in this task — it requires `listings` as an argument that isn't available at import time, and root pipeline wiring is out of scope per the spec. The agent has no `after_model_callback` — see the Task 4 note above on why threshold-dropping was removed from this stage.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/test_scorer_agent.py -v`
 Expected: `6 passed`
 
-- [ ] **Step 5: Run the full test suite**
+- [x] **Step 5: Run the full test suite**
 
 Run: `./.venv/Scripts/python.exe -m pytest -v`
 Expected: all tests pass. If the venv is missing dependencies (e.g. a fresh checkout), run `./.venv/Scripts/python.exe -m pip install -r requirements.txt` first.
 
 **Actual final count (post-review, see the Update note above)**: `tests/test_prompts.py`, `tests/test_scraper_agent.py`, `tests/test_scraper_tools.py` — 10; `tests/test_schemas.py` — 8 (5 original + 3 `ListingScore` tests); `tests/test_config.py` — 7 (includes `description_char_limit`); `tests/test_scorer_filters.py` — 7 (includes the remote-bypass fix); `tests/test_scorer_results.py` — 3 (new, `join_match_results`); `tests/test_scorer_agent.py` — 10 (covers the trimmed projection, truncation, `list[ListingScore]` output, and `temperature=0`): **45 passed**.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add scout/prompts.py scout/sub_agents/scorer/agent.py tests/test_scorer_agent.py
