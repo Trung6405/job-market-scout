@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
-from scout.shared.schemas import Listing, MatchResult
+from scout.shared.schemas import Listing, ListingScore, MatchResult
 
 
 def test_listing_accepts_valid_data():
@@ -81,3 +81,16 @@ def test_match_result_accepts_valid_data():
 def test_match_result_require_score():
     with pytest.raises(ValidationError):
         MatchResult(listing=_make_listing(), reasoning="Missing score.")
+
+def test_listing_score_accepts_valid_data():
+    score = ListingScore(external_id="123", score=82, reasoning="Strong overlap.")
+    assert score.external_id == "123"
+    assert score.score == 82
+
+def test_listing_score_rejects_score_above_100():
+    with pytest.raises(ValidationError):
+        ListingScore(external_id="123", score=101, reasoning="Too high.")
+
+def test_listing_score_rejects_score_below_0():
+    with pytest.raises(ValidationError):
+        ListingScore(external_id="123", score=-1, reasoning="Too low.")

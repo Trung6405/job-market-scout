@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl
 
 
 class Listing(BaseModel):
@@ -22,4 +22,10 @@ class Listing(BaseModel):
 class MatchResult(BaseModel):
     listing: Listing
     score: int
+    reasoning: str
+
+
+class ListingScore(BaseModel):
+    external_id: str
+    score: int = Field(ge=0, le=100)
     reasoning: str
