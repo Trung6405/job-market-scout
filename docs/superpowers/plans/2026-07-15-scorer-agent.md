@@ -4,7 +4,20 @@
 
 **Goal:** Build a working ADK `LlmAgent` scorer sub-agent that rule-filters listings against preferences, then scores the survivors against a resume with DeepSeek, returning `MatchResult` objects above a minimum score.
 
-**Architecture:** `scout/sub_agents/scorer` (folder name from the existing scaffold; agent `name="scorer"`) is an ADK `LlmAgent` (DeepSeek via LiteLLM) with no tools. A plain Python function, `filters.filter_listings`, runs *before* the agent is built and drops hard-reject listings (remote/location/salary) using `scout.config.Settings`. The survivors are serialized into the agent's instruction alongside resume text, so the LLM only reasons over listings that already passed the deterministic filter. An `after_model_callback` (`callbacks.build_drop_low_scores_callback`) drops any scored result below `min_match_score` from the LLM's JSON response before it's returned, mirroring the scraper sub-agent's `stamp_scraped_at` callback pattern.
+**Architecture:** `scout/sub_agents/scorer` (folder name from the existing scaffold; agent `name="scorer"`) is an ADK `LlmAgent` (DeepSeek via LiteLLM) with no tools. A plain Python function, `filters.filter_listings`, runs *before* the agent is built and drops hard-reject listings (remote/location/salary) using `scout.config.Settings`. The survivors are serialized into the agent's instruction alongside resume text, so the LLM only reasons over listings that already passed the deterministic filter. The agent's `output_schema` is **not** `list[MatchResult]` — the LLM outputs `list[ListingScore]` (`external_id`, `score`, `reasoning` only, no echoed listing fields), and a separate deterministic function, `results.join_match_results`, pairs each score back to its source `Listing` by `external_id` to produce `list[MatchResult]`. The agent returns every scored survivor, including scores below `min_match_score` — no in-agent threshold drop. This is a deliberate reconciliation with `docs/scout-architecture.md` Decision 4 ("relevance filtering happens at Briefing query time, never at write time"): dropping sub-threshold matches inside the Scorer would make it impossible for a future persistence layer to store full score history or re-query with a different threshold. `min_match_score` remains a config field (read by a future Briefing-query stage), but the Scorer itself does not filter on it.
+
+**Update (2026-07-16, post-implementation review):** Tasks 1, 3, and 5 below are shown in their original as-planned form for historical record, but the actual implementation diverged from them after a code-review pass caught real issues. The differences, in order of what changed:
+- **`ListingScore` schema added** (`scout/shared/schemas.py`): `{external_id: str, score: int = Field(ge=0, le=100), reasoning: str}`. The Scorer's `output_schema` is `list[ListingScore]`, not `list[MatchResult]` — having the LLM echo the full `Listing` object back (as originally planned) costs roughly 3x the output tokens for zero new information and risks the model silently mutating/hallucinating listing fields on the way through.
+- **`scout/sub_agents/scorer/results.py` added**: `join_match_results(listings: list[Listing], scores: list[ListingScore]) -> list[MatchResult]` — deterministic code that pairs each `ListingScore` back to its source `Listing` by `external_id`. Scores with an `external_id` that doesn't match any input listing (a hallucinated ID) are silently dropped rather than raising, consistent with the spec's "filter don't fail" stance on malformed LLM output. Listings the LLM didn't score at all are simply absent from the result — no zero-score placeholder is invented.
+- **`filters.filter_listings` fixed** (`scout/sub_agents/scorer/filters.py`): the `preferred_locations` check is skipped entirely when `listing.is_remote` is `True`. Without this, a remote listing like `"Remote (AUS)"` was hard-rejected by `preferred_locations=["Melbourne"]` even though a remote role satisfies any location preference — a real correctness gap in the original filter.
+- **`description_char_limit` added to `Settings`** (default `1500`, env var `DESCRIPTION_CHAR_LIMIT`): `build_scorer_instruction` truncates each listing's `description` to this many characters before serializing it into the prompt. Scraped descriptions are routinely 3-8k characters of boilerplate (About Us, EEO statements, benefits) that add input-token cost without improving scoring quality.
+- **`build_scorer_instruction` projects a trimmed listing view**, not `listing.model_dump()` — only `external_id`, `title`, `company`, `location`, `is_remote`, `salary_min`, `salary_max`, and the truncated `description` are serialized into the prompt. Fields the LLM never needs to reason about (`url`, `source`, `scraped_at`, raw timestamps) are dropped from the prompt entirely.
+- **`temperature=0`** passed to `LiteLlm(model=..., temperature=0)` in `build_scorer_agent`, for score reproducibility across runs (scores feed into a `matches` table history in a future session; comparing scores across runs is only meaningful if scoring is as deterministic as the model allows).
+
+Explicitly **not** adopted from that review, with reasoning:
+- **Retry-on-validation-failure** and **batching listings into chunks of ~10-15 with per-batch retry** — both directly contradict the spec's stated stance: *"No retry logic for LLM calls yet — add once real failure modes are observed (YAGNI), same stance as the scraper spec."* No evidence of either failure mode has been observed yet. Revisit once `results_wanted` grows large enough that a single-call prompt becomes unreliable, or once a real malformed-output failure is seen in practice.
+- **Restructuring `build_scorer_agent` to read listings from ADK session state** (`ctx.state.get("scraped_listings")`) instead of taking `listings` as an explicit argument — this invents a session-state key contract that doesn't exist anywhere in the codebase (the scraper agent has no `output_key` set). Root pipeline wiring, including how the scraper's output reaches the Scorer, is explicitly out of scope per the spec and deferred to a future session that will design that contract properly.
+- **Recording model name / prompt-template hash in the `matches` table** — the `matches` table doesn't exist yet; DB persistence is out of scope for this session. Correct direction for whichever future session wires up persistence, alongside `config_version` (architecture Decision 5/6) — no action here.
 
 **Tech Stack:** Python 3.12, `google-adk==2.4.0` (`LlmAgent`, `LiteLlm`), `pydantic`, `python-dotenv`, `pytest==9.1.1` (new dev dependency — not yet in `requirements.txt` on `main`).
 
@@ -417,145 +430,11 @@ git commit -m "feat(scout): add scorer rule-based pre-filter"
 
 ---
 
-### Task 4: Score-threshold callback
+### Task 4: (dropped — see architecture reconciliation)
 
-**Files:**
-- Create: `scout/sub_agents/scorer/callbacks.py`
-- Create: `tests/test_scorer_callbacks.py`
+**Update (2026-07-16):** this task originally built an `after_model_callback` (`callbacks.build_drop_low_scores_callback`) that dropped `MatchResult`s below `min_match_score` from the Scorer's output before it was returned. Comparing the spec against `docs/scout-architecture.md` Decision 4 ("Relevance filtering happens at Briefing query time ... never at write time") surfaced a real conflict: if the Scorer discards sub-threshold matches before they ever leave the agent, a future persistence layer has nothing to write for those listings, and the architecture's goal of a full re-queryable score history is structurally impossible to satisfy later.
 
-**Interfaces:**
-- Consumes: nothing from earlier tasks (operates on raw JSON, decoupled from `MatchResult` for the same reason `stamp_scraped_at` operates on raw JSON in the scraper worktree — the callback runs on the LLM's text output before Pydantic validation).
-- Produces: `scout.sub_agents.scorer.callbacks.build_drop_low_scores_callback(min_score: int) -> Callable[[CallbackContext, LlmResponse], LlmResponse | None]`. Task 5 calls this as `after_model_callback=build_drop_low_scores_callback(active_settings.min_match_score)`.
-
-- [ ] **Step 1: Write the failing tests**
-
-Create `tests/test_scorer_callbacks.py`:
-
-```python
-import json
-
-from google.genai import types
-
-from scout.sub_agents.scorer.callbacks import build_drop_low_scores_callback
-
-
-def _make_response(payload) -> types.GenerateContentResponse:
-    from google.adk.models.llm_response import LlmResponse
-
-    content = types.Content(parts=[types.Part(text=json.dumps(payload))])
-    return LlmResponse(content=content)
-
-
-def test_drop_low_scores_removes_results_below_threshold():
-    callback = build_drop_low_scores_callback(min_score=60)
-    response = _make_response(
-        [
-            {"listing": {"title": "A"}, "score": 80, "reasoning": "good fit"},
-            {"listing": {"title": "B"}, "score": 40, "reasoning": "poor fit"},
-        ]
-    )
-
-    result = callback(None, response)
-
-    kept = json.loads(result.content.parts[0].text)
-    assert len(kept) == 1
-    assert kept[0]["score"] == 80
-
-
-def test_drop_low_scores_keeps_results_at_or_above_threshold():
-    callback = build_drop_low_scores_callback(min_score=60)
-    response = _make_response(
-        [{"listing": {"title": "A"}, "score": 60, "reasoning": "borderline"}]
-    )
-
-    result = callback(None, response)
-
-    kept = json.loads(result.content.parts[0].text)
-    assert len(kept) == 1
-
-
-def test_drop_low_scores_returns_none_when_response_is_partial():
-    callback = build_drop_low_scores_callback(min_score=60)
-    from google.adk.models.llm_response import LlmResponse
-
-    response = LlmResponse(partial=True)
-
-    assert callback(None, response) is None
-
-
-def test_drop_low_scores_returns_none_on_invalid_json():
-    callback = build_drop_low_scores_callback(min_score=60)
-    from google.adk.models.llm_response import LlmResponse
-
-    content = types.Content(parts=[types.Part(text="not json")])
-    response = LlmResponse(content=content)
-
-    assert callback(None, response) is None
-```
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-Run: `./.venv/Scripts/python.exe -m pytest tests/test_scorer_callbacks.py -v`
-Expected: FAIL at collection with `ModuleNotFoundError: No module named 'scout.sub_agents.scorer.callbacks'`
-
-- [ ] **Step 3: Implement the callback**
-
-Write `scout/sub_agents/scorer/callbacks.py`:
-
-```python
-from __future__ import annotations
-
-import json
-from typing import Callable
-
-from google.adk.agents.callback_context import CallbackContext
-from google.adk.models.llm_response import LlmResponse
-
-
-def build_drop_low_scores_callback(
-    min_score: int,
-) -> Callable[[CallbackContext, LlmResponse], LlmResponse | None]:
-    def drop_low_scores(
-        callback_context: CallbackContext, llm_response: LlmResponse
-    ) -> LlmResponse | None:
-        if llm_response.partial or not llm_response.content:
-            return None
-
-        parts = llm_response.content.parts or []
-        if not parts or parts[0].text is None:
-            return None
-
-        try:
-            results = json.loads(parts[0].text)
-        except json.JSONDecodeError:
-            return None
-
-        if not isinstance(results, list):
-            return None
-
-        kept = [
-            result
-            for result in results
-            if isinstance(result, dict) and result.get("score", 0) >= min_score
-        ]
-
-        parts[0].text = json.dumps(kept)
-        return llm_response
-
-    return drop_low_scores
-```
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-Run: `./.venv/Scripts/python.exe -m pytest tests/test_scorer_callbacks.py -v`
-Expected: `4 passed`
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add scout/sub_agents/scorer/callbacks.py tests/test_scorer_callbacks.py
-git commit -m "feat(scout): add scorer score-threshold callback"
-```
+Resolved by dropping this task. The Scorer (Task 5) returns the full `list[MatchResult]` for every filtered survivor, unfiltered by score. `min_match_score` stays a `Settings` field (already added in Task 2) for a future Briefing-query stage to apply at read time. `scout/sub_agents/scorer/callbacks.py` and `tests/test_scorer_callbacks.py` are not created.
 
 ---
 
@@ -567,8 +446,8 @@ git commit -m "feat(scout): add scorer score-threshold callback"
 - Create: `tests/test_scorer_agent.py`
 
 **Interfaces:**
-- Consumes: `scout.config.Settings`, `scout.config.settings` (Task 2); `scout.shared.schemas.Listing`, `scout.shared.schemas.MatchResult` (Task 1); `scout.sub_agents.scorer.filters.filter_listings` (Task 3); `scout.sub_agents.scorer.callbacks.build_drop_low_scores_callback` (Task 4).
-- Produces: `scout.prompts.build_scorer_instruction(settings: Settings, listings: list[Listing]) -> str`. Produces `scout.sub_agents.scorer.agent.build_scorer_agent(listings: list[Listing], settings: Settings | None = None) -> LlmAgent`. `build_scorer_agent` takes `listings` explicitly (rather than reading from session state) because root pipeline wiring — how the scraper's output reaches this agent inside a `SequentialAgent` — is out of scope per the spec; a future session will decide that wiring and can adapt this signature then.
+- Consumes: `scout.config.Settings`, `scout.config.settings` (Task 2); `scout.shared.schemas.Listing`, `scout.shared.schemas.MatchResult` (Task 1); `scout.sub_agents.scorer.filters.filter_listings` (Task 3).
+- Produces: `scout.prompts.build_scorer_instruction(settings: Settings, listings: list[Listing]) -> str`. Produces `scout.sub_agents.scorer.agent.build_scorer_agent(listings: list[Listing], settings: Settings | None = None) -> LlmAgent`. `build_scorer_agent` takes `listings` explicitly (rather than reading from session state) because root pipeline wiring — how the scraper's output reaches this agent inside a `SequentialAgent` — is out of scope per the spec; a future session will decide that wiring and can adapt this signature then. The agent has no `after_model_callback` — it returns every scored survivor, unfiltered by `min_match_score` (see Task 4 note above).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -645,6 +524,12 @@ def test_build_scorer_agent_registers_no_tools():
     agent = build_scorer_agent([_make_listing()], Settings())
 
     assert agent.tools == []
+
+
+def test_build_scorer_agent_has_no_score_threshold_callback():
+    agent = build_scorer_agent([_make_listing()], Settings())
+
+    assert agent.after_model_callback is None
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -704,7 +589,6 @@ from scout.config import Settings
 from scout.config import settings as default_settings
 from scout.prompts import build_scorer_instruction
 from scout.shared.schemas import Listing, MatchResult
-from scout.sub_agents.scorer.callbacks import build_drop_low_scores_callback
 from scout.sub_agents.scorer.filters import filter_listings
 
 
@@ -718,23 +602,22 @@ def build_scorer_agent(
         model=LiteLlm(model=active_settings.deepseek_model),
         instruction=build_scorer_instruction(active_settings, survivors),
         output_schema=list[MatchResult],
-        after_model_callback=build_drop_low_scores_callback(
-            active_settings.min_match_score
-        ),
     )
 ```
 
-Note: unlike the scraper (which exposes a module-level `root_agent` built from `default_settings` for `adk` CLI discovery), the scorer has no `root_agent` in this task — it requires `listings` as an argument that isn't available at import time, and root pipeline wiring is out of scope per the spec.
+Note: unlike the scraper (which exposes a module-level `root_agent` built from `default_settings` for `adk` CLI discovery), the scorer has no `root_agent` in this task — it requires `listings` as an argument that isn't available at import time, and root pipeline wiring is out of scope per the spec. The agent has no `after_model_callback` — see the Task 4 note above on why threshold-dropping was removed from this stage.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/test_scorer_agent.py -v`
-Expected: `5 passed`
+Expected: `6 passed`
 
 - [ ] **Step 5: Run the full test suite**
 
 Run: `./.venv/Scripts/python.exe -m pytest -v`
-Expected: all tests pass, including the merged scraper suite (`tests/test_prompts.py`, `tests/test_scraper_agent.py`, `tests/test_scraper_tools.py` — 10 tests) alongside the scorer suite built in this plan (`tests/test_schemas.py`, `tests/test_config.py`, `tests/test_scorer_filters.py`, `tests/test_scorer_callbacks.py`, `tests/test_scorer_agent.py` — 27 tests): **37 passed**. If the venv is missing dependencies (e.g. a fresh checkout), run `./.venv/Scripts/python.exe -m pip install -r requirements.txt` first.
+Expected: all tests pass. If the venv is missing dependencies (e.g. a fresh checkout), run `./.venv/Scripts/python.exe -m pip install -r requirements.txt` first.
+
+**Actual final count (post-review, see the Update note above)**: `tests/test_prompts.py`, `tests/test_scraper_agent.py`, `tests/test_scraper_tools.py` — 10; `tests/test_schemas.py` — 8 (5 original + 3 `ListingScore` tests); `tests/test_config.py` — 7 (includes `description_char_limit`); `tests/test_scorer_filters.py` — 7 (includes the remote-bypass fix); `tests/test_scorer_results.py` — 3 (new, `join_match_results`); `tests/test_scorer_agent.py` — 10 (covers the trimmed projection, truncation, `list[ListingScore]` output, and `temperature=0`): **45 passed**.
 
 - [ ] **Step 6: Commit**
 
@@ -748,7 +631,8 @@ git commit -m "feat(scout): build scorer LlmAgent"
 The tasks above are fully unit-testable without a live DeepSeek API key. Before relying on the scorer for real scoring:
 
 1. Set `DEEPSEEK_API_KEY` and a real `RESUME_PATH` in `scout/.env`.
-2. In a Python shell: build some `Listing` objects, or run the now-merged `build_scraper_agent()` (`scout/sub_agents/scraper/agent.py`) to get real scraped output, call `build_scorer_agent(listings)`, and run it via the ADK runner (`adk run` equivalent for a single sub-agent, or a small script using `google.adk.runners.Runner`).
-3. Confirm the returned `MatchResult` list only contains listings that passed both the rule-based filter and the `min_match_score` threshold, with sensible scores/reasoning relative to the resume.
+2. In a Python shell: build some `Listing` objects, or run the now-merged `build_scraper_agent()` (`scout/sub_agents/scraper/agent.py`) to get real scraped output, call `build_scorer_agent(listings)`, and run it via the ADK runner (`adk run` equivalent for a single sub-agent, or a small script using `google.adk.runners.Runner`) to get back `list[ListingScore]`.
+3. Call `join_match_results(listings, scores)` (`scout/sub_agents/scorer/results.py`) on the filtered survivors and the returned scores to get `list[MatchResult]`.
+4. Confirm the joined `MatchResult` list contains every listing the LLM actually scored (regardless of score value — `min_match_score` is not applied at this stage, a future Briefing-query stage applies it at read time), with sensible scores/reasoning relative to the resume, and that no hallucinated `external_id`s made it through the join.
 
 This step needs a live DeepSeek key, so it isn't part of the automated task loop above — do it once after Task 5.
