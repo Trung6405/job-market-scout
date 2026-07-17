@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS listings (
+    id BIGSERIAL PRIMARY KEY,
+    source TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    company TEXT NOT NULL,
+    location TEXT NOT NULL,
+    url TEXT NOT NULL,
+    description TEXT NOT NULL,
+    is_remote BOOLEAN NOT NULL,
+    salary_min DOUBLE PRECISION,
+    salary_max DOUBLE PRECISION,
+    date_posted TIMESTAMPTZ,
+    scraped_at TIMESTAMPTZ NOT NULL,
+    content_hash TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    closed_at TIMESTAMPTZ,
+    UNIQUE (source, external_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_listings_status ON listings (status);
