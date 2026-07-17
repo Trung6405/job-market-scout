@@ -90,3 +90,19 @@ def test_settings_raises_when_resume_path_missing(monkeypatch):
 
     with pytest.raises(FileNotFoundError):
         Settings()
+
+
+def test_settings_uses_database_url_default_when_env_unset(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    settings = Settings()
+
+    assert settings.database_url == "postgresql://scout:scout@localhost:5433/scout"
+
+
+def test_settings_reads_database_url_env_override(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test:test@localhost:5433/test")
+
+    settings = Settings()
+
+    assert settings.database_url == "postgresql://test:test@localhost:5433/test"

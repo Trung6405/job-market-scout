@@ -9,6 +9,7 @@ aiosqlite==0.22.1
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.14.2
+asyncpg==0.31.0
 attrs==26.1.0
 Authlib==1.7.2
 certifi==2026.6.17
@@ -63,6 +64,7 @@ pydantic_core==2.41.5
 Pygments==2.20.0
 PyJWT==2.13.0
 pytest==9.1.1
+pytest-asyncio==1.4.0
 python-dotenv==1.0.1
 python-multipart==0.0.32
 PyYAML==6.0.3
