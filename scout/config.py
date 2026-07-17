@@ -8,6 +8,14 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
+_DEFAULT_RESUME_PATH = str(Path(__file__).resolve().parent / "resume.txt")
+
+def _read_resume_text(resume_path: str) -> str:
+    path = Path(resume_path)
+    if not path.is_file():
+        raise FileNotFoundError(f"resume file not found: {resume_path}")
+    return path.read_text(encoding="utf-8")
+
 
 def _split_csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
@@ -38,6 +46,31 @@ class Settings:
     hours_old: int = field(
         default_factory=lambda: int(os.getenv("HOURS_OLD", "72"))
     )
+    resume_path: str = field(
+        default_factory=lambda: os.getenv("RESUME_PATH", _DEFAULT_RESUME_PATH)
+    )
+    preferred_locations: list[str] = field(
+        default_factory=lambda: _split_csv(os.getenv("PREFERRED_LOCATIONS", ""))
+    )
+    remote_only: bool = field(
+        default_factory=lambda: os.getenv("REMOTE_ONLY", "false").strip().lower()
+        == "true"
+    )
+    min_salary: float | None = field(
+        default_factory=lambda: (
+            float(os.getenv("MIN_SALARY")) if os.getenv("MIN_SALARY") else None
+        )
+    )
+    min_match_score: int = field(
+        default_factory=lambda: int(os.getenv("MIN_MATCH_SCORE", "60"))
+    )
+    description_char_limit: int = field(
+        default_factory=lambda: int(os.getenv("DESCRIPTION_CHAR_LIMIT", "1500"))
+    )
+    resume_text: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "resume_text", _read_resume_text(self.resume_path))
 
 
 settings = Settings()
