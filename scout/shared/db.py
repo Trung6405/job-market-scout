@@ -8,6 +8,7 @@ import asyncpg
 
 from scout.config import Settings
 from scout.config import settings as default_settings
+from scout.shared.schemas import Listing
 
 _SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 
@@ -23,8 +24,8 @@ async def apply_schema(pool: asyncpg.Pool) -> None:
         await conn.execute(schema_sql)
 
 
-def _content_hash(listing) -> str:
-    payload = "|".join(
+def _content_hash(listing: Listing) -> str:
+    payload = "\x00".join(
         [
             listing.title,
             listing.company,
@@ -39,7 +40,7 @@ def _content_hash(listing) -> str:
 
 
 async def upsert_listing(
-    conn: asyncpg.Connection, listing
+    conn: asyncpg.Connection, listing: Listing
 ) -> Literal["new", "changed", "unchanged"]:
     content_hash = _content_hash(listing)
     row = await conn.fetchrow(
@@ -101,29 +102,19 @@ async def upsert_listing(
 async def close_stale_listings(
     conn: asyncpg.Connection, seen_keys: list[tuple[str, str]]
 ) -> list[str]:
-    if not seen_keys:
-        rows = await conn.fetch(
-            """
-            UPDATE listings
-            SET status = 'closed', closed_at = now()
-            WHERE status = 'open'
-            RETURNING external_id
-            """
-        )
-    else:
-        sources = [key[0] for key in seen_keys]
-        external_ids = [key[1] for key in seen_keys]
-        rows = await conn.fetch(
-            """
-            UPDATE listings
-            SET status = 'closed', closed_at = now()
-            WHERE status = 'open'
-              AND NOT (source, external_id) IN (
-                  SELECT * FROM unnest($1::text[], $2::text[])
-              )
-            RETURNING external_id
-            """,
-            sources,
-            external_ids,
-        )
+    sources = [key[0] for key in seen_keys]
+    external_ids = [key[1] for key in seen_keys]
+    rows = await conn.fetch(
+        """
+        UPDATE listings
+        SET status = 'closed', closed_at = now()
+        WHERE status = 'open'
+          AND NOT (source, external_id) IN (
+              SELECT * FROM unnest($1::text[], $2::text[])
+          )
+        RETURNING external_id
+        """,
+        sources,
+        external_ids,
+    )
     return [row["external_id"] for row in rows]

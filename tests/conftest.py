@@ -4,6 +4,7 @@ import asyncpg
 import pytest
 import pytest_asyncio
 
+from scout.config import Settings
 from scout.shared.db import apply_schema
 
 
@@ -11,7 +12,7 @@ from scout.shared.db import apply_schema
 async def db_pool():
     try:
         pool = await asyncpg.create_pool(
-            dsn="postgresql://scout:scout@localhost:5433/scout", timeout=2
+            dsn=Settings().database_url, timeout=2
         )
     except (OSError, asyncpg.PostgresError) as exc:
         pytest.skip(f"Postgres unreachable: {exc}")
