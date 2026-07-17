@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Spec: `docs/superpowers/specs/2026-07-15-scraper-agent-design.md` — this plan implements it in full; do not add Seek support, career-page search, DB persistence, or other sub-agents (out of scope per that spec).
+- Spec: `docs/specs/scraper-agent/spec.md` — this plan implements it in full; do not add Seek support, career-page search, DB persistence, or other sub-agents (out of scope per that spec).
 - `google-adk==2.4.0` is already installed; do not change its version.
 - `mcp` must be pinned `>=1.24,<2` (the range `google-adk[mcp]` requires) — use `mcp==1.28.1`.
 - All new Python dependencies are installed into the existing project venv at `.venv` (already active for this repo) and captured in `requirements.txt` via `pip freeze`, not hand-typed version guesses.

@@ -10,7 +10,7 @@
 
 `job-market-scout`'s pipeline (Scraper → Tracker → Scorer → Briefing) needs its Tracker stage implemented. Per the PRS, the Tracker is deterministic code (Decision D1) that persists every scraped listing to PostgreSQL, deduplicates, classifies each as new/changed/unchanged/closed by diffing against prior runs, and forwards only new/changed listings to the Scorer (FR-3 through FR-6).
 
-The approved Storage module design (`docs/superpowers/specs/2026-07-17-listings-db-design.md`) defined the persistence primitives but explicitly deferred the Tracker's own orchestration — batching, calling convention, and how relevant listings reach the Scorer. `scout/shared/db.py` and `scout/tools/tracker.py` are currently empty stubs. The root `SequentialAgent` wiring and scheduler do not exist yet (PRS §7); existing stages are plain builder functions called directly with `list[Listing]`.
+The approved Storage module design (`docs/specs/listings-db/spec.md`) defined the persistence primitives but explicitly deferred the Tracker's own orchestration — batching, calling convention, and how relevant listings reach the Scorer. `scout/shared/db.py` and `scout/tools/tracker.py` are currently empty stubs. The root `SequentialAgent` wiring and scheduler do not exist yet (PRS §7); existing stages are plain builder functions called directly with `list[Listing]`.
 
 ## Success Criteria
 
