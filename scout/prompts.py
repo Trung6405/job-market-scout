@@ -42,6 +42,7 @@ def build_scraper_instruction(settings: Settings) -> str:
 
 def _project_listing_for_scoring(listing: Listing, description_char_limit: int) -> dict:
     return {
+        "source": listing.source,
         "external_id": listing.external_id,
         "title": listing.title,
         "company": listing.company,
@@ -78,7 +79,9 @@ Minimum salary: {settings.min_salary if settings.min_salary is not None else "no
 Listings to score:
 {listings_json}
 
-Return a JSON list of objects, each with "external_id" (copied exactly
-from the listing), "score" (integer 0-100), and "reasoning" (one short
-sentence). Return only the JSON list, no commentary.
+Return a JSON list of objects, each with "source" and "external_id"
+(copied exactly from the listing — together they identify it, since
+external_id alone may repeat across sources), "score" (integer 0-100),
+and "reasoning" (one short sentence). Return only the JSON list, no
+commentary.
 """

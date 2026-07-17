@@ -40,6 +40,14 @@ def test_build_scorer_instruction_includes_external_id_for_joining():
 
     assert "job-42" in instruction
 
+def test_build_scorer_instruction_includes_source_for_joining():
+    settings = Settings()
+    listings = [_make_listing(source="indeed")]
+
+    instruction = build_scorer_instruction(settings, listings)
+
+    assert "indeed" in instruction
+
 def test_build_scorer_instruction_excludes_url_and_scraped_at():
     settings = Settings()
     listings = [_make_listing(url="https://www.linkedin.com/jobs/view/999")]
