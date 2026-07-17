@@ -82,15 +82,15 @@ This gives a future Tracker exactly the classification FR-5/FR-6 need (only new/
 
 ### `scout/config.py`
 
-Add `database_url: str` to `Settings`, env var `DATABASE_URL`, default `postgresql://scout:scout@localhost:5432/scout`, following the existing env-driven field pattern.
+Add `database_url: str` to `Settings`, env var `DATABASE_URL`, default `postgresql://scout:scout@localhost:5433/scout` (see Amendments — host port 5433, not 5432), following the existing env-driven field pattern.
 
 ### `scout/.env.example`
 
-Append `DATABASE_URL=postgresql://scout:scout@localhost:5432/scout`.
+Append `DATABASE_URL=postgresql://scout:scout@localhost:5433/scout`.
 
 ### `docker-compose.yaml`
 
-Add a `postgres` service: `image: postgres:16-alpine`, `POSTGRES_USER=scout`, `POSTGRES_PASSWORD=scout`, `POSTGRES_DB=scout`, a named volume for data persistence, and a `pg_isready` healthcheck. The `app` service adds `depends_on: postgres: condition: service_healthy` and a `DATABASE_URL` pointing at `postgres:5432` (container-to-container).
+Add a `postgres` service: `image: postgres:16-alpine`, `POSTGRES_USER=scout`, `POSTGRES_PASSWORD=scout`, `POSTGRES_DB=scout`, a named volume for data persistence, and a `pg_isready` healthcheck. Host port mapping is `5433:5432` (see Amendments). The `app` service adds `depends_on: postgres: condition: service_healthy` and a `DATABASE_URL` pointing at `postgres:5432` (container-to-container — unaffected by the host port remap, since containers talk to each other on the Docker network, not through the host port mapping).
 
 ### `requirements.txt`
 
@@ -121,3 +121,7 @@ Add `asyncpg`.
 - Tracker orchestration (how/when `upsert_listing` and `close_stale_listings` get called, batching strategy, and how new/changed listings reach the Scorer via pipeline state) is a future session's design, building directly on this Storage module.
 - The deferred `matches` table (score persistence, correlated via a `config_version` hash per PRS §8) is not designed here; when that session happens, it will need its own idempotent addition to `schema.sql`.
 - `close_stale_listings`' global-close behavior assumes one search configuration; if the project ever runs multiple independent search configs against the same DB, closing would need to be scoped — not needed now (YAGNI).
+
+## Amendments
+
+- 2026-07-17: Changed the `postgres` service's host port mapping from `5432:5432` to `5433:5432`, and `Settings.database_url`'s default host port from 5432 to 5433, discovered during implementation: a pre-existing native PostgreSQL service on the development machine already binds host port 5432, making the Docker container unreachable from the host on that port. Container-to-container traffic (the `app` service's `DATABASE_URL`, pointing at `postgres:5432`) is unaffected — that's Docker-internal networking, not the host port mapping.
