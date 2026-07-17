@@ -67,6 +67,11 @@ class Settings:
     description_char_limit: int = field(
         default_factory=lambda: int(os.getenv("DESCRIPTION_CHAR_LIMIT", "1500"))
     )
+    database_url: str = field(
+        default_factory=lambda: os.getenv(
+            "DATABASE_URL", "postgresql://scout:scout@localhost:5432/scout"
+        )
+    )
     resume_text: str = field(init=False)
 
     def __post_init__(self) -> None:
