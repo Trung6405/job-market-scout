@@ -94,3 +94,16 @@ async def test_track_listings_does_not_close_caller_supplied_pool(db_pool):
         row = await conn.fetchrow("SELECT 1 AS ok")
 
     assert row["ok"] == 1
+
+
+@pytest.mark.asyncio
+async def test_track_listings_rerun_after_partial_failure_is_safe(db_pool):
+    listing_a = _make_listing(source="linkedin", external_id="job-a")
+    listing_b = _make_listing(source="linkedin", external_id="job-b")
+
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing_a)
+
+    result = await track_listings([listing_a, listing_b], pool=db_pool)
+
+    assert result == [listing_b]
