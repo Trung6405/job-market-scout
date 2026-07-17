@@ -97,6 +97,23 @@ async def test_track_listings_does_not_close_caller_supplied_pool(db_pool):
 
 
 @pytest.mark.asyncio
+async def test_track_listings_empty_batch_does_not_close_open_listings(db_pool):
+    open_listing = _make_listing(source="linkedin", external_id="job-open")
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, open_listing)
+
+    result = await track_listings([], pool=db_pool)
+
+    assert result == []
+
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT status FROM listings WHERE external_id = $1", "job-open"
+        )
+    assert row["status"] == "open"
+
+
+@pytest.mark.asyncio
 async def test_track_listings_rerun_after_partial_failure_is_safe(db_pool):
     listing_a = _make_listing(source="linkedin", external_id="job-a")
     listing_b = _make_listing(source="linkedin", external_id="job-b")

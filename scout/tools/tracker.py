@@ -23,6 +23,8 @@ async def track_listings(
     try:
         if owns_pool:
             await apply_schema(active_pool)
+        if not listings:
+            return []
         relevant: list[Listing] = []
         async with active_pool.acquire() as conn:
             for listing in listings:
