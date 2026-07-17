@@ -5,7 +5,7 @@ Status: Approved
 
 ## Context
 
-`job-market-scout` is a multi-agent job search pipeline (Scraper → Tracker → Scorer → Briefing) built on Google ADK, LiteLLM, and DeepSeek, deployed via Docker. Per the PRS (`docs/sdlc/product-requirements-spec.md`), PostgreSQL is used only by the Tracker stage (single writer, Decision D2) to persist every scraped listing and track its lifecycle (new / changed / closed) via diffing against prior runs (FR-3 through FR-6). Match scores are explicitly **not** persisted in this version (Decision D4) — that's deferred.
+`job-market-scout` is a multi-agent job search pipeline (Scraper → Tracker → Scorer → Briefing) built on Google ADK, LiteLLM, and DeepSeek, deployed via Docker. Per the PRS (`docs/requirements/product-requirements-spec.md`), PostgreSQL is used only by the Tracker stage (single writer, Decision D2) to persist every scraped listing and track its lifecycle (new / changed / closed) via diffing against prior runs (FR-3 through FR-6). Match scores are explicitly **not** persisted in this version (Decision D4) — that's deferred.
 
 `scout/shared/db.py` and `scout/tools/tracker.py` currently exist as empty stub files; nothing has been implemented for storage yet. There is no DB driver in `requirements.txt` and no Postgres service in `docker-compose.yaml`.
 
