@@ -69,7 +69,7 @@ class Settings:
     )
     database_url: str = field(
         default_factory=lambda: os.getenv(
-            "DATABASE_URL", "postgresql://scout:scout@localhost:5432/scout"
+            "DATABASE_URL", "postgresql://scout:scout@localhost:5433/scout"
         )
     )
     resume_text: str = field(init=False)

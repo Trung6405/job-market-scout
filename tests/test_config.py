@@ -97,7 +97,7 @@ def test_settings_uses_database_url_default_when_env_unset(monkeypatch):
 
     settings = Settings()
 
-    assert settings.database_url == "postgresql://scout:scout@localhost:5432/scout"
+    assert settings.database_url == "postgresql://scout:scout@localhost:5433/scout"
 
 
 def test_settings_reads_database_url_env_override(monkeypatch):
