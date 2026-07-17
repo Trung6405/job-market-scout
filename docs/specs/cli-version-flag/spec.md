@@ -2,7 +2,7 @@
 
 > **Status:** Approved
 > **Created:** 2026-07-17 · **Approved:** 2026-07-17
-> **Implementation plan:** [plan.md](plan.md) *(created after approval)*
+> **Implementation plan:** [plan.md](../../plans/cli-version-flag/plan.md) *(created after approval)*
 
 ---
 

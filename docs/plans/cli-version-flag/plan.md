@@ -2,6 +2,7 @@
 
 > **Status:** Not started
 > **Created:** 2026-07-17 · **Last updated:** 2026-07-17
+> **Spec:** [spec.md](../../specs/cli-version-flag/spec.md)
 
 ---
 
