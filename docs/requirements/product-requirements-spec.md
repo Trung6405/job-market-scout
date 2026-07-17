@@ -56,28 +56,21 @@ A single job seeker (initially the author). Single-user by design in this versio
 
 ### 3.1 Pipeline
 
-The Scout App runs as a single containerised process. On each daily run, four stages execute in order, passing data through shared pipeline state (in-memory), not through per-stage database round trips.
+The Scout App runs as a single containerised process. On each daily run, four stages execute in order, passing data through shared pipeline state (in-memory), not through per-stage database round trips:
 
-```
-Scheduler (planned)
-   │ triggers daily run
-   ▼
-┌─────────────────────────────────────────────────────────┐
-│ Scout App (Docker container)                            │
-│                                                         │
-│  🤖 Scraper ──raw listings──► ⚙️ Tracker                │
-│                                  │                      │
-│                    relevant / new listings              │
-│                                  ▼                      │
-│                              🤖 Scorer                  │
-│                                  │                      │
-│                        listings + scores                │
-│                                  ▼                      │
-│                              🤖 Briefing ──► email      │
-└─────────────────────────────────────────────────────────┘
-```
+- Scheduler (planned) triggers the daily run
+- 🤖 **Scraper** → raw listings → ⚙️ **Tracker**
+- ⚙️ **Tracker** → relevant / new listings → 🤖 **Scorer**
+- 🤖 **Scorer** → listings + scores → 🤖 **Briefing**
+- 🤖 **Briefing** → email
 
 🤖 = LLM agent stage · ⚙️ = deterministic code stage
+
+![Job Market Scout — high-level architecture: Scheduler triggers the Scout App container, which runs Scraper → Tracker → Scorer → Briefing against their modules and external services](../diagrams/job-market-scout-simplified-1-high-level-architecture.png)
+
+*A day in the life, step by step:*
+
+![A day in the life — Scheduler starts the run, then Scraper, Tracker, Scorer, and Briefing execute in order, ending with the Job Seeker reading the daily briefing](../diagrams/job-market-scout-simplified-2-user-journey-daily-run.png)
 
 ### 3.2 Stage responsibilities
 
