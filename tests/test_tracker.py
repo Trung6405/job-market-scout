@@ -32,3 +32,27 @@ async def test_track_listings_returns_only_new_and_changed(db_pool):
     stored = {row["external_id"]: row["title"] for row in rows}
     assert stored["job-existing"] == "Updated Title"
     assert stored["job-new"] == new.title
+
+
+@pytest.mark.asyncio
+async def test_track_listings_closes_previously_open_listings_absent_from_batch(
+    db_pool,
+):
+    stale = _make_listing(source="linkedin", external_id="job-stale")
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, stale)
+
+    current = _make_listing(source="linkedin", external_id="job-current")
+
+    await track_listings([current], pool=db_pool)
+
+    async with db_pool.acquire() as conn:
+        stale_row = await conn.fetchrow(
+            "SELECT status FROM listings WHERE external_id = $1", "job-stale"
+        )
+        current_row = await conn.fetchrow(
+            "SELECT status FROM listings WHERE external_id = $1", "job-current"
+        )
+
+    assert stale_row["status"] == "closed"
+    assert current_row["status"] == "open"
