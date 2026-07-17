@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from scout.shared.db import apply_schema, upsert_listing
+from scout.shared.db import apply_schema, close_stale_listings, upsert_listing
 from scout.shared.schemas import Listing
 
 
@@ -87,3 +87,27 @@ async def test_upsert_listing_reopened_closed_listing_returns_changed(db_pool):
         classification = await upsert_listing(conn, listing)
 
     assert classification == "changed"
+
+
+@pytest.mark.asyncio
+async def test_close_stale_listings_closes_unseen_and_keeps_seen_open(db_pool):
+    seen = _make_listing(source="linkedin", external_id="job-seen")
+    stale = _make_listing(source="linkedin", external_id="job-stale")
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, seen)
+        await upsert_listing(conn, stale)
+
+        closed_ids = await close_stale_listings(conn, [(seen.source, seen.external_id)])
+
+        seen_row = await conn.fetchrow(
+            "SELECT status FROM listings WHERE external_id = $1", seen.external_id
+        )
+        stale_row = await conn.fetchrow(
+            "SELECT status, closed_at FROM listings WHERE external_id = $1",
+            stale.external_id,
+        )
+
+    assert closed_ids == ["job-stale"]
+    assert seen_row["status"] == "open"
+    assert stale_row["status"] == "closed"
+    assert stale_row["closed_at"] is not None

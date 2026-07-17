@@ -96,3 +96,34 @@ async def upsert_listing(
     if row["previous_status"] == "closed" or row["previous_hash"] != content_hash:
         return "changed"
     return "unchanged"
+
+
+async def close_stale_listings(
+    conn: asyncpg.Connection, seen_keys: list[tuple[str, str]]
+) -> list[str]:
+    if not seen_keys:
+        rows = await conn.fetch(
+            """
+            UPDATE listings
+            SET status = 'closed', closed_at = now()
+            WHERE status = 'open'
+            RETURNING external_id
+            """
+        )
+    else:
+        sources = [key[0] for key in seen_keys]
+        external_ids = [key[1] for key in seen_keys]
+        rows = await conn.fetch(
+            """
+            UPDATE listings
+            SET status = 'closed', closed_at = now()
+            WHERE status = 'open'
+              AND NOT (source, external_id) IN (
+                  SELECT * FROM unnest($1::text[], $2::text[])
+              )
+            RETURNING external_id
+            """,
+            sources,
+            external_ids,
+        )
+    return [row["external_id"] for row in rows]
