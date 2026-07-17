@@ -19,10 +19,10 @@ async def track_listings(
 ) -> list[Listing]:
     owns_pool = pool is None
     active_pool = pool if pool is not None else await create_pool(settings)
-    if owns_pool:
-        await apply_schema(active_pool)
 
     try:
+        if owns_pool:
+            await apply_schema(active_pool)
         relevant: list[Listing] = []
         async with active_pool.acquire() as conn:
             for listing in listings:
