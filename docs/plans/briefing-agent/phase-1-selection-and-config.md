@@ -1,7 +1,7 @@
 # Phase 1: Selection & Config
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** nothing
 
 ---
@@ -24,7 +24,7 @@ Add the config and shared schema pieces Briefing needs (`briefing_max_matches`, 
 - **Files:** `scout/config.py`, `scout/.env.example`, `tests/test_config.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing tests in `tests/test_config.py` (append below the existing scorer/database tests, following the file's existing `_make_listing`-free style — plain `Settings()` construction):
+  - [x] Write failing tests in `tests/test_config.py` (append below the existing scorer/database tests, following the file's existing `_make_listing`-free style — plain `Settings()` construction):
     ```python
     def test_settings_uses_briefing_defaults_when_env_unset(monkeypatch):
         for var in (
@@ -56,8 +56,8 @@ Add the config and shared schema pieces Briefing needs (`briefing_max_matches`, 
         assert settings.gmail_app_password == "app-password"
         assert settings.gmail_recipient == "me@example.com"
     ```
-  - [ ] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_config.py -v` — expect `AttributeError: 'Settings' object has no attribute 'briefing_max_matches'`
-  - [ ] Implement: append to the `Settings` dataclass body in `scout/config.py` (after the existing `database_url` field, before `resume_text`):
+  - [x] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_config.py -v` — expect `AttributeError: 'Settings' object has no attribute 'briefing_max_matches'`
+  - [x] Implement: append to the `Settings` dataclass body in `scout/config.py` (after the existing `database_url` field, before `resume_text`):
     ```python
         briefing_max_matches: int = field(
             default_factory=lambda: int(os.getenv("BRIEFING_MAX_MATCHES", "5"))
@@ -79,15 +79,15 @@ Add the config and shared schema pieces Briefing needs (`briefing_max_matches`, 
     GMAIL_APP_PASSWORD=
     GMAIL_RECIPIENT=
     ```
-  - [ ] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_config.py -v` — expect all tests including the 2 new ones to pass
-  - [ ] Commit: `feat(scout): add briefing config fields`
+  - [x] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_config.py -v` — expect all tests including the 2 new ones to pass
+  - [x] Commit: `feat(scout): add briefing config fields`
 
 ### Task 2: Briefing prose schemas
 
 - **Files:** `scout/shared/schemas.py`, `tests/test_schemas.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing tests in `tests/test_schemas.py` (append below the existing `ListingScore` tests):
+  - [x] Write failing tests in `tests/test_schemas.py` (append below the existing `ListingScore` tests):
     ```python
     from scout.shared.schemas import BriefingProse, BriefingTakeaway
 
@@ -117,8 +117,8 @@ Add the config and shared schema pieces Briefing needs (`briefing_max_matches`, 
         assert prose.takeaways == []
     ```
     Note: add the `BriefingProse, BriefingTakeaway` import to the existing `from scout.shared.schemas import ...` line at the top rather than a second import line, if one already exists after Task 1's edits land — check current imports first.
-  - [ ] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_schemas.py -v` — expect `ImportError: cannot import name 'BriefingProse'`
-  - [ ] Implement: append to `scout/shared/schemas.py` (below `ListingScore`):
+  - [x] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_schemas.py -v` — expect `ImportError: cannot import name 'BriefingProse'`
+  - [x] Implement: append to `scout/shared/schemas.py` (below `ListingScore`):
     ```python
     class BriefingTakeaway(BaseModel):
         source: str
@@ -130,15 +130,15 @@ Add the config and shared schema pieces Briefing needs (`briefing_max_matches`, 
         intro: str
         takeaways: list[BriefingTakeaway]
     ```
-  - [ ] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_schemas.py -v` — expect all tests including the 3 new ones to pass
-  - [ ] Commit: `feat(scout): add BriefingTakeaway and BriefingProse schemas`
+  - [x] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_schemas.py -v` — expect all tests including the 3 new ones to pass
+  - [x] Commit: `feat(scout): add BriefingTakeaway and BriefingProse schemas`
 
 ### Task 3: Select step
 
 - **Files:** `scout/sub_agents/briefing/select.py` (new), `tests/test_briefing_select.py` (new)
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing tests in `tests/test_briefing_select.py`:
+  - [x] Write failing tests in `tests/test_briefing_select.py`:
     ```python
     from datetime import datetime, timezone
 
@@ -197,8 +197,8 @@ Add the config and shared schema pieces Briefing needs (`briefing_max_matches`, 
 
         assert result == []
     ```
-  - [ ] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_select.py -v` — expect `ModuleNotFoundError: No module named 'scout.sub_agents.briefing.select'`
-  - [ ] Implement `scout/sub_agents/briefing/select.py`:
+  - [x] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_select.py -v` — expect `ModuleNotFoundError: No module named 'scout.sub_agents.briefing.select'`
+  - [x] Implement `scout/sub_agents/briefing/select.py`:
     ```python
     from __future__ import annotations
 
@@ -213,15 +213,15 @@ Add the config and shared schema pieces Briefing needs (`briefing_max_matches`, 
         qualifying.sort(key=lambda m: m.score, reverse=True)
         return qualifying[: settings.briefing_max_matches]
     ```
-  - [ ] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_select.py -v` — expect `4 passed`
-  - [ ] Commit: `feat(scout): add briefing select step`
+  - [x] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_select.py -v` — expect `4 passed`
+  - [x] Commit: `feat(scout): add briefing select step`
 
 ---
 
 ## Verification
 
-- [ ] All phase tests pass: `./.venv/Scripts/python.exe -m pytest tests/test_config.py tests/test_schemas.py tests/test_briefing_select.py -v`
-- [ ] Full suite still green: `./.venv/Scripts/python.exe -m pytest -v` (confirms the new `Settings` fields didn't break any existing Scraper/Scorer/Tracker test)
+- [x] All phase tests pass: `./.venv/Scripts/python.exe -m pytest tests/test_config.py tests/test_schemas.py tests/test_briefing_select.py -v`
+- [x] Full suite still green: `./.venv/Scripts/python.exe -m pytest -v` (confirms the new `Settings` fields didn't break any existing Scraper/Scorer/Tracker test)
 
 ## Rollback
 
@@ -231,4 +231,6 @@ Revert the three commits above; all changes are additive fields/files with no ca
 
 ## Notes / Learnings
 
-<Filled in during execution — anything that should inform later phases.>
+Executed exactly as planned — no deviations. All 3 tasks (config fields,
+prose schemas, select step) went in cleanly on top of the existing
+Scraper/Scorer/Tracker code with no merge conflicts or test breakage.

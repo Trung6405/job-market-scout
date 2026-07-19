@@ -1,7 +1,7 @@
 # Phase 2: Summarize & Build
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** Phase 1 complete (`select_top_matches`, `BriefingProse`/`BriefingTakeaway`, `briefing_max_matches`)
 
 ---
@@ -24,7 +24,7 @@ Build the Summarize step (an `LlmAgent` that writes intro + per-listing takeaway
 - **Files:** `scout/prompts.py`, `tests/test_prompts.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing tests in `tests/test_prompts.py` (append):
+  - [x] Write failing tests in `tests/test_prompts.py` (append):
     ```python
     from datetime import datetime, timezone
 
@@ -68,8 +68,8 @@ Build the Summarize step (an `LlmAgent` that writes intro + per-listing takeaway
         assert "Build backend systems." not in instruction
     ```
     Note: `Settings` is already imported in this file from the scraper/scorer test additions — reuse it, don't re-import.
-  - [ ] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_prompts.py -v` — expect `ImportError: cannot import name 'build_briefing_instruction'`
-  - [ ] Implement: append to `scout/prompts.py`:
+  - [x] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_prompts.py -v` — expect `ImportError: cannot import name 'build_briefing_instruction'`
+  - [x] Implement: append to `scout/prompts.py`:
     ```python
     def _project_match_for_briefing(match: MatchResult) -> dict:
         return {
@@ -107,15 +107,15 @@ Build the Summarize step (an `LlmAgent` that writes intro + per-listing takeaway
     """
     ```
     Add `MatchResult` to the existing `from scout.shared.schemas import Listing` line at the top of `scout/prompts.py` if it isn't already imported.
-  - [ ] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_prompts.py -v`
-  - [ ] Commit: `feat(scout): add briefing prompt`
+  - [x] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_prompts.py -v`
+  - [x] Commit: `feat(scout): add briefing prompt`
 
 ### Task 2: Briefing LlmAgent
 
 - **Files:** `scout/sub_agents/briefing/agent.py` (currently empty), `tests/test_briefing_agent.py` (new)
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing tests in `tests/test_briefing_agent.py` (mirror `tests/test_scorer_agent.py`'s structure):
+  - [x] Write failing tests in `tests/test_briefing_agent.py` (mirror `tests/test_scorer_agent.py`'s structure):
     ```python
     from datetime import datetime, timezone
 
@@ -169,8 +169,8 @@ Build the Summarize step (an `LlmAgent` that writes intro + per-listing takeaway
 
         assert "Platform Engineer" in agent.instruction
     ```
-  - [ ] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_agent.py -v` — expect a collection error (empty module, no `build_briefing_agent`)
-  - [ ] Implement `scout/sub_agents/briefing/agent.py`:
+  - [x] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_agent.py -v` — expect a collection error (empty module, no `build_briefing_agent`)
+  - [x] Implement `scout/sub_agents/briefing/agent.py`:
     ```python
     from __future__ import annotations
 
@@ -194,15 +194,15 @@ Build the Summarize step (an `LlmAgent` that writes intro + per-listing takeaway
         )
     ```
     `output_schema` is deliberately omitted — see plan.md's Key Decisions for why a `BaseModel`-shaped `output_schema` isn't used here. `temperature=0.3` (not `0` like the Scorer) because this step is prose, not a reproducible numeric score — implementation-time judgment, adjust freely if manual verification reads oddly.
-  - [ ] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_agent.py -v` — expect `4 passed`
-  - [ ] Commit: `feat(scout): add briefing LlmAgent`
+  - [x] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_agent.py -v` — expect `4 passed`
+  - [x] Commit: `feat(scout): add briefing LlmAgent`
 
 ### Task 3: Summarize step (Runner invocation + parsing)
 
 - **Files:** `scout/sub_agents/briefing/summarize.py` (new), `tests/test_briefing_summarize.py` (new)
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing tests in `tests/test_briefing_summarize.py`:
+  - [x] Write failing tests in `tests/test_briefing_summarize.py`:
     ```python
     from __future__ import annotations
 
@@ -265,8 +265,8 @@ Build the Summarize step (an `LlmAgent` that writes intro + per-listing takeaway
         assert isinstance(prose, BriefingProse)
         assert prose.takeaways[0].takeaway == "Great fit."
     ```
-  - [ ] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_summarize.py -v` — expect `ModuleNotFoundError: No module named 'scout.sub_agents.briefing.summarize'`
-  - [ ] Implement `scout/sub_agents/briefing/summarize.py`:
+  - [x] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_summarize.py -v` — expect `ModuleNotFoundError: No module named 'scout.sub_agents.briefing.summarize'`
+  - [x] Implement `scout/sub_agents/briefing/summarize.py`:
     ```python
     from __future__ import annotations
 
@@ -317,15 +317,15 @@ Build the Summarize step (an `LlmAgent` that writes intro + per-listing takeaway
         raw_text = await _run_briefing_agent(agent)
         return parse_briefing_prose(raw_text)
     ```
-  - [ ] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_summarize.py -v` — expect `3 passed`
-  - [ ] Commit: `feat(scout): add briefing summarize step`
+  - [x] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_summarize.py -v` — expect `3 passed`
+  - [x] Commit: `feat(scout): add briefing summarize step`
 
 ### Task 4: Build step (email construction)
 
 - **Files:** `scout/sub_agents/briefing/email_builder.py` (new), `tests/test_briefing_email_builder.py` (new)
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing tests in `tests/test_briefing_email_builder.py`:
+  - [x] Write failing tests in `tests/test_briefing_email_builder.py`:
     ```python
     from __future__ import annotations
 
@@ -385,8 +385,8 @@ Build the Summarize step (an `LlmAgent` that writes intro + per-listing takeaway
         html_body = message.get_body(preferencelist=("html",)).get_content()
         assert "<script>alert(1)</script>" not in html_body
     ```
-  - [ ] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_email_builder.py -v` — expect `ModuleNotFoundError`
-  - [ ] Implement `scout/sub_agents/briefing/email_builder.py`:
+  - [x] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_email_builder.py -v` — expect `ModuleNotFoundError`
+  - [x] Implement `scout/sub_agents/briefing/email_builder.py`:
     ```python
     from __future__ import annotations
 
@@ -454,15 +454,15 @@ Build the Summarize step (an `LlmAgent` that writes intro + per-listing takeaway
         )
         return message
     ```
-  - [ ] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_email_builder.py -v` — expect `4 passed`
-  - [ ] Commit: `feat(scout): add briefing email builder`
+  - [x] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_email_builder.py -v` — expect `4 passed`
+  - [x] Commit: `feat(scout): add briefing email builder`
 
 ---
 
 ## Verification
 
-- [ ] All phase tests pass: `./.venv/Scripts/python.exe -m pytest tests/test_prompts.py tests/test_briefing_agent.py tests/test_briefing_summarize.py tests/test_briefing_email_builder.py -v`
-- [ ] Full suite still green: `./.venv/Scripts/python.exe -m pytest -v`
+- [x] All phase tests pass: `./.venv/Scripts/python.exe -m pytest tests/test_prompts.py tests/test_briefing_agent.py tests/test_briefing_summarize.py tests/test_briefing_email_builder.py -v`
+- [x] Full suite still green: `./.venv/Scripts/python.exe -m pytest -v`
 
 ## Observability
 
@@ -476,4 +476,7 @@ Revert the four commits above. `scout/sub_agents/briefing/agent.py` reverts to i
 
 ## Notes / Learnings
 
-<Filled in during execution — anything that should inform later phases.>
+Executed exactly as planned. `_run_briefing_agent`'s monkeypatch seam
+(Task 3) worked cleanly for isolating `summarize_matches` from a real
+`InMemoryRunner`/DeepSeek call — no test in this phase touches the network.
+Code matched the plan's snippets verbatim; no design changes needed.
