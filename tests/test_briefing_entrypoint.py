@@ -23,7 +23,11 @@ def _listing_and_score(match):
 async def test_run_briefing_summarizes_and_sends_when_matches_qualify(monkeypatch):
     match = _make_match("1", "Platform Engineer", 88)
     listing, score = _listing_and_score(match)
-    settings = Settings(min_match_score=60, gmail_address="scout@example.com")
+    settings = Settings(
+        min_match_score=60,
+        gmail_address="scout@example.com",
+        gmail_app_password="secret",
+    )
 
     summarize_calls = []
     build_calls = []
@@ -62,7 +66,11 @@ async def test_run_briefing_summarizes_and_sends_when_matches_qualify(monkeypatc
 async def test_run_briefing_skips_summarize_when_no_matches_qualify(monkeypatch):
     match = _make_match("1", "Platform Engineer", 10)
     listing, score = _listing_and_score(match)
-    settings = Settings(min_match_score=60, gmail_address="scout@example.com")
+    settings = Settings(
+        min_match_score=60,
+        gmail_address="scout@example.com",
+        gmail_app_password="secret",
+    )
 
     summarize_calls = []
     build_calls = []
@@ -92,3 +100,29 @@ async def test_run_briefing_skips_summarize_when_no_matches_qualify(monkeypatch)
 
     assert summarize_calls == []
     assert build_calls == [([], None)]
+
+
+@pytest.mark.asyncio
+async def test_run_briefing_raises_before_summarizing_when_gmail_not_configured(
+    monkeypatch,
+):
+    match = _make_match("1", "Platform Engineer", 88)
+    listing, score = _listing_and_score(match)
+    settings = Settings(
+        min_match_score=60, gmail_address="", gmail_app_password=""
+    )
+
+    summarize_calls = []
+
+    async def _fake_summarize(top_matches, active_settings):
+        summarize_calls.append(top_matches)
+        return BriefingProse(intro="Nice matches.", takeaways=[])
+
+    monkeypatch.setattr(
+        "scout.sub_agents.briefing.briefing.summarize_matches", _fake_summarize
+    )
+
+    with pytest.raises(ValueError):
+        await run_briefing([listing], [score], settings)
+
+    assert summarize_calls == []
