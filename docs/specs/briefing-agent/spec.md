@@ -1,8 +1,8 @@
 # Spec: Briefing Agent
 
-> **Status:** Draft
-> **Created:** 2026-07-17 · **Approved:** —
-> **Implementation plan:** [plan.md](../../plans/briefing-agent/plan.md) *(created after approval)*
+> **Status:** Approved
+> **Created:** 2026-07-17 · **Approved:** 2026-07-19
+> **Implementation plan:** [plan.md](../../plans/briefing-agent/plan.md)
 
 ---
 
