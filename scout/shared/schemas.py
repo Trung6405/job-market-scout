@@ -30,3 +30,14 @@ class ListingScore(BaseModel):
     external_id: str
     score: int = Field(ge=0, le=100)
     reasoning: str
+
+
+class BriefingTakeaway(BaseModel):
+    source: str
+    external_id: str
+    takeaway: str
+
+
+class BriefingProse(BaseModel):
+    intro: str
+    takeaways: list[BriefingTakeaway]
