@@ -1,6 +1,6 @@
 # Plan: Briefing Agent
 
-> **Status:** Not started
+> **Status:** In progress — all 3 phases implemented and unit-tested; Manual Verification (live DeepSeek + Gmail) still pending
 > **Created:** 2026-07-19 · **Last updated:** 2026-07-19
 > **Spec:** [spec.md](../../specs/briefing-agent/spec.md)
 
@@ -12,11 +12,11 @@ Build the fourth and final pipeline stage: given `list[Listing]` and the Scorer'
 
 ## Acceptance Criteria
 
-- [ ] Given a `list[Listing]` and matching `list[ListingScore]`, `run_briefing` sends one email with the day's top matches (title, company, link, score) and LLM-written prose, using only real listing data for factual fields.
-- [ ] A day with no listing meeting `min_match_score` still sends a short "no strong matches today" email — no LLM call, no silence.
-- [ ] `run_briefing` is directly callable and testable in isolation, consistent with the Scraper/Scorer/Tracker pattern.
-- [ ] No listing field the LLM did not see (title, company, URL) can appear altered in the sent email — those fields are inserted by deterministic code.
-- [ ] Missing Gmail config or an SMTP send/auth failure raises immediately — no silent fallback, no retry.
+- [x] Given a `list[Listing]` and matching `list[ListingScore]`, `run_briefing` sends one email with the day's top matches (title, company, link, score) and LLM-written prose, using only real listing data for factual fields. (Verified by unit tests with the LLM/SMTP seams mocked; live end-to-end send is the outstanding Manual Verification step.)
+- [x] A day with no listing meeting `min_match_score` still sends a short "no strong matches today" email — no LLM call, no silence.
+- [x] `run_briefing` is directly callable and testable in isolation, consistent with the Scraper/Scorer/Tracker pattern.
+- [x] No listing field the LLM did not see (title, company, URL) can appear altered in the sent email — those fields are inserted by deterministic code.
+- [x] Missing Gmail config or an SMTP send/auth failure raises immediately — no silent fallback, no retry.
 
 ---
 
@@ -40,9 +40,9 @@ Build the fourth and final pipeline stage: given `list[Listing]` and the Scorer'
 
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
-| 1 | Selection & config | [phase-1-selection-and-config.md](phase-1-selection-and-config.md) | Not started |
-| 2 | Summarize & build | [phase-2-summarize-and-build.md](phase-2-summarize-and-build.md) | Not started |
-| 3 | Send & entry point | [phase-3-send-and-entrypoint.md](phase-3-send-and-entrypoint.md) | Not started |
+| 1 | Selection & config | [phase-1-selection-and-config.md](phase-1-selection-and-config.md) | Complete |
+| 2 | Summarize & build | [phase-2-summarize-and-build.md](phase-2-summarize-and-build.md) | Complete |
+| 3 | Send & entry point | [phase-3-send-and-entrypoint.md](phase-3-send-and-entrypoint.md) | Complete |
 
 > All phases are planned in advance — every row above has a written,
 > human-approved phase doc before phase 1 execution starts. If executing
@@ -79,11 +79,11 @@ Build the fourth and final pipeline stage: given `list[Listing]` and the Scorer'
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All phase verification steps pass
-- [ ] Feature verified manually in a running environment (Manual Verification, Phase 3)
-- [ ] Docs / README updated where behaviour changed
-- [ ] No new lint or type-check warnings
+- [x] All acceptance criteria met
+- [x] All phase verification steps pass (77 passed, 12 skipped — pre-existing DB tests needing a live Postgres, unaffected by this work)
+- [ ] Feature verified manually in a running environment (Manual Verification, Phase 3) — pending a live `DEEPSEEK_API_KEY` and Gmail app password
+- [ ] Docs / README updated where behaviour changed — not yet done; no README/docs beyond spec+plan reference Briefing today
+- [ ] No new lint or type-check warnings — not verified; this project has no lint/type-check tooling configured
 
 ## Update Rules
 

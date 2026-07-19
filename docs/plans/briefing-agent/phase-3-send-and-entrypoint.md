@@ -1,7 +1,7 @@
 # Phase 3: Send & Entry Point
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** Phase 1 and Phase 2 complete (`select_top_matches`, `summarize_matches`, `build_email`)
 
 ---
@@ -24,7 +24,7 @@ Build the Send step (Gmail SMTP via `smtplib`, fail-fast on missing config or au
 - **Files:** `scout/sub_agents/briefing/notification.py` (new), `tests/test_briefing_notification.py` (new)
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing tests in `tests/test_briefing_notification.py`:
+  - [x] Write failing tests in `tests/test_briefing_notification.py`:
     ```python
     from __future__ import annotations
 
@@ -109,8 +109,8 @@ Build the Send step (Gmail SMTP via `smtplib`, fail-fast on missing config or au
         with pytest.raises(RuntimeError):
             send_email(EmailMessage(), settings)
     ```
-  - [ ] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_notification.py -v` — expect `ModuleNotFoundError`
-  - [ ] Implement `scout/sub_agents/briefing/notification.py`:
+  - [x] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_notification.py -v` — expect `ModuleNotFoundError`
+  - [x] Implement `scout/sub_agents/briefing/notification.py`:
     ```python
     from __future__ import annotations
 
@@ -133,15 +133,15 @@ Build the Send step (Gmail SMTP via `smtplib`, fail-fast on missing config or au
             smtp.login(settings.gmail_address, settings.gmail_app_password)
             smtp.send_message(message)
     ```
-  - [ ] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_notification.py -v` — expect `4 passed`
-  - [ ] Commit: `feat(scout): add briefing SMTP notification`
+  - [x] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_notification.py -v` — expect `4 passed`
+  - [x] Commit: `feat(scout): add briefing SMTP notification`
 
 ### Task 2: Entry point
 
 - **Files:** `scout/sub_agents/briefing/briefing.py` (new), `tests/test_briefing_entrypoint.py` (new)
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing tests in `tests/test_briefing_entrypoint.py`:
+  - [x] Write failing tests in `tests/test_briefing_entrypoint.py`:
     ```python
     from __future__ import annotations
 
@@ -240,8 +240,8 @@ Build the Send step (Gmail SMTP via `smtplib`, fail-fast on missing config or au
         assert summarize_calls == []
         assert build_calls == [([], None)]
     ```
-  - [ ] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_entrypoint.py -v` — expect `ModuleNotFoundError`
-  - [ ] Implement `scout/sub_agents/briefing/briefing.py`:
+  - [x] Verify it fails: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_entrypoint.py -v` — expect `ModuleNotFoundError`
+  - [x] Implement `scout/sub_agents/briefing/briefing.py`:
     ```python
     from __future__ import annotations
 
@@ -274,15 +274,15 @@ Build the Send step (Gmail SMTP via `smtplib`, fail-fast on missing config or au
         send_email(message, active_settings)
         return message
     ```
-  - [ ] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_entrypoint.py -v` — expect `2 passed`
-  - [ ] Commit: `feat(scout): add briefing entry point`
+  - [x] Verify it passes: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_entrypoint.py -v` — expect `2 passed`
+  - [x] Commit: `feat(scout): add briefing entry point`
 
 ---
 
 ## Verification
 
-- [ ] All phase tests pass: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_notification.py tests/test_briefing_entrypoint.py -v`
-- [ ] Full suite green: `./.venv/Scripts/python.exe -m pytest -v`
+- [x] All phase tests pass: `./.venv/Scripts/python.exe -m pytest tests/test_briefing_notification.py tests/test_briefing_entrypoint.py -v`
+- [x] Full suite green: `./.venv/Scripts/python.exe -m pytest -v`
 
 ## Observability
 
@@ -296,7 +296,11 @@ Revert the two commits above. Nothing outside `scout/sub_agents/briefing/` calls
 
 ## Notes / Learnings
 
-<Filled in during execution — anything that should inform later phases.>
+Executed exactly as planned. Full automated suite after this phase and
+across the whole plan: 77 passed, 12 skipped (pre-existing DB tests that
+need a live Postgres — unaffected by this work). **Manual Verification
+below has not been run yet** — it needs a live `DEEPSEEK_API_KEY` and a
+real Gmail app password, neither of which is available in this session.
 
 ---
 

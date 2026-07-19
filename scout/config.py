@@ -72,6 +72,18 @@ class Settings:
             "DATABASE_URL", "postgresql://scout:scout@localhost:5433/scout"
         )
     )
+    briefing_max_matches: int = field(
+        default_factory=lambda: int(os.getenv("BRIEFING_MAX_MATCHES", "5"))
+    )
+    gmail_address: str = field(
+        default_factory=lambda: os.getenv("GMAIL_ADDRESS", "")
+    )
+    gmail_app_password: str = field(
+        default_factory=lambda: os.getenv("GMAIL_APP_PASSWORD", "")
+    )
+    gmail_recipient: str = field(
+        default_factory=lambda: os.getenv("GMAIL_RECIPIENT", "")
+    )
     resume_text: str = field(init=False)
 
     def __post_init__(self) -> None:
