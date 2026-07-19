@@ -9,14 +9,21 @@ from scout.shared.schemas import BriefingProse, MatchResult
 _FALLBACK_TAKEAWAY_TEMPLATE = "Worth a look — scored {score}/100 against your resume."
 
 
-def _takeaway_for(match: MatchResult, prose: BriefingProse | None) -> str:
-    if prose is not None:
-        for takeaway in prose.takeaways:
-            if (
-                takeaway.source == match.listing.source
-                and takeaway.external_id == match.listing.external_id
-            ):
-                return takeaway.takeaway
+def _index_takeaways(prose: BriefingProse | None) -> dict[tuple[str, str], str]:
+    if prose is None:
+        return {}
+    return {
+        (takeaway.source, takeaway.external_id): takeaway.takeaway
+        for takeaway in prose.takeaways
+    }
+
+
+def _takeaway_for(
+    match: MatchResult, takeaways_by_key: dict[tuple[str, str], str]
+) -> str:
+    key = (match.listing.source, match.listing.external_id)
+    if key in takeaways_by_key:
+        return takeaways_by_key[key]
     return _FALLBACK_TAKEAWAY_TEMPLATE.format(score=match.score)
 
 
@@ -42,11 +49,12 @@ def build_email(
     )
 
     intro = prose.intro if prose is not None else ""
+    takeaways_by_key = _index_takeaways(prose)
     text_lines = [intro, ""]
     html_items = []
     for match in top_matches:
         listing = match.listing
-        takeaway = _takeaway_for(match, prose)
+        takeaway = _takeaway_for(match, takeaways_by_key)
         text_lines += [
             f"{listing.title} at {listing.company} — {match.score}/100",
             str(listing.url),
