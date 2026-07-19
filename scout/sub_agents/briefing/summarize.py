@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from google.adk.agents import LlmAgent
 from google.adk.runners import InMemoryRunner
@@ -15,9 +16,17 @@ _APP_NAME = "briefing"
 _USER_ID = "briefing"
 _SESSION_ID = "briefing"
 
+_CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```$", re.DOTALL)
+
+
+def _strip_code_fence(raw_text: str) -> str:
+    stripped = raw_text.strip()
+    match = _CODE_FENCE_RE.match(stripped)
+    return match.group(1).strip() if match else stripped
+
 
 def parse_briefing_prose(raw_text: str) -> BriefingProse:
-    return BriefingProse.model_validate(json.loads(raw_text))
+    return BriefingProse.model_validate(json.loads(_strip_code_fence(raw_text)))
 
 
 async def _run_briefing_agent(agent: LlmAgent) -> str:

@@ -34,6 +34,38 @@ def test_parse_briefing_prose_rejects_non_json():
         parse_briefing_prose("not json")
 
 
+def test_parse_briefing_prose_strips_markdown_code_fence():
+    raw = (
+        "```json\n"
+        + json.dumps(
+            {
+                "intro": "Nice matches today.",
+                "takeaways": [
+                    {
+                        "source": "linkedin",
+                        "external_id": "1",
+                        "takeaway": "Great fit.",
+                    }
+                ],
+            }
+        )
+        + "\n```"
+    )
+
+    prose = parse_briefing_prose(raw)
+
+    assert prose.intro == "Nice matches today."
+    assert prose.takeaways[0].external_id == "1"
+
+
+def test_parse_briefing_prose_strips_bare_code_fence_without_language_tag():
+    raw = '```\n{"intro": "Hi.", "takeaways": []}\n```'
+
+    prose = parse_briefing_prose(raw)
+
+    assert prose.intro == "Hi."
+
+
 @pytest.mark.asyncio
 async def test_summarize_matches_returns_parsed_prose(monkeypatch):
     raw = json.dumps(
