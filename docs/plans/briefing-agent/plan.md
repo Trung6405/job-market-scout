@@ -1,6 +1,6 @@
 # Plan: Briefing Agent
 
-> **Status:** In progress — all 3 phases implemented and unit-tested; Manual Verification (live DeepSeek + Gmail) still pending
+> **Status:** Complete — all 3 phases implemented, unit-tested, and manually verified with a real send
 > **Created:** 2026-07-19 · **Last updated:** 2026-07-19
 > **Spec:** [spec.md](../../specs/briefing-agent/spec.md)
 
@@ -81,7 +81,7 @@ Build the fourth and final pipeline stage: given `list[Listing]` and the Scorer'
 
 - [x] All acceptance criteria met
 - [x] All phase verification steps pass (77 passed, 12 skipped — pre-existing DB tests needing a live Postgres, unaffected by this work)
-- [ ] Feature verified manually in a running environment (Manual Verification, Phase 3) — pending a live `DEEPSEEK_API_KEY` and Gmail app password
+- [x] Feature verified manually in a running environment (Manual Verification, Phase 3) — done 2026-07-19, real email sent against live DeepSeek + Gmail
 - [ ] Docs / README updated where behaviour changed — not yet done; no README/docs beyond spec+plan reference Briefing today
 - [ ] No new lint or type-check warnings — not verified; this project has no lint/type-check tooling configured
 

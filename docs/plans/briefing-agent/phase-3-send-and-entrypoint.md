@@ -297,10 +297,25 @@ Revert the two commits above. Nothing outside `scout/sub_agents/briefing/` calls
 ## Notes / Learnings
 
 Executed exactly as planned. Full automated suite after this phase and
-across the whole plan: 77 passed, 12 skipped (pre-existing DB tests that
-need a live Postgres — unaffected by this work). **Manual Verification
-below has not been run yet** — it needs a live `DEEPSEEK_API_KEY` and a
-real Gmail app password, neither of which is available in this session.
+across the whole plan (including 3 post-review fixes — Gmail check
+reordered before the LLM call, code-fence tolerance in prose parsing,
+O(1) takeaway lookup): 80 passed, 12 skipped (pre-existing DB tests that
+need a live Postgres — unaffected by this work).
+
+**Manual Verification: done (2026-07-19).** Steps 1-3 and 5 run live and
+confirmed:
+- A real `run_briefing(listings, scores)` call against a live
+  `DEEPSEEK_API_KEY` and Gmail app password sent a real email
+  (`Job Market Scout: 2 matches today`) with correct facts and sensible
+  prose; the low-scoring listing was correctly excluded.
+- Along the way, an invalid/truncated `GMAIL_APP_PASSWORD` produced a
+  real `smtplib.SMTPAuthenticationError` that propagated uncaught
+  through `send_email`/`run_briefing`, confirming step 5's fail-fast
+  behavior live, not just in unit tests.
+- Step 4 (empty-match zero-DeepSeek-call path) was not separately run
+  live — it's covered by `test_run_briefing_skips_summarize_when_no_matches_qualify`
+  and `test_select_top_matches_returns_empty_when_none_qualify`; low
+  priority to re-verify live given that unit coverage.
 
 ---
 
