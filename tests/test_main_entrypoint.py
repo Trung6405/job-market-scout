@@ -51,6 +51,24 @@ async def test_run_once_completes_without_raising(monkeypatch):
     await run_once()
 
 
+@pytest.mark.asyncio
+async def test_run_once_propagates_stage_exception(monkeypatch):
+    """A real exception raised inside a stage (run_scraper) must propagate
+    all the way out of run_once() — i.e. InMemoryRunner must not swallow it
+    into an error event. This is an integration check of ADK's real runner
+    behavior, not a mock of run_once itself."""
+
+    async def _raising_run_scraper(settings):
+        raise RuntimeError("scraper failed")
+
+    monkeypatch.setattr("scout.agent.run_scraper", _raising_run_scraper)
+
+    from scout.main import run_once
+
+    with pytest.raises(RuntimeError, match="scraper failed"):
+        await run_once()
+
+
 def test_main_exits_nonzero_when_run_once_raises(monkeypatch):
     async def _fake_run_once():
         raise RuntimeError("boom")
