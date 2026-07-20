@@ -1,61 +1,93 @@
 from __future__ import annotations
 
-import json
 import pytest
-from datetime import datetime, timezone
 
 from scout.config import Settings
-from scout.shared.schemas import Listing
-from scout.sub_agents.scraper.runner import parse_listings, run_scraper
+from scout.sub_agents.scraper.runner import run_scraper
 
 
-def _listing_dict(**overrides):
+def _job(**overrides):
     defaults = dict(
-        source="linkedin",
-        external_id="1",
+        id="1",
+        site="indeed",
+        jobUrl="https://www.indeed.com/viewjob?jk=1",
         title="Backend Engineer",
         company="Acme Corp",
-        location="Sydney, AU",
-        is_remote=True,
-        url="https://www.linkedin.com/jobs/view/1",
+        location="Remote",
+        isRemote=True,
         description="Build backend systems.",
-        scraped_at=datetime(2026, 7, 15, tzinfo=timezone.utc).isoformat(),
     )
     defaults.update(overrides)
     return defaults
 
 
-def test_parse_listings_valid_json():
-    raw = json.dumps([_listing_dict()])
+@pytest.mark.asyncio
+async def test_run_scraper_calls_fetch_jobs_once_per_role(monkeypatch):
+    calls = []
 
-    listings = parse_listings(raw)
+    async def _fake_fetch_jobs(url, **params):
+        calls.append(params)
+        return []
 
-    assert listings == [Listing(**_listing_dict())]
+    monkeypatch.setattr(
+        "scout.sub_agents.scraper.runner.fetch_jobs", _fake_fetch_jobs
+    )
 
+    settings = Settings(
+        search_roles=["backend engineer", "platform engineer"],
+        search_locations=["Remote", "Sydney, AU"],
+        results_wanted=15,
+        hours_old=48,
+    )
 
-def test_parse_listings_strips_markdown_code_fence():
-    raw = "```json\n" + json.dumps([_listing_dict(external_id="2")]) + "\n```"
+    await run_scraper(settings)
 
-    listings = parse_listings(raw)
-
-    assert listings[0].external_id == "2"
-
-
-def test_parse_listings_empty_list():
-    assert parse_listings("[]") == []
+    assert len(calls) == 2
+    for params in calls:
+        assert params["location"] == "Remote, Sydney, AU"
+        assert params["resultsWanted"] == 15
+        assert params["hoursOld"] == 48
 
 
 @pytest.mark.asyncio
-async def test_run_scraper_returns_parsed_listings(monkeypatch):
-    raw = json.dumps([_listing_dict()])
-
-    async def _fake_run(agent):
-        return raw
+async def test_run_scraper_normalizes_and_returns_listings(monkeypatch):
+    async def _fake_fetch_jobs(url, **params):
+        return [_job()]
 
     monkeypatch.setattr(
-        "scout.sub_agents.scraper.runner._run_scraper_agent", _fake_run
+        "scout.sub_agents.scraper.runner.fetch_jobs", _fake_fetch_jobs
     )
 
-    listings = await run_scraper(Settings())
+    listings = await run_scraper(Settings(search_roles=["backend engineer"]))
 
-    assert listings == [Listing(**_listing_dict())]
+    assert len(listings) == 1
+    assert listings[0].external_id == "1"
+
+
+@pytest.mark.asyncio
+async def test_run_scraper_drops_rows_that_fail_normalization(monkeypatch):
+    async def _fake_fetch_jobs(url, **params):
+        return [_job(company=None)]
+
+    monkeypatch.setattr(
+        "scout.sub_agents.scraper.runner.fetch_jobs", _fake_fetch_jobs
+    )
+
+    listings = await run_scraper(Settings(search_roles=["backend engineer"]))
+
+    assert listings == []
+
+
+@pytest.mark.asyncio
+async def test_run_scraper_deduplicates_across_roles(monkeypatch):
+    async def _fake_fetch_jobs(url, **params):
+        return [_job()]
+
+    monkeypatch.setattr(
+        "scout.sub_agents.scraper.runner.fetch_jobs", _fake_fetch_jobs
+    )
+
+    settings = Settings(search_roles=["backend engineer", "platform engineer"])
+    listings = await run_scraper(settings)
+
+    assert len(listings) == 1

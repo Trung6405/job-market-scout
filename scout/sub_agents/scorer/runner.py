@@ -3,22 +3,20 @@ from __future__ import annotations
 from google.adk.agents import LlmAgent
 from google.adk.runners import InMemoryRunner
 from google.genai import types as genai_types
-from pydantic import TypeAdapter
 
 from scout.config import Settings
 from scout.config import settings as default_settings
 from scout.shared.parsing import strip_code_fence
-from scout.shared.schemas import Listing, ListingScore
+from scout.shared.schemas import Listing, ListingScore, ListingScoreBatch
 from scout.sub_agents.scorer.agent import build_scorer_agent
 
-_SCORE_LIST_ADAPTER = TypeAdapter(list[ListingScore])
 _APP_NAME = "scorer"
 _USER_ID = "scorer"
 _SESSION_ID = "scorer"
 
 
 def parse_scores(raw_text: str) -> list[ListingScore]:
-    return _SCORE_LIST_ADAPTER.validate_json(strip_code_fence(raw_text))
+    return ListingScoreBatch.model_validate_json(strip_code_fence(raw_text)).scores
 
 
 async def _run_scorer_agent(agent: LlmAgent) -> str:

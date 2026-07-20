@@ -17,7 +17,7 @@ def _score_dict(**overrides):
 
 
 def test_parse_scores_valid_json():
-    raw = json.dumps([_score_dict()])
+    raw = json.dumps({"scores": [_score_dict()]})
 
     scores = parse_scores(raw)
 
@@ -25,7 +25,11 @@ def test_parse_scores_valid_json():
 
 
 def test_parse_scores_strips_markdown_code_fence():
-    raw = "```json\n" + json.dumps([_score_dict(external_id="2")]) + "\n```"
+    raw = (
+        "```json\n"
+        + json.dumps({"scores": [_score_dict(external_id="2")]})
+        + "\n```"
+    )
 
     scores = parse_scores(raw)
 
@@ -33,7 +37,7 @@ def test_parse_scores_strips_markdown_code_fence():
 
 
 def test_parse_scores_empty_list():
-    assert parse_scores("[]") == []
+    assert parse_scores(json.dumps({"scores": []})) == []
 
 
 def _make_listing(**overrides):
@@ -54,7 +58,7 @@ def _make_listing(**overrides):
 
 @pytest.mark.asyncio
 async def test_run_scorer_returns_parsed_scores(monkeypatch):
-    raw = json.dumps([_score_dict()])
+    raw = json.dumps({"scores": [_score_dict()]})
 
     async def _fake_run(agent):
         return raw

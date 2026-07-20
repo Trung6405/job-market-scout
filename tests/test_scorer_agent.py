@@ -5,7 +5,7 @@ from google.adk.models.lite_llm import LiteLlm
 
 from scout.config import Settings
 from scout.prompts import build_scorer_instruction
-from scout.shared.schemas import Listing, ListingScore
+from scout.shared.schemas import Listing, ListingScoreBatch
 from scout.sub_agents.scorer.agent import build_scorer_agent
 
 def _make_listing(**overrides):
@@ -80,10 +80,17 @@ def test_build_scorer_agent_uses_zero_temperature():
 
     assert agent.model._additional_args.get("temperature") == 0
 
-def test_build_scorer_agent_outputs_listing_score_list():
+def test_build_scorer_agent_outputs_listing_score_batch():
     agent = build_scorer_agent([_make_listing()], Settings())
 
-    assert agent.output_schema == list[ListingScore]
+    assert agent.output_schema == ListingScoreBatch
+
+def test_build_scorer_agent_requests_json_object_mode():
+    agent = build_scorer_agent([_make_listing()], Settings())
+
+    assert agent.model._additional_args.get("response_format") == {
+        "type": "json_object"
+    }
 
 def test_build_scorer_agent_excludes_rule_filtered_listings_from_instruction():
     settings = Settings(remote_only=True)

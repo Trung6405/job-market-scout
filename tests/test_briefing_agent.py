@@ -4,7 +4,7 @@ from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
 
 from scout.config import Settings
-from scout.shared.schemas import Listing, MatchResult
+from scout.shared.schemas import BriefingProse, Listing, MatchResult
 from scout.sub_agents.briefing.agent import build_briefing_agent
 
 
@@ -33,10 +33,18 @@ def test_build_briefing_agent_uses_configured_model():
     assert agent.model.model == "deepseek/deepseek-reasoner"
 
 
-def test_build_briefing_agent_has_no_output_schema():
+def test_build_briefing_agent_outputs_briefing_prose():
     agent = build_briefing_agent([_make_match("1", "Platform Engineer", 88)], Settings())
 
-    assert agent.output_schema is None
+    assert agent.output_schema == BriefingProse
+
+
+def test_build_briefing_agent_requests_json_object_mode():
+    agent = build_briefing_agent([_make_match("1", "Platform Engineer", 88)], Settings())
+
+    assert agent.model._additional_args.get("response_format") == {
+        "type": "json_object"
+    }
 
 
 def test_build_briefing_agent_registers_no_tools():

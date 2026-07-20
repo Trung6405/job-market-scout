@@ -32,6 +32,10 @@ class ListingScore(BaseModel):
     reasoning: str
 
 
+class ListingScoreBatch(BaseModel):
+    scores: list[ListingScore]
+
+
 class BriefingTakeaway(BaseModel):
     source: str
     external_id: str
