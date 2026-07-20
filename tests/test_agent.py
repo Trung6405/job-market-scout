@@ -87,3 +87,36 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     assert any("Tracker: 1 new/changed" in t for t in texts)
     assert any("Scorer: 1 scored" in t for t in texts)
     assert any("Briefing: email sent" in t for t in texts)
+
+
+@pytest.mark.asyncio
+async def test_scout_pipeline_agent_short_circuits_when_nothing_relevant(
+    monkeypatch,
+):
+    listing = _make_listing()
+    calls = []
+
+    async def _fake_run_scraper(settings):
+        return [listing]
+
+    async def _fake_track_listings(listings, settings=None):
+        return []
+
+    async def _fake_run_scorer(listings, settings):
+        calls.append("scorer")
+        return []
+
+    async def _fake_run_briefing(listings, scores, settings):
+        calls.append("briefing")
+        return EmailMessage()
+
+    monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
+    monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
+    monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
+    monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
+
+    texts = await _run_pipeline_agent()
+
+    assert calls == []
+    assert any("Tracker: 0 new/changed" in t for t in texts)
+    assert any("nothing to score or brief" in t.lower() for t in texts)

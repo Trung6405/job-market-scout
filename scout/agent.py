@@ -43,6 +43,14 @@ class ScoutPipelineAgent(BaseAgent):
             ctx, self.name, f"Tracker: {len(relevant)} new/changed"
         )
 
+        if not relevant:
+            yield _status_event(
+                ctx,
+                self.name,
+                "No new or changed listings — nothing to score or brief.",
+            )
+            return
+
         scores = await run_scorer(relevant, settings)
         yield _status_event(ctx, self.name, f"Scorer: {len(scores)} scored")
 
