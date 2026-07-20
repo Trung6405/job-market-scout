@@ -30,9 +30,32 @@ def build_scorer_instruction(settings: Settings, listings: list[Listing]) -> str
     return f"""\
 You are the job-match scorer for Job Market Scout.
 
-Score each listing below from 0 to 100 on how well it fits the resume and
-preferences, and give one short sentence of reasoning per listing. Do not
-invent listings beyond the ones provided, and do not call any tool.
+For each listing below, first identify the required skills and
+qualifications stated in its description — not nice-to-haves, the ones
+described as required, must-have, or similar. Check each one against the
+resume. A skill only counts as met if the resume states it or something
+clearly equivalent; do not assume a candidate has a skill just because it
+is adjacent to something they do have.
+
+Score from 0 to 100 using this rubric:
+- 90-100: the resume meets essentially all stated required skills, with
+  no missing skill category.
+- 70-89: the resume meets most required skills, missing at most one
+  minor one.
+- 40-69: the resume meets the core experience level and role type, but
+  is missing multiple required skills, or an entire required skill
+  category (e.g. the listing requires cloud/DevOps tooling and the
+  resume has none).
+- 0-39: fundamental mismatch in role, seniority, or most required
+  skills.
+
+Matching on job title, seniority, or general domain alone is not enough
+to score high if specific required skills are missing — a partial skill
+match is a partial score, not a full one.
+
+Give one short sentence of reasoning per listing that names the most
+significant missing required skill, if any. Do not invent listings
+beyond the ones provided, and do not call any tool.
 
 Resume:
 {settings.resume_text}
