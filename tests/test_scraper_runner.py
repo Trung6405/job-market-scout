@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import pytest
 from datetime import datetime, timezone
 
+from scout.config import Settings
 from scout.shared.schemas import Listing
-from scout.sub_agents.scraper.runner import parse_listings
+from scout.sub_agents.scraper.runner import parse_listings, run_scraper
 
 
 def _listing_dict(**overrides):
@@ -41,3 +43,19 @@ def test_parse_listings_strips_markdown_code_fence():
 
 def test_parse_listings_empty_list():
     assert parse_listings("[]") == []
+
+
+@pytest.mark.asyncio
+async def test_run_scraper_returns_parsed_listings(monkeypatch):
+    raw = json.dumps([_listing_dict()])
+
+    async def _fake_run(agent):
+        return raw
+
+    monkeypatch.setattr(
+        "scout.sub_agents.scraper.runner._run_scraper_agent", _fake_run
+    )
+
+    listings = await run_scraper(Settings())
+
+    assert listings == [Listing(**_listing_dict())]
