@@ -49,3 +49,17 @@ async def test_run_once_completes_without_raising(monkeypatch):
     from scout.main import run_once
 
     await run_once()
+
+
+def test_main_exits_nonzero_when_run_once_raises(monkeypatch):
+    async def _fake_run_once():
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("scout.main.run_once", _fake_run_once)
+
+    from scout.main import main
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    assert exc_info.value.code == 1
