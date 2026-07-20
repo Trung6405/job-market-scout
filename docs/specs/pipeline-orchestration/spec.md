@@ -1,7 +1,7 @@
 # Spec: Pipeline Orchestration
 
-> **Status:** Draft
-> **Created:** 2026-07-19 · **Approved:** —
+> **Status:** Approved
+> **Created:** 2026-07-19 · **Approved:** 2026-07-20
 > **Implementation plan:** [plan.md](../../plans/pipeline-orchestration/plan.md) *(created after approval)*
 
 ---
@@ -26,9 +26,8 @@
 
 - A `run_scraper` function that runs the existing Scraper `LlmAgent` via an ADK runner and returns parsed `list[Listing]`, following the invocation pattern `briefing/summarize.py` already uses.
 - A `run_scorer` function with the same shape for the Scorer `LlmAgent`, returning parsed `list[ListingScore]`.
-- A `run_scout` function that calls, in order: `run_scraper` → `track_listings` → (short-circuit if empty) → `run_scorer` → `run_briefing`, threading a single `Settings` instance through every call. This is the one place the full stage sequence is implemented.
-- A custom (non-LLM) `BaseAgent` in `scout/agent.py` — `ScoutPipelineAgent` — whose `_run_async_impl` calls `run_scout`'s stage sequence directly (not `run_scout` as an opaque call, since it needs to emit an ADK `Event` after each stage completes: listing count after Scraper, new/changed count after Tracker, score count after Scorer, "email sent" after Briefing). `scout/agent.py` exports `root_agent = ScoutPipelineAgent()`, so `adk web` (pointed at the repo root) discovers it and a developer can send it one message to trigger a full run and watch stage-by-stage progress in the UI, the same way each sub-agent's own `root_agent` already works standalone today.
-- A batch entrypoint (`scout/main.py`) that runs the same stage sequence once via `asyncio.run` and exits — either by calling `run_scout` directly or by driving `ScoutPipelineAgent` through an `InMemoryRunner` (implementation detail for the plan); either way there is one implementation of the stage sequence, not two.
+- A custom (non-LLM) `BaseAgent` in `scout/agent.py` — `ScoutPipelineAgent` — whose `_run_async_impl` calls, in order: `run_scraper` → `track_listings` → (short-circuit if empty) → `run_scorer` → `run_briefing`, threading a single `Settings` instance through every call, and yields an ADK `Event` after each stage completes (listing count after Scraper, new/changed count after Tracker, score count after Scorer, "email sent" after Briefing). This is the one place the full stage sequence is implemented — calling the stage functions directly (not through a separate `run_scout` wrapper) is what makes the per-stage events possible. `scout/agent.py` exports `root_agent = ScoutPipelineAgent()`, so `adk web` (pointed at the repo root) discovers it and a developer can send it one message to trigger a full run and watch stage-by-stage progress in the UI, the same way each sub-agent's own `root_agent` already works standalone today.
+- A batch entrypoint (`scout/main.py`) that drives `ScoutPipelineAgent` through an `InMemoryRunner` once via `asyncio.run`, consuming its events (e.g. logging them) and exiting non-zero if the run raises, so the same single implementation of the stage sequence serves both `adk web` and the batch/Docker path.
 - `Dockerfile`'s `CMD` updated to invoke that batch entrypoint instead of `adk api_server`.
 
 ### Should have
@@ -46,11 +45,11 @@
 
 ## Proposed Approach
 
-`run_scout` is a plain async Python function, not an ADK agent construct. It calls each stage's existing (or newly added) async entry point directly, passing typed Python values (`list[Listing]`, `list[ListingScore]`) from one stage's return value into the next stage's arguments — the same style `briefing/briefing.py`'s `run_briefing` already uses internally to join `Listing`s and `ListingScore`s by key. `run_scraper` and `run_scorer` fill the one missing piece of that style: each builds its stage's `LlmAgent` (via the existing `build_scraper_agent`/`build_scorer_agent`), runs it through an `InMemoryRunner` exactly as `briefing/summarize.py`'s `_run_briefing_agent` does, and parses the final response text into the stage's Pydantic output type using `TypeAdapter(list[X]).validate_json(...)` after stripping any markdown code fence.
+`run_scraper` and `run_scorer` are plain async Python functions, not ADK agent constructs: each builds its stage's `LlmAgent` (via the existing `build_scraper_agent`/`build_scorer_agent`), runs it through an `InMemoryRunner` exactly as `briefing/summarize.py`'s `_run_briefing_agent` does, and parses the final response text into the stage's Pydantic output type using `TypeAdapter(list[X]).validate_json(...)` after stripping any markdown code fence.
 
-`ScoutPipelineAgent` (in `scout/agent.py`) is a thin `BaseAgent` subclass that gives `run_scout`'s stage sequence a face `adk web` can talk to. Its `_run_async_impl` runs the same steps `run_scout` runs, but after each stage it yields an `Event` carrying a short human-readable status (e.g. `"Scraper: 18 listings found"`, `"Tracker: 5 new, 13 existing"`, `"Scorer: 5 scored"`, `"Briefing: email sent"`), so a developer running `adk web` and sending it any message sees the whole pipeline's behavior unfold turn by turn instead of only a final result. `scout/agent.py` exports `root_agent = ScoutPipelineAgent()` for ADK's agent discovery, mirroring the `root_agent = build_scraper_agent()` pattern each sub-agent module already uses standalone.
+`ScoutPipelineAgent` (in `scout/agent.py`) is a thin `BaseAgent` subclass that is the pipeline's single orchestrator — it is what `run_scraper` → `track_listings` → `run_scorer` → `run_briefing` are wired together *in*, rather than a separate plain-function orchestrator. Its `_run_async_impl` calls each stage in order, passing typed Python values (`list[Listing]`, `list[ListingScore]`) from one stage's return value into the next stage's arguments — the same style `briefing/briefing.py`'s `run_briefing` already uses internally to join `Listing`s and `ListingScore`s by key — and after each stage yields an `Event` carrying a short human-readable status (e.g. `"Scraper: 18 listings found"`, `"Tracker: 5 new, 13 existing"`, `"Scorer: 5 scored"`, `"Briefing: email sent"`). Run through `adk web`, sending it any message triggers this sequence and the developer watches the whole pipeline's behavior unfold turn by turn instead of only seeing a final result. `scout/agent.py` exports `root_agent = ScoutPipelineAgent()` for ADK's agent discovery, mirroring the `root_agent = build_scraper_agent()` pattern each sub-agent module already uses standalone.
 
-The batch entrypoint (`scout/main.py`) exists so the same sequence can run to completion non-interactively: `asyncio.run` over either `run_scout` directly or `ScoutPipelineAgent` driven through an `InMemoryRunner` (the plan picks whichever keeps a single source of truth for the sequence — likely `run_scout` as the shared implementation, with `ScoutPipelineAgent` calling it and translating its return value into progress `Event`s, rather than duplicating the stage sequence in two places). The `Dockerfile`'s `CMD` is changed to run `scout/main.py`, so a scheduled container invocation actually executes the pipeline instead of starting an idle API server.
+The batch entrypoint (`scout/main.py`) drives the same `ScoutPipelineAgent` through an `InMemoryRunner`, so the container path and the `adk web` path share one implementation of the stage sequence rather than two. `main.py` consumes the runner's events (logging each), and raises/exits non-zero if the run fails, satisfying the "stage failure aborts visibly" success criterion. The `Dockerfile`'s `CMD` is changed to run `scout/main.py`, so a scheduled container invocation actually executes the pipeline instead of starting an idle API server.
 
 ## Alternatives Considered
 
@@ -59,6 +58,8 @@ The batch entrypoint (`scout/main.py`) exists so the same sequence can run to co
 | Literal ADK `SequentialAgent` wiring the four stages as agent instances | Scorer/Briefing agents must be built with the prior stage's data already baked into their instructions (D3); `SequentialAgent` shares state at runtime between pre-built agent instances, which doesn't fit that construction-time dependency. |
 | Leave `Dockerfile`'s `CMD` as `adk api_server` | The new orchestrator would have no caller in the running container — a scheduler hitting this image would start a chat server, not execute the batch pipeline; the PRS's "one run per day" behavior would remain unreachable in production. |
 | Keep the code-fence-stripping parsing helper duplicated per stage | Three near-identical copies of the same small regex helper; low cost to extract once, reused by briefing, scraper, and scorer parsers. |
+| A plain `run_scout` async function as the only orchestrator, with no ADK-discoverable agent | Simpler, but leaves no way to exercise the full pipeline through `adk web` for interactive dev/debug visibility — every sub-agent can already be run standalone that way, and the top-level pipeline was the one gap. |
+| Reuse `LlmAgent`/`SequentialAgent` itself to get `adk web` support "for free" | Same problem as the rejected literal `SequentialAgent` above: those constructs pass data via ADK session state, which doesn't fit D3's construction-time dependency between stages. |
 
 ---
 
@@ -66,7 +67,8 @@ The batch entrypoint (`scout/main.py`) exists so the same sequence can run to co
 
 | Question | Who decides | Blocks planning? |
 |----------|-------------|------------------|
-| Whether `run_scout`'s zero-relevant-listings short circuit should still log/return anything distinguishable from "pipeline ran but nothing to brief" vs. "pipeline errored" | Implementation-time judgment | No |
+| Whether `ScoutPipelineAgent`'s zero-relevant-listings short circuit should yield an `Event` distinguishing "pipeline ran but nothing to brief" from "pipeline errored" | Implementation-time judgment | No |
+| Exact `Event` content/format for progress reporting (plain text vs. structured `actions`/`state_delta`) — affects only how readable the `adk web` transcript is, not pipeline behavior | Implementation-time judgment | No |
 
 ---
 
