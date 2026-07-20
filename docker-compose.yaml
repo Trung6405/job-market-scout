@@ -36,6 +36,16 @@ services:
         COPY package.json package-lock.json ./
         RUN npm ci --omit=dev
         COPY . .
+        # Upstream's prompt registrations pass z.object(...) where the MCP SDK
+        # expects a raw Zod shape, crashing the server before it can bind its
+        # port (see https://github.com/borgius/jobspy-mcp-server, src/index.js).
+        # We only need the search_jobs tool, not these prompts, so drop the
+        # calls at build time rather than patching the tracked submodule.
+        RUN sed -i \
+          -e "/^searchJobsPrompt(server);/d" \
+          -e "/^jobRecommendationsPrompt(server);/d" \
+          -e "/^resumeFeedbackPrompt(server);/d" \
+          src/index.js
         EXPOSE 9423
         CMD ["node", "src/index.js"]
     environment:
