@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 
 from google.adk.agents import LlmAgent
 from google.adk.runners import InMemoryRunner
@@ -9,6 +8,7 @@ from google.genai import types as genai_types
 
 from scout.config import Settings
 from scout.config import settings as default_settings
+from scout.shared.parsing import strip_code_fence
 from scout.shared.schemas import BriefingProse, MatchResult
 from scout.sub_agents.briefing.agent import build_briefing_agent
 
@@ -16,17 +16,9 @@ _APP_NAME = "briefing"
 _USER_ID = "briefing"
 _SESSION_ID = "briefing"
 
-_CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```$", re.DOTALL)
-
-
-def _strip_code_fence(raw_text: str) -> str:
-    stripped = raw_text.strip()
-    match = _CODE_FENCE_RE.match(stripped)
-    return match.group(1).strip() if match else stripped
-
 
 def parse_briefing_prose(raw_text: str) -> BriefingProse:
-    return BriefingProse.model_validate(json.loads(_strip_code_fence(raw_text)))
+    return BriefingProse.model_validate(json.loads(strip_code_fence(raw_text)))
 
 
 async def _run_briefing_agent(agent: LlmAgent) -> str:
