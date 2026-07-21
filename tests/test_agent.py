@@ -165,6 +165,10 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
     monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
     monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
+    # scout/profile.json is a tracked placeholder (kept so the Docker
+    # bind-mount always has a source), so it exists on disk in every
+    # checkout. Stub it out to exercise the documented no-profile path.
+    monkeypatch.setattr("scout.agent.load_profile", lambda path: None)
 
     texts = await _run_pipeline_agent()
 

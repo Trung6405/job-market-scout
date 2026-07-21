@@ -38,7 +38,7 @@ That fix was reverted after live testing. Wrapping the schema makes ADK send `re
   - `scout/sub_agents/scorer/agent.py` and `scout/sub_agents/scorer/tools.py` are still empty stubs, as expected — nothing to reconcile there.
 - `google-adk==2.4.0` is already installed; do not change its version.
 - All new Python dependencies are installed into the existing project venv at `.venv` and captured in `requirements.txt` via `pip freeze`, not hand-typed version guesses.
-- Run all commands from the repository root: `c:\Users\trung\OneDrive\Documents\FPT Internship\job-market-scout`.
+- Run all commands from the repository root.
 - Use the project's venv Python explicitly: `./.venv/Scripts/python.exe` (Bash) — ensures commands hit the right interpreter regardless of shell `PATH`.
 - Tests go in the existing flat `tests/` package (matches `tests/test_schemas.py` convention already in the repo) — no new subpackages.
 - No code comments except where a non-obvious constraint justifies one (project convention) — see `stamp_scraped_at` in the scraper worktree for the house style.

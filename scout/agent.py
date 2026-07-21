@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import AsyncGenerator
 
 from google.adk.agents import BaseAgent
@@ -72,7 +72,11 @@ class ScoutPipelineAgent(BaseAgent):
         banded_matches = [
             (match, classify_band(match.score, settings)) for match in matches
         ]
-        run_date = datetime.now(timezone.utc).date()
+        run_date = (
+            date.fromisoformat(settings.run_date_override)
+            if settings.run_date_override
+            else datetime.now(timezone.utc).date()
+        )
         pool = await create_pool(settings)
         try:
             async with pool.acquire() as conn:
