@@ -209,50 +209,51 @@ async def record_listing_gaps(
     run_id: int,
     gaps_by_match: list[tuple[MatchResult, list[SkillGap]]],
 ) -> None:
-    await conn.execute(
-        """
-        DELETE FROM listing_gaps
-        WHERE run_listing_id IN (
-            SELECT run_listings.id
-            FROM run_listings
-            JOIN listings ON listings.id = run_listings.listing_id
-            WHERE run_listings.run_id = $1
+    async with conn.transaction():
+        await conn.execute(
+            """
+            DELETE FROM listing_gaps
+            WHERE run_listing_id IN (
+                SELECT run_listings.id
+                FROM run_listings
+                JOIN listings ON listings.id = run_listings.listing_id
+                WHERE run_listings.run_id = $1
+            )
+            """,
+            run_id,
         )
-        """,
-        run_id,
-    )
 
-    sources: list[str] = []
-    external_ids: list[str] = []
-    skills: list[str] = []
-    requirement_levels: list[str] = []
-    for match, gaps in gaps_by_match:
-        for gap in gaps:
-            sources.append(match.listing.source)
-            external_ids.append(match.listing.external_id)
-            skills.append(gap.skill)
-            requirement_levels.append(gap.requirement_level)
+        sources: list[str] = []
+        external_ids: list[str] = []
+        skills: list[str] = []
+        requirement_levels: list[str] = []
+        for match, gaps in gaps_by_match:
+            for gap in gaps:
+                sources.append(match.listing.source)
+                external_ids.append(match.listing.external_id)
+                skills.append(gap.skill)
+                requirement_levels.append(gap.requirement_level)
 
-    if not skills:
-        return
+        if not skills:
+            return
 
-    await conn.execute(
-        """
-        INSERT INTO listing_gaps (run_listing_id, skill, requirement_level)
-        SELECT run_listings.id, data.skill, data.requirement_level
-        FROM unnest($2::text[], $3::text[], $4::text[], $5::text[])
-            AS data(source, external_id, skill, requirement_level)
-        JOIN listings
-            ON listings.source = data.source AND listings.external_id = data.external_id
-        JOIN run_listings
-            ON run_listings.listing_id = listings.id AND run_listings.run_id = $1
-        """,
-        run_id,
-        sources,
-        external_ids,
-        skills,
-        requirement_levels,
-    )
+        await conn.execute(
+            """
+            INSERT INTO listing_gaps (run_listing_id, skill, requirement_level)
+            SELECT run_listings.id, data.skill, data.requirement_level
+            FROM unnest($2::text[], $3::text[], $4::text[], $5::text[])
+                AS data(source, external_id, skill, requirement_level)
+            JOIN listings
+                ON listings.source = data.source AND listings.external_id = data.external_id
+            JOIN run_listings
+                ON run_listings.listing_id = listings.id AND run_listings.run_id = $1
+            """,
+            run_id,
+            sources,
+            external_ids,
+            skills,
+            requirement_levels,
+        )
 
 
 async def get_listing_gaps(conn: asyncpg.Connection, run_listing_id: int) -> list[SkillGap]:

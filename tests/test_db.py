@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
+import asyncpg
 import pytest
 
 from scout.shared.db import (
@@ -571,4 +572,30 @@ async def test_record_listing_gaps_delete_scoped_to_run_id(db_pool):
     assert [(g.skill, g.requirement_level) for g in gaps_1] == [("Go", "must_have")]
     assert [(g.skill, g.requirement_level) for g in gaps_2] == [
         ("Rust", "nice_to_have")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_record_listing_gaps_rolls_back_delete_when_insert_fails(db_pool):
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        match = MatchResult(listing=listing, score=70, reasoning="Decent fit")
+        await record_run_listings(conn, run_id, [(match, "competitive")])
+
+        existing_gaps = [SkillGap(skill="Go", requirement_level="must_have")]
+        await record_listing_gaps(conn, run_id, [(match, existing_gaps)])
+
+        invalid_gaps = [SkillGap(skill="Rust", requirement_level="invalid_level")]
+        with pytest.raises(asyncpg.CheckViolationError):
+            await record_listing_gaps(conn, run_id, [(match, invalid_gaps)])
+
+        run_listing_id = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id
+        )
+        stored_gaps = await get_listing_gaps(conn, run_listing_id)
+
+    assert [(g.skill, g.requirement_level) for g in stored_gaps] == [
+        ("Go", "must_have")
     ]
