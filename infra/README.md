@@ -69,12 +69,11 @@ edit the Bicep and re-run `az deployment group create`.
 
 ## Notes & caveats
 
-- **Repo URL is hardcoded** in `cloud-init.yaml`
-  (`https://github.com/Trung6405/job-market-scout.git`). Change it there if the
-  repo moves. If the repo is **private**, cloud-init's anonymous HTTPS clone
-  fails — add a deploy token/key, or let the deploy pipeline do the first clone.
-- **`cloud-init.yaml` clones submodules** (`--recurse-submodules`) — the scraper
-  vendors `jobspy-mcp-server`.
+- **`cloud-init.yaml` only preps the host** (Docker + Compose + git, and creates
+  `/opt/job-market-scout`). It does **not** clone — the repo is private, so the
+  Deploy pipeline clones/pulls over SSH using a GitHub deploy key
+  (`GIT_DEPLOY_KEY`, see `docs/plans/azure-vm-cicd-deploy/deployment-setup.md`).
+  This keeps all secrets out of the IaC (nothing sensitive in Bicep/customData).
 - **SSH is open to `*`** by default (`sshSourceAddressPrefix`), relying on
   key-only auth (`disablePasswordAuthentication: true`). Narrow it to a known
   IP/CIDR to harden.

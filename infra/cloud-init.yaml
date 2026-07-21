@@ -8,5 +8,4 @@ runcmd:
   - curl -fsSL https://get.docker.com | sh
   - systemctl enable --now docker
   - usermod -aG docker "$(getent passwd 1000 | cut -d: -f1)"
-  - git clone --recurse-submodules https://github.com/Trung6405/job-market-scout.git /opt/job-market-scout
-  - chown -R 1000:1000 /opt/job-market-scout
+  - install -d -o 1000 -g 1000 /opt/job-market-scout

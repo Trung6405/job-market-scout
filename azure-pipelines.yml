@@ -54,6 +54,7 @@ stages:
             displayName: SSH deploy
             env:
               VM_SSH_PRIVATE_KEY: $(VM_SSH_PRIVATE_KEY)
+              GIT_DEPLOY_KEY: $(GIT_DEPLOY_KEY)
               JOBSPY_MCP_URL: $(JOBSPY_MCP_URL)
               DEEPSEEK_API_KEY: $(DEEPSEEK_API_KEY)
               DEEPSEEK_MODEL: $(DEEPSEEK_MODEL)
@@ -82,7 +83,18 @@ stages:
                 REMOTE="$(VM_USER)@$(VM_HOST)"
                 SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new $REMOTE"
 
-                $SSH "cd $(appDir) && git pull --ff-only"
+                printf '%s\n' "$GIT_DEPLOY_KEY" | $SSH "install -m 700 -d ~/.ssh && install -m 600 /dev/stdin ~/.ssh/github_deploy"
+                $SSH APP_DIR='$(appDir)' bash -s <<'REMOTE'
+                set -euo pipefail
+                grep -q '^github.com ' ~/.ssh/known_hosts 2>/dev/null || ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts
+                export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/github_deploy -o IdentitiesOnly=yes"
+                if [ -d "$APP_DIR/.git" ]; then
+                  git -C "$APP_DIR" pull --ff-only
+                  git -C "$APP_DIR" submodule update --init --recursive
+                else
+                  git clone --recurse-submodules git@github.com:Trung6405/job-market-scout.git "$APP_DIR"
+                fi
+                REMOTE
 
                 $SSH "cat > $(appDir)/scout/.env" <<EOF
                 JOBSPY_MCP_URL=${JOBSPY_MCP_URL}

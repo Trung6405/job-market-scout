@@ -43,10 +43,30 @@ line, and Azure recommends secrets never appear there). Keys:
 | `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, `GMAIL_RECIPIENT` | yes | email |
 | `VM_HOST` | no | VM public IP (step 1 output) |
 | `VM_USER` | no | VM admin username (default `azureuser`) |
-| `VM_SSH_PRIVATE_KEY` | yes | private half of the keypair whose public key is in `main.bicepparam` |
+| `VM_SSH_PRIVATE_KEY` | yes | private half of the keypair whose public key is in `main.bicepparam` (used to SSH **into** the VM) |
+| `GIT_DEPLOY_KEY` | yes | private half of a GitHub **deploy key** — lets the VM clone/pull this **private** repo (see step 3a) |
 
 The full-file key set mirrors [`scout/.env.example`](../../../scout/.env.example)
-plus the three `VM_*` deploy keys.
+plus the `VM_*` connection values and `GIT_DEPLOY_KEY`.
+
+### 3a. GitHub deploy key (private repo access)
+
+The repo is **private**, so the VM authenticates to GitHub with a read-only
+deploy key (cloud-init no longer clones — the Deploy stage does, on first run):
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/scout_deploy -N "" -C "scout-vm-deploy"
+cat ~/.ssh/scout_deploy.pub   # add to GitHub repo -> Settings -> Deploy keys (read-only)
+cat ~/.ssh/scout_deploy       # paste (whole private key) into GIT_DEPLOY_KEY (secret)
+```
+
+The Deploy stage installs this key at `~/.ssh/github_deploy` on the VM, then
+`git clone` (first deploy) or `git pull` (subsequent) over SSH. The public
+submodule (`jobspy-mcp-server`) needs no auth.
+
+> The daily **RunJob** assumes the repo is already on the VM — a Deploy must run
+> once (push to `main`) before the first scheduled run. Alternative to a deploy
+> key: a fine-scoped GitHub PAT via HTTPS credential helper.
 
 > Note: `docker-compose.yaml` sets `JOBSPY_MCP_URL` and `DATABASE_URL` in the
 > `app` service's `environment:` block, which overrides `env_file`. Those two

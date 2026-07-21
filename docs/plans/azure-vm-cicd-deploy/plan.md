@@ -75,7 +75,7 @@ Deliverable: the four files in `infra/`, such that `az deployment group create -
   - `packages: [git]` (+ `package_update: true`).
   - `runcmd`: install Docker Engine + Compose plugin via `curl -fsSL https://get.docker.com | sh` (the convenience script ships `docker-compose-plugin`); enable + start `docker`; add `${adminUsername}` to the `docker` group.
   - `git clone --recurse-submodules <REPO_URL> /opt/job-market-scout` — repo vendors a submodule (`jobspy-mcp-server`), so `--recurse-submodules` is mandatory (matches README).
-- [ ] `<REPO_URL>` hardcoded (fixed repo). Flag as the one edit needed if the repo moves.
+- [x] **Revised (private repo):** cloud-init does NOT clone. It installs Docker+Compose+git and creates `/opt/job-market-scout` (owned uid 1000). The Deploy pipeline clones/pulls via a GitHub deploy key. Keeps IaC secret-free.
 
 > Note: `jobspy-mcp` mounts `/var/run/docker.sock` and shells out to `docker run` per search (see `docker-compose.yaml`) — so a working host Docker daemon on the VM is a hard requirement, which this bootstrap satisfies. No extra nested-Docker setup needed.
 
@@ -102,7 +102,8 @@ Deliverable: the four files in `infra/`, such that `az deployment group create -
 ## Phase 3 — `azure-pipelines.yml` (CI/CD) — ✅ done
 
 `azure-pipelines.yml` at repo root. Two paths gated by `Build.Reason`:
-- **CI path** (push/manual): `Test` (pytest, Python 3.12) → `Deploy` (SSH: `git pull --ff-only` → render `.env` from `scout-secrets` → `docker compose up -d --build`).
+- **CI path** (push/manual): `Test` (pytest, Python 3.12) → `Deploy` (SSH: install GitHub deploy key → clone-if-absent / pull-if-present → render `.env` from `scout-secrets` → `docker compose up -d --build`).
+- **Private repo:** cloud-init only preps the host (Docker+git+dir); the Deploy stage clones/pulls over SSH using a read-only GitHub deploy key (`GIT_DEPLOY_KEY`), so no secret lives in Bicep/customData.
 - **Schedule path** (`cron: "0 21 * * *"`, `always: true`): `RunJob` (`dependsOn: []`, SSH `docker compose run --rm app`).
 - `set -euo pipefail` throughout; deploy key `chmod 600` on the ephemeral agent; `.env` rendered via heredoc-over-stdin (no secret on command line, no `set -x`).
 
