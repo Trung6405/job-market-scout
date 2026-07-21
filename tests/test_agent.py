@@ -7,6 +7,7 @@ import pytest
 from google.adk.runners import InMemoryRunner
 from google.genai import types as genai_types
 
+from scout.shared.db import get_run_by_date, get_run_listings, upsert_listing
 from scout.shared.schemas import Listing, ListingScore
 
 _APP_NAME = "scout"
@@ -120,3 +121,48 @@ async def test_scout_pipeline_agent_short_circuits_when_nothing_relevant(
     assert calls == []
     assert any("Tracker: 0 new/changed" in t for t in texts)
     assert any("nothing to score or brief" in t.lower() for t in texts)
+
+
+@pytest.mark.asyncio
+async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
+    listing = _make_listing()
+    score = ListingScore(
+        source="linkedin", external_id="1", score=80, reasoning="Good fit."
+    )
+
+    # Seed the listings table so record_run_listings can join on it.
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+
+    async def _fake_run_scraper(settings):
+        return [listing]
+
+    async def _fake_track_listings(listings, settings=None):
+        return listings
+
+    async def _fake_run_scorer(listings, settings):
+        return [score]
+
+    async def _fake_run_briefing(listings, scores, settings):
+        return EmailMessage()
+
+    monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
+    monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
+    monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
+    monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
+
+    texts = await _run_pipeline_agent()
+
+    run_date = datetime.now(timezone.utc).date()
+    async with db_pool.acquire() as conn:
+        run = await get_run_by_date(conn, run_date)
+        assert run is not None
+        assert run.listings_scraped == 1
+        assert run.listings_scored == 1
+
+        run_listings = await get_run_listings(conn, run.id)
+        assert len(run_listings) == 1
+        assert run_listings[0].score == 80
+        assert run_listings[0].reasoning == "Good fit."
+
+    assert any(f"Run persisted: {run_date}" in t for t in texts)
