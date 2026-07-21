@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timezone
 
 from scout.config import Settings
@@ -17,20 +16,22 @@ async def run_scraper(settings: Settings | None = None) -> list[Listing]:
     location = ", ".join(active_settings.search_locations)
     scraped_at = datetime.now(timezone.utc)
 
-    jobs_by_role = await asyncio.gather(
-        *(
-            fetch_jobs(
-                active_settings.jobspy_mcp_url,
-                searchTerm=role,
-                location=location,
-                resultsWanted=active_settings.results_wanted,
-                hoursOld=active_settings.hours_old,
-                siteNames=_DEFAULT_SITE_NAMES,
-                format="json",
-            )
-            for role in active_settings.search_roles
+    # jobspy-mcp-server shares one MCP `Server` instance across all SSE
+    # connections and never disconnects it between clients, so a second
+    # concurrent connection crashes the server. Fetch roles one at a time
+    # so only one SSE connection is ever open.
+    jobs_by_role = [
+        await fetch_jobs(
+            active_settings.jobspy_mcp_url,
+            searchTerm=role,
+            location=location,
+            resultsWanted=active_settings.results_wanted,
+            hoursOld=active_settings.hours_old,
+            siteNames=_DEFAULT_SITE_NAMES,
+            format="json",
         )
-    )
+        for role in active_settings.search_roles
+    ]
 
     listings: list[Listing] = []
     seen: set[tuple[str, str]] = set()
