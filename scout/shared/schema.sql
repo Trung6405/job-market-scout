@@ -41,3 +41,10 @@ CREATE TABLE IF NOT EXISTS run_listings (
 );
 
 ALTER TABLE run_listings ADD COLUMN IF NOT EXISTS band TEXT;
+
+CREATE TABLE IF NOT EXISTS listing_gaps (
+    id BIGSERIAL PRIMARY KEY,
+    run_listing_id BIGINT NOT NULL REFERENCES run_listings (id) ON DELETE CASCADE,
+    skill TEXT NOT NULL,
+    requirement_level TEXT NOT NULL CHECK (requirement_level IN ('must_have', 'nice_to_have'))
+);

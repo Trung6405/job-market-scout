@@ -8,14 +8,16 @@ from scout.shared.db import (
     apply_schema,
     close_stale_listings,
     finish_run,
+    get_listing_gaps,
     get_run_by_date,
     get_run_listings,
     list_runs,
+    record_listing_gaps,
     record_run_listings,
     start_run,
     upsert_listing,
 )
-from scout.shared.schemas import Listing, MatchResult
+from scout.shared.schemas import Listing, MatchResult, SkillGap
 
 
 def _make_listing(**overrides) -> Listing:
@@ -457,3 +459,116 @@ async def test_get_run_listings_returns_scored_listings_for_run(db_pool):
     assert {rl.score for rl in run_listings} == {80, 60}
     assert {rl.band for rl in run_listings} == {"competitive", "reach"}
     assert all(rl.run_id == run_id for rl in run_listings)
+
+
+@pytest.mark.asyncio
+async def test_record_listing_gaps_inserts_and_get_listing_gaps_returns_them(db_pool):
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        match = MatchResult(listing=listing, score=70, reasoning="Decent fit")
+        await record_run_listings(conn, run_id, [(match, "competitive")])
+
+        gaps = [
+            SkillGap(skill="Go", requirement_level="must_have"),
+            SkillGap(skill="Kubernetes", requirement_level="nice_to_have"),
+        ]
+        await record_listing_gaps(conn, run_id, [(match, gaps)])
+
+        run_listing_id = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id
+        )
+        stored_gaps = await get_listing_gaps(conn, run_listing_id)
+
+    assert {(g.skill, g.requirement_level) for g in stored_gaps} == {
+        ("Go", "must_have"),
+        ("Kubernetes", "nice_to_have"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_record_listing_gaps_skips_matches_with_no_gaps(db_pool):
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        match = MatchResult(listing=listing, score=95, reasoning="Great fit")
+        await record_run_listings(conn, run_id, [(match, "strong_match")])
+
+        await record_listing_gaps(conn, run_id, [(match, [])])
+
+        run_listing_id = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id
+        )
+        stored_gaps = await get_listing_gaps(conn, run_listing_id)
+
+    assert stored_gaps == []
+
+
+@pytest.mark.asyncio
+async def test_record_listing_gaps_is_idempotent_on_rerun(db_pool):
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        match = MatchResult(listing=listing, score=70, reasoning="Decent fit")
+        await record_run_listings(conn, run_id, [(match, "competitive")])
+
+        first_gaps = [
+            SkillGap(skill="Go", requirement_level="must_have"),
+            SkillGap(skill="Kubernetes", requirement_level="nice_to_have"),
+            SkillGap(skill="Rust", requirement_level="nice_to_have"),
+        ]
+        await record_listing_gaps(conn, run_id, [(match, first_gaps)])
+
+        second_gaps = [SkillGap(skill="Go", requirement_level="must_have")]
+        await record_listing_gaps(conn, run_id, [(match, second_gaps)])
+
+        run_listing_id = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id
+        )
+        stored_gaps = await get_listing_gaps(conn, run_listing_id)
+
+    assert [(g.skill, g.requirement_level) for g in stored_gaps] == [
+        ("Go", "must_have")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_record_listing_gaps_delete_scoped_to_run_id(db_pool):
+    listing_a = _make_listing(source="linkedin", external_id="job-a")
+    listing_b = _make_listing(source="linkedin", external_id="job-b")
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing_a)
+        await upsert_listing(conn, listing_b)
+
+        run_id_1 = await start_run(conn, date(2026, 7, 20))
+        match_1 = MatchResult(listing=listing_a, score=70, reasoning="Decent fit")
+        await record_run_listings(conn, run_id_1, [(match_1, "competitive")])
+        await record_listing_gaps(
+            conn, run_id_1, [(match_1, [SkillGap(skill="Go", requirement_level="must_have")])]
+        )
+
+        run_id_2 = await start_run(conn, date(2026, 7, 21))
+        match_2 = MatchResult(listing=listing_b, score=60, reasoning="Ok fit")
+        await record_run_listings(conn, run_id_2, [(match_2, "reach")])
+        await record_listing_gaps(
+            conn,
+            run_id_2,
+            [(match_2, [SkillGap(skill="Rust", requirement_level="nice_to_have")])],
+        )
+
+        run_listing_id_1 = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id_1
+        )
+        run_listing_id_2 = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id_2
+        )
+        gaps_1 = await get_listing_gaps(conn, run_listing_id_1)
+        gaps_2 = await get_listing_gaps(conn, run_listing_id_2)
+
+    assert [(g.skill, g.requirement_level) for g in gaps_1] == [("Go", "must_have")]
+    assert [(g.skill, g.requirement_level) for g in gaps_2] == [
+        ("Rust", "nice_to_have")
+    ]

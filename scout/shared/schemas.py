@@ -65,6 +65,11 @@ class ListingRequirementsBatch(BaseModel):
     requirements: list[ListingRequirements]
 
 
+class SkillGap(BaseModel):
+    skill: str
+    requirement_level: str
+
+
 class BriefingTakeaway(BaseModel):
     source: str
     external_id: str
