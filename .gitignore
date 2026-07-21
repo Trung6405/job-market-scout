@@ -227,3 +227,6 @@ scout/resume.txt
 
 agent_plans/
 agent_docs/
+
+# subagent-driven-development scratch (task briefs, reports, review diffs)
+.superpowers/
