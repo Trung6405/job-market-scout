@@ -5,7 +5,7 @@ services:
       - scout/.env
     depends_on:
       jobspy-mcp:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
     environment:
@@ -68,6 +68,12 @@ services:
       - jobspy-scraper
     ports:
       - "9423:9423"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9423/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   postgres:
     image: postgres:16-alpine
