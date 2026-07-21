@@ -19,7 +19,7 @@ files, and the email links to that day's report.
 
 - [x] `runs`/`run_listings` persist a run's scored listings, readable
       back by date; a same-day re-run updates rather than duplicates.
-- [ ] `classify_band` returns the correct band for scores at and around
+- [x] `classify_band` returns the correct band for scores at and around
       each threshold boundary; every persisted `run_listing` has a band.
 - [ ] Requirements extraction returns structured must-have/nice-to-have
       lists per listing; `detect_gaps` correctly flags requirement
@@ -44,6 +44,7 @@ files, and the email links to that day's report.
 | Requirements-extraction batching strategy (batched vs. per-listing) unresolved | Could hit token limits if batched like the scorer | Spike task in Phase 3: try the scorer's batched pattern first, fall back to per-listing if it breaks |
 | No hosting solution — files opened locally via `file://` or a shared path | Might be inconvenient day-to-day, especially from a phone | Accepted risk (spec Open Questions) — ship the simple version, revisit if inconvenient in practice |
 | Relative cross-screen links must resolve correctly regardless of where `report_output_dir` is mounted | Broken navigation between rendered screens | Spike task in Phase 4: verify links work by opening rendered output directly in a browser before pipeline wiring |
+| `run_listings.band` column is nullable with no default while `RunListing.band` is non-Optional `str` (found in Phase 2 review) | A row written before the band migration, or by a future caller that skips banding, would crash `get_run_listings` on read | Accepted risk — no pre-existing data exists yet and every current pipeline write supplies a real band; revisit if this schema ever runs against a database with pre-migration rows |
 
 ## Blast Radius
 
@@ -72,7 +73,7 @@ files, and the email links to that day's report.
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
 | 1 | Schema, db functions, and pipeline wiring (persistence) | [phase-1-persistence.md](phase-1-persistence.md) | Complete |
-| 2 | Success-band classification | [phase-2-bands.md](phase-2-bands.md) | Not started |
+| 2 | Success-band classification | [phase-2-bands.md](phase-2-bands.md) | Complete |
 | 3 | Requirements extraction & gap detection | [phase-3-gaps.md](phase-3-gaps.md) | Not started |
 | 4 | Templates and rendering module | [phase-4-templates.md](phase-4-templates.md) | Not started |
 | 5 | Pipeline and email wiring (rendering) | [phase-5-wiring.md](phase-5-wiring.md) | Not started |
