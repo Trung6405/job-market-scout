@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from scout.config import Settings
@@ -99,3 +100,24 @@ def test_build_email_omits_report_path_reference_when_not_given():
     zero_html_body = zero_match_message.get_body(preferencelist=("html",)).get_content()
     assert "Full report" not in zero_text_body
     assert "Full report" not in zero_html_body
+
+
+def test_build_email_report_path_href_is_valid_escaped_file_uri():
+    report_path = Path("reports/2026-07-21/dashboard.html")
+    match = _make_match("1", "Platform Engineer", 88)
+    prose = BriefingProse(intro="Nice matches.", takeaways=[])
+
+    message = build_email([match], prose, _settings(), report_path=report_path)
+
+    html_body = message.get_body(preferencelist=("html",)).get_content()
+    href_match = re.search(r'Full report: <a href="([^"]+)">', html_body)
+    assert href_match is not None
+    href = href_match.group(1)
+
+    assert href.startswith("file:///")
+    assert "\\" not in href
+    # The href must be the escaped, resolved absolute URI — not a raw
+    # interpolation of the (possibly relative, backslash-containing on
+    # Windows) report_path.
+    assert str(report_path) not in href
+    assert href == report_path.resolve().as_uri()

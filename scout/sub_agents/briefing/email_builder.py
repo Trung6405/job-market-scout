@@ -19,6 +19,16 @@ def _index_takeaways(prose: BriefingProse | None) -> dict[tuple[str, str], str]:
     }
 
 
+def _report_uri(report_path: Path) -> str:
+    """Build a valid, clickable file:// URI from a possibly-relative path.
+
+    ``Path.as_uri()`` requires an absolute path, and on Windows
+    ``str(Path(...))`` uses backslashes which are not valid in a URI.
+    Resolving first sidesteps both issues on Windows and POSIX alike.
+    """
+    return report_path.resolve().as_uri()
+
+
 def _takeaway_for(
     match: MatchResult, takeaways_by_key: dict[tuple[str, str], str]
 ) -> str:
@@ -44,8 +54,9 @@ def build_email(
         html = f"<p>{escape(text)}</p>"
         if report_path is not None:
             text += f"\n\nFull report: {report_path}"
+            report_uri = _report_uri(report_path)
             html += (
-                f'<p>Full report: <a href="file://{report_path}">'
+                f'<p>Full report: <a href="{escape(report_uri)}">'
                 f"{escape(str(report_path))}</a></p>"
             )
         message.set_content(text)
@@ -83,8 +94,9 @@ def build_email(
 
     html = f"<p>{escape(intro)}</p><ul>{''.join(html_items)}</ul>"
     if report_path is not None:
+        report_uri = _report_uri(report_path)
         html += (
-            f'<p>Full report: <a href="file://{report_path}">'
+            f'<p>Full report: <a href="{escape(report_uri)}">'
             f"{escape(str(report_path))}</a></p>"
         )
 
