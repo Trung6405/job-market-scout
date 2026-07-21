@@ -230,3 +230,6 @@ agent_docs/
 
 # subagent-driven-development scratch (task briefs, reports, review diffs)
 .superpowers/
+
+# Advisor report output (rendered HTML, mounted as a Docker volume)
+/reports/
