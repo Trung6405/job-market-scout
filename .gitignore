@@ -223,3 +223,7 @@ scout/.adk/
 
 # Personal resume (see scout/resume.txt.example for the template)
 scout/resume.txt
+
+
+agent_plans/
+agent_docs/
