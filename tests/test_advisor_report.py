@@ -120,6 +120,8 @@ async def test_render_run_writes_dashboard_and_job_detail_files(db_pool, tmp_pat
     job_detail_html = job_detail_path.read_text(encoding="utf-8")
     assert "Graduate Software Engineer" in job_detail_html
     assert "PostgreSQL" in job_detail_html
+    assert '../history.html' in job_detail_html
+    assert '../profile.html' in job_detail_html
 
 
 @pytest.mark.asyncio
