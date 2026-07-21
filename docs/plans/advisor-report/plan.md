@@ -25,7 +25,7 @@ files, and the email links to that day's report.
       lists per listing; `detect_gaps` correctly flags requirement
       skills absent from the profile's `tech_stack`; gaps are persisted
       in `listing_gaps`.
-- [ ] `render_run`/`render_history`/`render_profile` produce HTML
+- [x] `render_run`/`render_history`/`render_profile` produce HTML
       matching each mockup's layout, populated from real data, with
       working cross-screen links.
 - [ ] The email sends as it does today, with an added link to the
@@ -43,7 +43,7 @@ files, and the email links to that day's report.
 | Exact-match skill comparison in `detect_gaps` may miss naming variants ("JS" vs "JavaScript") | Gaps under- or over-reported, undermining the "gap-first coaching" value | Accepted risk for this pass; revisit with real profile/listing data |
 | ~~Requirements-extraction batching strategy (batched vs. per-listing) unresolved~~ | Could hit token limits if batched like the scorer | **Resolved in Phase 3**: batched pattern (mirroring the scorer) worked with no token-limit issue encountered |
 | No hosting solution — files opened locally via `file://` or a shared path | Might be inconvenient day-to-day, especially from a phone | Accepted risk (spec Open Questions) — ship the simple version, revisit if inconvenient in practice |
-| Relative cross-screen links must resolve correctly regardless of where `report_output_dir` is mounted | Broken navigation between rendered screens | Spike task in Phase 4: verify links work by opening rendered output directly in a browser before pipeline wiring |
+| ~~Relative cross-screen links must resolve correctly regardless of where `report_output_dir` is mounted~~ | Broken navigation between rendered screens | **Resolved in Phase 4**: scripted verification against real rendered output found 23/23 links resolving correctly (after one nav-link gap was caught and fixed in review) |
 | `run_listings.band` column is nullable with no default while `RunListing.band` is non-Optional `str` (found in Phase 2 review) | A row written before the band migration, or by a future caller that skips banding, would crash `get_run_listings` on read | Accepted risk — no pre-existing data exists yet and every current pipeline write supplies a real band; revisit if this schema ever runs against a database with pre-migration rows |
 
 ## Blast Radius
@@ -75,7 +75,7 @@ files, and the email links to that day's report.
 | 1 | Schema, db functions, and pipeline wiring (persistence) | [phase-1-persistence.md](phase-1-persistence.md) | Complete |
 | 2 | Success-band classification | [phase-2-bands.md](phase-2-bands.md) | Complete |
 | 3 | Requirements extraction & gap detection | [phase-3-gaps.md](phase-3-gaps.md) | Complete |
-| 4 | Templates and rendering module | [phase-4-templates.md](phase-4-templates.md) | Not started |
+| 4 | Templates and rendering module | [phase-4-templates.md](phase-4-templates.md) | Complete |
 | 5 | Pipeline and email wiring (rendering) | [phase-5-wiring.md](phase-5-wiring.md) | Not started |
 
 ---
