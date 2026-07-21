@@ -153,13 +153,36 @@ files, and the email links to that day's report.
 - [ ] Feature verified manually in a running environment — **not yet
       done**: a real `docker compose up --build` end-to-end run
       (confirming `./reports/<date>/` appears on the host and a real
-      email arrives with a working link) is outstanding
+      email arrives with a working link) is outstanding. This is the
+      one remaining item before merge — everything else is done.
 - [x] Docs / README updated where behaviour changed (`reports/`
       output directory, new `.env` settings, `scout/profile.json`
       setup step)
 - [x] No new lint or type-check warnings — full suite green throughout
       (197/197), no new warnings beyond pre-existing third-party
       deprecations
+
+## Final Whole-Branch Review
+
+Two rounds. First pass found the branch architecturally sound (clean
+reuse of the scorer's LLM-agent pattern for requirements extraction,
+consistent real-Postgres testing throughout, correct additive
+migrations, genuine backward compatibility with no `profile.json`) but
+caught one cross-phase issue no single task-scoped review could see:
+the emailed report link resolved to the Docker container's internal
+path (`/app/reports/...`), not the host path, so it would never open
+for the user. Also flagged (Minor): the "My Profile" nav link 404s
+when no profile is configured, since `profile.html` is only rendered
+when one exists.
+
+Both fixed: an optional `REPORT_HOST_DIR` setting now produces a real
+clickable link when configured, falling back to a plain (never broken)
+relative-path text by default; the nav link is now gated on profile
+presence across all three templates that show it. Second review round
+confirmed both fixes correct with no regressions.
+
+**Verdict: Ready to merge** (pending the one outstanding manual
+`docker compose up --build` pass — see Definition of Done above).
 
 ## Update Rules
 
