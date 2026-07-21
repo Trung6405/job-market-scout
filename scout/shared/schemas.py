@@ -45,3 +45,53 @@ class BriefingTakeaway(BaseModel):
 class BriefingProse(BaseModel):
     intro: str
     takeaways: list[BriefingTakeaway]
+
+
+class TechSkill(BaseModel):
+    name: str
+    proficiency: int = Field(ge=1, le=5)
+    note: str | None = None
+
+
+class TechCategory(BaseModel):
+    category: str
+    skills: list[TechSkill]
+
+
+class DomainKnowledge(BaseModel):
+    name: str
+    proficiency: int = Field(ge=0, le=100)
+    description: str
+
+    @property
+    def level(self) -> str:
+        if self.proficiency >= 70:
+            return "Solid"
+        if self.proficiency >= 50:
+            return "Good"
+        if self.proficiency >= 30:
+            return "Developing"
+        return "Emerging"
+
+
+class Background(BaseModel):
+    education: str
+    experience: str
+    preferred_roles: list[str]
+    locations: list[str]
+
+
+class Project(BaseModel):
+    title: str
+    description: str
+    tags: list[str]
+
+
+class Profile(BaseModel):
+    name: str
+    target_role: str
+    target_locations: list[str]
+    tech_stack: list[TechCategory]
+    domain_knowledge: list[DomainKnowledge]
+    background: Background
+    projects: list[Project]
