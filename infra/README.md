@@ -1,8 +1,8 @@
 # infra/ — Azure infrastructure-as-code
 
 Bicep templates that create the single Azure VM hosting the job-market-scout
-containers. This folder is **IaC only** — no secrets, no CI/CD pipeline YAML
-(those live at the repo root: `azure-pipelines.yml`, `infra-provision.yml`).
+containers. This folder is **IaC only** — no secrets, no CI/CD YAML (those live
+in `.github/workflows/`: `deploy.yml`, `scheduled-run.yml`, `infra-provision.yml`).
 
 Implements [`docs/specs/azure-vm-cicd-deploy/spec.md`](../docs/specs/azure-vm-cicd-deploy/spec.md).
 
@@ -69,11 +69,10 @@ edit the Bicep and re-run `az deployment group create`.
 
 ## Notes & caveats
 
-- **`cloud-init.yaml` only preps the host** (Docker + Compose + git, and creates
-  `/opt/job-market-scout`). It does **not** clone — the repo is private, so the
-  Deploy pipeline clones/pulls over SSH using a GitHub deploy key
-  (`GIT_DEPLOY_KEY`, see `docs/plans/azure-vm-cicd-deploy/deployment-setup.md`).
-  This keeps all secrets out of the IaC (nothing sensitive in Bicep/customData).
+- **`cloud-init.yaml` only preps the host** (Docker + Compose + rsync, and creates
+  `/opt/job-market-scout`). It does **not** clone — the `deploy.yml` workflow
+  rsyncs the repo from the GitHub runner to the VM over SSH, so the VM needs no
+  GitHub access. Keeps all secrets out of the IaC (nothing sensitive in Bicep/customData).
 - **SSH is open to `*`** by default (`sshSourceAddressPrefix`), relying on
   key-only auth (`disablePasswordAuthentication: true`). Narrow it to a known
   IP/CIDR to harden.

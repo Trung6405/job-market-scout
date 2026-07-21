@@ -2,7 +2,7 @@
 package_update: true
 package_upgrade: false
 packages:
-  - git
+  - rsync
 
 runcmd:
   - curl -fsSL https://get.docker.com | sh

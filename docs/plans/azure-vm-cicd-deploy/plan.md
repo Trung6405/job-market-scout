@@ -1,36 +1,40 @@
 # Azure VM CI/CD Deployment — Implementation Plan
 
 > **Spec:** [`docs/specs/azure-vm-cicd-deploy/spec.md`](../../specs/azure-vm-cicd-deploy/spec.md) — this plan implements it.
-> **Status:** ✅ All phases implemented (2026-07-21). Bicep compiles clean; pipeline YAML validated; code-review passed (DONE_WITH_CONCERNS, advisories applied).
-> **Deliverables:** `infra/` (Bicep IaC + draw.io diagram), root `azure-pipelines.yml` + `infra-provision.yml`, `deployment-setup.md`.
+> **Status:** ✅ All phases implemented (2026-07-21). Bicep compiles clean; workflow YAML validated; code-review passed (advisories applied).
+> **CI system:** ⚠️ **Changed 2026-07-21** — GitHub Actions (was Azure DevOps; user reversed the spec's choice). Deploy via runner **rsync** to the VM; Azure auth via **OIDC**.
+> **Deliverables:** `infra/` (Bicep IaC + draw.io diagram), `.github/workflows/{deploy,scheduled-run,infra-provision}.yml`, `deployment-setup.md`.
 
-**Goal:** Stand up tracked infrastructure-as-code so the single Azure VM (that hosts the scout containers) can be created/recreated from source, not portal clicks. The `infra/` folder is the first, self-contained deliverable; the two Azure DevOps pipelines and the secret variable group build on top of it.
+**Goal:** Stand up tracked infrastructure-as-code so the single Azure VM (that hosts the scout containers) can be created/recreated from source, not portal clicks. The `infra/` folder is the self-contained IaC deliverable; the GitHub Actions workflows and repo secrets build on top of it.
 
 **Architecture (target layout):**
 
 ```
-infra/                      ← IaC only (Bicep) — THIS PLAN, Phase 1
+infra/                      ← IaC only (Bicep)
 ├── main.bicep              ← VM + VNet/subnet + NSG + public IP + NIC, one file
 ├── main.bicepparam         ← fill-in params (region, VM size, admin user, SSH pubkey…)
-├── cloud-init.yaml         ← VM bootstrap (Docker + compose + git + clone), base64'd into the VM
-└── README.md               ← deploy steps + manual one-time Azure/ADO setup checklist
+├── cloud-init.yaml         ← host prep (Docker + Compose + rsync + app dir), base64'd into the VM
+├── azure-deployment.drawio ← 2-page diagram (deployment flow + network topology)
+└── README.md               ← deploy steps + manual one-time Azure setup
 
-azure-pipelines.yml         ← (repo root) CI/CD: pytest → SSH deploy + daily scheduled run — Phase 3
-infra-provision.yml         ← (repo root) manual: az deployment of infra/main.bicep         — Phase 2
+.github/workflows/
+├── deploy.yml              ← push to main: pytest → rsync to VM → render .env → compose up
+├── scheduled-run.yml       ← daily cron: SSH docker compose run --rm app
+└── infra-provision.yml     ← manual (workflow_dispatch): OIDC login → az deployment of main.bicep
 ```
 
-**Decisions carried from brainstorm (all confirmed):** single `main.bicep` (no modules — one VM doesn't warrant it) · separate `cloud-init.yaml` referenced via `loadFileAsBase64()` · pipeline YAMLs live at **repo root**, `infra/` is Bicep-only · `infra/` holds **zero secrets**.
+**Decisions:** single `main.bicep` (no modules — one VM doesn't warrant it) · separate `cloud-init.yaml` referenced via `loadFileAsBase64()` · CI/CD in `.github/workflows/`, `infra/` is Bicep-only · `infra/` holds **zero secrets** · deploy = runner checkout + rsync (VM needs no GitHub access) · Azure auth = OIDC federated (no stored cloud secret).
 
 ## Global Constraints (from spec)
 
-- **Bicep only** — not Terraform. Native ARM deploy, no extra tooling in the pipeline.
+- **Bicep only** — not Terraform. Native ARM deploy.
 - **Single VM, one environment.** No staging/prod split, no autoscaling, no blue-green.
-- **No ACR.** Deploy is git-pull + local `docker compose build` on the VM (Phase 3), so the Bicep does **not** provision a registry.
-- **Secrets never in the repo.** SSH *private* key + all `scout/.env` values live in an ADO secret variable group (Phase 4). Only the SSH **public** key sits in `main.bicepparam` (safe to commit). `.env` is already gitignored.
+- **No ACR.** Deploy = rsync source + local `docker compose build` on the VM, so the Bicep does **not** provision a registry.
+- **Secrets never in the repo.** SSH *private* key + all `scout/.env` values live in **GitHub Actions secrets**. Only the SSH **public** key sits in `main.bicepparam` (safe to commit). `.env` is gitignored + rsync-excluded.
 - **No changes** to `docker-compose.yaml`, `Dockerfile`, or `scout/` app code — deployment tooling only.
-- Placeholders (not real values) for subscription/RG/region/org — resolved as manual setup, per spec Open Questions.
+- Placeholders (not real values) for subscription/RG/region — resolved as manual setup.
 
-**Tech stack:** Bicep (ARM), Azure CLI (`az deployment group create`), cloud-init, Ubuntu 22.04 LTS. No Python/app changes.
+**Tech stack:** Bicep (ARM), Azure CLI, cloud-init, Ubuntu 22.04 LTS, GitHub Actions (OIDC, rsync). No Python/app changes.
 
 ---
 
@@ -75,50 +79,48 @@ Deliverable: the four files in `infra/`, such that `az deployment group create -
   - `packages: [git]` (+ `package_update: true`).
   - `runcmd`: install Docker Engine + Compose plugin via `curl -fsSL https://get.docker.com | sh` (the convenience script ships `docker-compose-plugin`); enable + start `docker`; add `${adminUsername}` to the `docker` group.
   - `git clone --recurse-submodules <REPO_URL> /opt/job-market-scout` — repo vendors a submodule (`jobspy-mcp-server`), so `--recurse-submodules` is mandatory (matches README).
-- [x] **Revised (private repo):** cloud-init does NOT clone. It installs Docker+Compose+git and creates `/opt/job-market-scout` (owned uid 1000). The Deploy pipeline clones/pulls via a GitHub deploy key. Keeps IaC secret-free.
+- [x] **Final (GitHub Actions + rsync):** cloud-init does NOT clone or install git. It installs Docker + Compose + rsync and creates `/opt/job-market-scout` (owned uid 1000). The `deploy.yml` workflow rsyncs the repo from the runner to the VM, so the VM needs no GitHub access — keeps IaC secret-free.
 
 > Note: `jobspy-mcp` mounts `/var/run/docker.sock` and shells out to `docker run` per search (see `docker-compose.yaml`) — so a working host Docker daemon on the VM is a hard requirement, which this bootstrap satisfies. No extra nested-Docker setup needed.
 
 ### 1.4 `infra/README.md`
 
-- [ ] Manual one-time checklist (from spec — account/portal steps, not IaC): create Azure DevOps org/project, GitHub↔ADO service connection, Azure service connection, resource group (`az group create -n <RG> -l <REGION>`).
-- [ ] Deploy commands: `az deployment group create -g <RG> --template-file main.bicep --parameters main.bicepparam`.
-- [ ] Which params to set before first run (`location`, `adminSshPublicKey`), how to generate the SSH keypair, and that the **private** key goes into the ADO variable group (Phase 4), never here.
-- [ ] Placeholder legend: `<SUBSCRIPTION_ID>`, `<RESOURCE_GROUP>`, `<REGION>`.
+- [x] Manual one-time checklist (account/portal steps, not IaC): resource group (`az group create -n <RG> -l <REGION>`); GitHub Actions OIDC/secrets setup lives in `deployment-setup.md`.
+- [x] Deploy commands: `az deployment group create -g <RG> --template-file main.bicep --parameters main.bicepparam`.
+- [x] Which params to set before first run (`location`, `adminSshPublicKey`), how to generate the SSH keypair, and that the **private** key goes into a GitHub Actions secret (`VM_SSH_PRIVATE_KEY`), never here.
+- [x] Placeholder legend: `<SUBSCRIPTION_ID>`, `<RESOURCE_GROUP>`, `<REGION>`.
 
 ### Phase 1 Success Criteria
 
 - [ ] `infra/` contains exactly the four files above; no secrets committed.
 - [ ] `az bicep build --file infra/main.bicep` compiles clean (lint pass) — the cheap local gate.
-- [ ] (When a subscription exists) `az deployment group create ... --what-if` shows the VM + network resources with no errors; a real deploy yields a VM reachable over SSH with `docker`, `docker compose`, `git` present and the repo cloned at `/opt/job-market-scout`.
+- [ ] (When a subscription exists) `az deployment group create ... --what-if` shows the VM + network resources with no errors; a real deploy yields a VM reachable over SSH with `docker`, `docker compose`, `rsync` present and `/opt/job-market-scout` ready for the workflow to rsync into.
 - [ ] Spec success-criterion met: "VM + network resources can be created/recreated from tracked IaC."
 
 ---
 
-## Phase 2 — `infra-provision.yml` (manual infra pipeline) — ✅ done
+## Phase 2 — `infra-provision.yml` (manual infra workflow) — ✅ done
 
-`infra-provision.yml` at repo root: `trigger: none` / `pr: none`, one `AzureCLI@2` step that `az group create` + `az deployment group create --template-file infra/main.bicep --parameters infra/main.bicepparam`, echoing outputs. Re-run to apply infra changes.
+`.github/workflows/infra-provision.yml`: `workflow_dispatch` only, `permissions: id-token: write`. Steps: `azure/login@v2` (OIDC, using `AZURE_CLIENT_ID/TENANT_ID/SUBSCRIPTION_ID`) → `az group create` + `az deployment group create --template-file infra/main.bicep --parameters infra/main.bicepparam`. Re-run to apply infra changes.
 
-## Phase 3 — `azure-pipelines.yml` (CI/CD) — ✅ done
+## Phase 3 — CI/CD workflows — ✅ done
 
-`azure-pipelines.yml` at repo root. Two paths gated by `Build.Reason`:
-- **CI path** (push/manual): `Test` (pytest, Python 3.12) → `Deploy` (SSH: install GitHub deploy key → clone-if-absent / pull-if-present → render `.env` from `scout-secrets` → `docker compose up -d --build`).
-- **Private repo:** cloud-init only preps the host (Docker+git+dir); the Deploy stage clones/pulls over SSH using a read-only GitHub deploy key (`GIT_DEPLOY_KEY`), so no secret lives in Bicep/customData.
-- **Schedule path** (`cron: "0 21 * * *"`, `always: true`): `RunJob` (`dependsOn: []`, SSH `docker compose run --rm app`).
-- `set -euo pipefail` throughout; deploy key `chmod 600` on the ephemeral agent; `.env` rendered via heredoc-over-stdin (no secret on command line, no `set -x`).
+- **`deploy.yml`** (push to `main` + `workflow_dispatch`): `test` job (pytest, Python 3.12) → `deploy` job: `actions/checkout` (submodules) → **rsync** repo to VM over SSH (`--delete`, excludes `.git`/`scout/.env`) → render `.env` from Actions secrets (heredoc, secrets via `env:`) → `docker compose up -d --build`. VM needs **no** GitHub access.
+- **`scheduled-run.yml`** (`cron: "0 21 * * *"` + `workflow_dispatch`): SSH `docker compose run --rm app`. Runs whatever `deploy` last synced.
+- `set -euo pipefail` throughout; SSH key `chmod 600` on the ephemeral runner; no `set -x`.
 
-## Phase 4 — ADO secret variable group + manual setup — ✅ done
+## Phase 4 — GitHub Actions secrets + manual setup — ✅ done
 
-Documented in [`deployment-setup.md`](./deployment-setup.md): create the `scout-secrets` variable group (18 `.env` keys secret, `VM_SSH_PRIVATE_KEY` secret, `VM_HOST`/`VM_USER` non-secret), service connections, and how secrets stay out of repo/logs. `.env` gitignored; rendered on the VM at deploy time only.
+Documented in [`deployment-setup.md`](./deployment-setup.md): OIDC federated credential setup; **secrets** (18 `.env` keys + `VM_SSH_PRIVATE_KEY` + `AZURE_*` IDs) and **variables** (`VM_HOST`, `VM_USER`, `RESOURCE_GROUP`, `AZURE_LOCATION`); how secrets stay out of repo/logs. `.env` gitignored + rsync-excluded; rendered on the VM at deploy time only.
 
 ## Diagram — ✅ added
 
-`infra/azure-deployment.drawio` (2 pages): CI/CD deployment flow + network topology (VNet/subnet/NSG/public-IP/NIC/VM). Matches repo's existing `docs/diagrams/*.drawio` style.
+`infra/azure-deployment.drawio` (2 pages): CI/CD deployment flow (GitHub Actions) + network topology (VNet/subnet/NSG/public-IP/NIC/VM). Matches repo's existing `docs/diagrams/*.drawio` style.
 
-## Applied code-review advisories
+## Applied code-review advisories (from the earlier ADO version, carried over)
 
-- Deploy reordered to `git pull` → render `.env` → `compose up` (config never leads code).
-- `VM_HOST`/`VM_USER` documented as non-secret (used via `$(...)` on SSH command line).
+- Deploy orders host-sync before `.env` render before `compose up` (config never leads code).
+- `VM_HOST`/`VM_USER` are non-secret **variables** (not secrets).
 - Noted compose `environment:` overrides `JOBSPY_MCP_URL`/`DATABASE_URL` from `.env` (inert-but-harmless).
 
 ---
@@ -127,9 +129,8 @@ Documented in [`deployment-setup.md`](./deployment-setup.md): create the `scout-
 
 | Risk / Unknown | Handling |
 |----------------|----------|
-| **SSH open to `*`** (`sshSourceAddressPrefix` default) | Accept `*` + key-only auth (`disablePasswordAuthentication: true`) for now. Hardening follow-up: narrow to a jump-host/known IP, or an "open→deploy→close" step, once the deploy source IP is known. ADO Microsoft-hosted agents rotate IPs, so static allowlisting isn't practical yet. |
+| **SSH open to `*`** (`sshSourceAddressPrefix` default) | Accept `*` + key-only auth (`disablePasswordAuthentication: true`) for now. Hardening follow-up: narrow to known IPs, or an "open→deploy→close" step. GitHub-hosted runners rotate IPs, so static allowlisting isn't practical yet. |
 | Public IP SKU | Use **Standard + Static** — Basic SKU is being retired by Azure; Standard is the safe default. |
-| Repo URL hardcoded in `cloud-init.yaml` | Documented as the single edit if the repo moves. Templating deferred (YAGNI). |
 | Subscription/RG/region not chosen yet | Placeholders in `main.bicepparam` + README legend; does not block authoring or `bicep build` lint. |
 | `az`/Bicep CLI not installed locally | `az bicep build` lint requires Azure CLI. If absent, Phase 1 ships with the compile gate deferred to first pipeline/CI run; note the limitation. |
 | Cloud-init timing | First boot installs Docker before the app can run; the deploy pipeline (Phase 3) runs after provisioning, so no race — documented ordering. |

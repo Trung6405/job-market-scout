@@ -1,89 +1,89 @@
-# Deployment setup — Azure DevOps (manual, one-time)
+# Deployment setup — GitHub Actions (manual, one-time)
 
 Companion to [`plan.md`](./plan.md). Covers the account/portal steps that live
-**outside** the pipeline YAML: the ADO project, service connections, and the
-secret variable group the pipelines read from.
+**outside** the workflow YAML: the Azure OIDC identity, the resource group, and
+the GitHub Actions secrets/variables the workflows read.
 
-Pipelines (repo root):
-- `infra-provision.yml` — manual: deploys `infra/main.bicep`.
-- `azure-pipelines.yml` — CI/CD: `main` push → test + deploy; daily cron → scout run.
+Workflows (`.github/workflows/`):
+- `infra-provision.yml` — manual (`workflow_dispatch`): deploys `infra/main.bicep` via OIDC.
+- `deploy.yml` — push to `main`: `test` (pytest) → `deploy` (rsync repo to VM, render `.env`, `docker compose up -d --build`).
+- `scheduled-run.yml` — daily cron 21:00 UTC (+ manual): SSH `docker compose run --rm app`.
+
+Deploy model: the runner checks out the repo and **rsyncs** it to the VM over
+SSH — the VM needs no GitHub access (no deploy key).
 
 ## 1. Provision the VM first
 
-Run `infra-provision.yml` (or `az deployment` locally per [`infra/README.md`](../../../infra/README.md)).
-Note the deployment output `publicIpAddress` — it becomes `VM_HOST` below.
+Run **Actions → Provision infra → Run workflow** (or `az deployment` locally per
+[`infra/README.md`](../../../infra/README.md)). Note the output `publicIpAddress`
+— it becomes the `VM_HOST` variable below.
 
-## 2. Azure DevOps project + connections
+## 2. Azure OIDC (federated) for infra-provision
 
-1. Create the ADO organization/project.
-2. Connect this GitHub repo (**Project settings → Service connections → GitHub**).
-3. Create an **Azure Resource Manager** service connection scoped to the target
-   subscription/resource group. Its name goes into `infra-provision.yml`
-   (`azureServiceConnection`, currently `<AZURE_SERVICE_CONNECTION>`).
-4. Register both pipelines: **Pipelines → New → existing YAML** →
-   `azure-pipelines.yml` and `infra-provision.yml`.
-
-## 3. Secret variable group: `scout-secrets`
-
-**Pipelines → Library → + Variable group**, name it exactly `scout-secrets`
-(matches `variables: - group: scout-secrets` in `azure-pipelines.yml`). Mark
-the credential values as **secret** (lock icon); leave the connection targets
-`VM_HOST`/`VM_USER` **non-secret** (they are used as `$(...)` on the SSH command
-line, and Azure recommends secrets never appear there). Keys:
-
-| Key | Secret? | Source |
-|-----|---------|--------|
-| `JOBSPY_MCP_URL` | yes | `http://jobspy-mcp:9423` (compose-internal) |
-| `DEEPSEEK_API_KEY` | yes | DeepSeek |
-| `DEEPSEEK_MODEL` | yes | e.g. `deepseek/deepseek-chat` |
-| `SEARCH_ROLES`, `SEARCH_LOCATIONS`, `RESULTS_WANTED`, `HOURS_OLD` | yes | search config |
-| `RESUME_PATH`, `PREFERRED_LOCATIONS`, `REMOTE_ONLY`, `MIN_SALARY`, `MIN_MATCH_SCORE` | yes | scoring config |
-| `DESCRIPTION_CHAR_LIMIT`, `BRIEFING_MAX_MATCHES` | yes | limits |
-| `DATABASE_URL` | yes | `postgresql://scout:scout@postgres:5432/scout` (compose-internal) |
-| `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, `GMAIL_RECIPIENT` | yes | email |
-| `VM_HOST` | no | VM public IP (step 1 output) |
-| `VM_USER` | no | VM admin username (default `azureuser`) |
-| `VM_SSH_PRIVATE_KEY` | yes | private half of the keypair whose public key is in `main.bicepparam` (used to SSH **into** the VM) |
-| `GIT_DEPLOY_KEY` | yes | private half of a GitHub **deploy key** — lets the VM clone/pull this **private** repo (see step 3a) |
-
-The full-file key set mirrors [`scout/.env.example`](../../../scout/.env.example)
-plus the `VM_*` connection values and `GIT_DEPLOY_KEY`.
-
-### 3a. GitHub deploy key (private repo access)
-
-The repo is **private**, so the VM authenticates to GitHub with a read-only
-deploy key (cloud-init no longer clones — the Deploy stage does, on first run):
+Create an Azure AD app + service principal, grant it Contributor on the target
+subscription/RG, and add a **federated credential** for this repo so no cloud
+secret is stored:
 
 ```bash
-ssh-keygen -t ed25519 -f ~/.ssh/scout_deploy -N "" -C "scout-vm-deploy"
-cat ~/.ssh/scout_deploy.pub   # add to GitHub repo -> Settings -> Deploy keys (read-only)
-cat ~/.ssh/scout_deploy       # paste (whole private key) into GIT_DEPLOY_KEY (secret)
+az ad app create --display-name "job-market-scout-gha"
+# capture appId (-> AZURE_CLIENT_ID) and the tenant/subscription IDs
+az ad sp create --id <appId>
+az role assignment create --assignee <appId> --role Contributor \
+  --scope /subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>
+az ad app federated-credential create --id <appId> --parameters '{
+  "name": "gha-main",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:Trung6405/job-market-scout:ref:refs/heads/main",
+  "audiences": ["api://AzureADTokenExchange"]
+}'
 ```
 
-The Deploy stage installs this key at `~/.ssh/github_deploy` on the VM, then
-`git clone` (first deploy) or `git pull` (subsequent) over SSH. The public
-submodule (`jobspy-mcp-server`) needs no auth.
+For manual `workflow_dispatch` runs the token subject is the branch ref above.
+If you provision from a non-`main` branch, add a matching federated credential.
 
-> The daily **RunJob** assumes the repo is already on the VM — a Deploy must run
-> once (push to `main`) before the first scheduled run. Alternative to a deploy
-> key: a fine-scoped GitHub PAT via HTTPS credential helper.
+## 3. GitHub Actions secrets & variables
 
-> Note: `docker-compose.yaml` sets `JOBSPY_MCP_URL` and `DATABASE_URL` in the
-> `app` service's `environment:` block, which overrides `env_file`. Those two
-> rendered `.env` lines are therefore inert for the `app` service — kept for
-> completeness, harmless.
+**Repo → Settings → Secrets and variables → Actions.**
+
+**Secrets** (encrypted):
+
+| Secret | Source |
+|--------|--------|
+| `JOBSPY_MCP_URL`, `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL` | app config / DeepSeek |
+| `SEARCH_ROLES`, `SEARCH_LOCATIONS`, `RESULTS_WANTED`, `HOURS_OLD` | search config |
+| `RESUME_PATH`, `PREFERRED_LOCATIONS`, `REMOTE_ONLY`, `MIN_SALARY`, `MIN_MATCH_SCORE` | scoring config |
+| `DESCRIPTION_CHAR_LIMIT`, `BRIEFING_MAX_MATCHES` | limits |
+| `DATABASE_URL` | `postgresql://scout:scout@postgres:5432/scout` (compose-internal) |
+| `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, `GMAIL_RECIPIENT` | email |
+| `VM_SSH_PRIVATE_KEY` | private half of the keypair whose public key is in `main.bicepparam` |
+| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | OIDC (step 2) |
+
+The 18 app keys mirror [`scout/.env.example`](../../../scout/.env.example).
+
+**Variables** (non-secret):
+
+| Variable | Value |
+|----------|-------|
+| `VM_HOST` | VM public IP (step 1 output) |
+| `VM_USER` | VM admin username (default `azureuser`) |
+| `RESOURCE_GROUP` | resource group name |
+| `AZURE_LOCATION` | e.g. `australiaeast` |
 
 ## 4. How secrets stay out of the repo and logs
 
-- The `.env` file is **never committed** (`.gitignore` covers it). The deploy
-  stage renders it on the VM at `/opt/job-market-scout/scout/.env` over SSH,
-  from the variable group values.
-- ADO auto-masks secret variable values in pipeline logs; the deploy script
-  never runs with `set -x`, so rendered `.env` contents are not echoed.
+- `.env` is **never committed** (`.gitignore` covers it) and is excluded from the
+  rsync. The `deploy` job renders it on the VM from the mapped secrets.
+- GitHub Actions auto-masks secret values in logs; secrets are consumed via
+  `env:` (not inline `${{ }}` in `run:`), and no step uses `set -x`.
 - `VM_SSH_PRIVATE_KEY` is written to `~/.ssh/deploy_key` (`chmod 600`) on the
-  ephemeral pipeline agent only.
+  ephemeral runner only. No cloud credential is stored (OIDC).
 
 ## 5. Schedule
 
-`azure-pipelines.yml` runs the scout cycle daily at **21:00 UTC** (`cron: "0 21 * * *"`).
-Change the cron line to adjust. `always: true` runs it even without new commits.
+`scheduled-run.yml` runs daily at **21:00 UTC** (`cron: "0 21 * * *"`). Change the
+cron to adjust. A `deploy` must run once (push to `main`) before the first
+scheduled run, so the code + `.env` exist on the VM.
+
+> Note: `docker-compose.yaml` sets `JOBSPY_MCP_URL` and `DATABASE_URL` in the
+> `app` service's `environment:` block, which overrides `env_file` — those two
+> rendered `.env` lines are inert for `app`, kept for completeness.
