@@ -3,7 +3,13 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
-from scout.shared.schemas import Listing, ListingScore, MatchResult
+from scout.shared.schemas import (
+    BriefingProse,
+    BriefingTakeaway,
+    Listing,
+    ListingScore,
+    MatchResult,
+)
 
 
 def test_listing_accepts_valid_data():
@@ -83,14 +89,45 @@ def test_match_result_require_score():
         MatchResult(listing=_make_listing(), reasoning="Missing score.")
 
 def test_listing_score_accepts_valid_data():
-    score = ListingScore(external_id="123", score=82, reasoning="Strong overlap.")
+    score = ListingScore(
+        source="linkedin", external_id="123", score=82, reasoning="Strong overlap."
+    )
     assert score.external_id == "123"
     assert score.score == 82
 
 def test_listing_score_rejects_score_above_100():
     with pytest.raises(ValidationError):
-        ListingScore(external_id="123", score=101, reasoning="Too high.")
+        ListingScore(
+            source="linkedin", external_id="123", score=101, reasoning="Too high."
+        )
 
 def test_listing_score_rejects_score_below_0():
     with pytest.raises(ValidationError):
-        ListingScore(external_id="123", score=-1, reasoning="Too low.")
+        ListingScore(
+            source="linkedin", external_id="123", score=-1, reasoning="Too low."
+        )
+
+
+def test_briefing_takeaway_accepts_valid_data():
+    takeaway = BriefingTakeaway(
+        source="linkedin", external_id="123", takeaway="Strong Python overlap."
+    )
+    assert takeaway.external_id == "123"
+
+
+def test_briefing_prose_accepts_valid_data():
+    prose = BriefingProse(
+        intro="Here are today's top matches.",
+        takeaways=[
+            BriefingTakeaway(
+                source="linkedin", external_id="123", takeaway="Strong overlap."
+            )
+        ],
+    )
+    assert prose.intro == "Here are today's top matches."
+    assert len(prose.takeaways) == 1
+
+
+def test_briefing_prose_allows_empty_takeaways():
+    prose = BriefingProse(intro="No matches today.", takeaways=[])
+    assert prose.takeaways == []

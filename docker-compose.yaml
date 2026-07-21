@@ -3,10 +3,14 @@ services:
     build: .
     env_file:
       - scout/.env
+    depends_on:
+      jobspy-mcp:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     environment:
       JOBSPY_MCP_URL: http://jobspy-mcp:9423
-    depends_on:
-      - jobspy-mcp
+      DATABASE_URL: postgresql://scout:scout@postgres:5432/scout
     ports:
       - "8000:8000"
 
@@ -32,6 +36,16 @@ services:
         COPY package.json package-lock.json ./
         RUN npm ci --omit=dev
         COPY . .
+        # Upstream's prompt registrations pass z.object(...) where the MCP SDK
+        # expects a raw Zod shape, crashing the server before it can bind its
+        # port (see https://github.com/borgius/jobspy-mcp-server, src/index.js).
+        # We only need the search_jobs tool, not these prompts, so drop the
+        # calls at build time rather than patching the tracked submodule.
+        RUN sed -i \
+          -e "/^searchJobsPrompt(server);/d" \
+          -e "/^jobRecommendationsPrompt(server);/d" \
+          -e "/^resumeFeedbackPrompt(server);/d" \
+          src/index.js
         EXPOSE 9423
         CMD ["node", "src/index.js"]
     environment:
@@ -44,3 +58,22 @@ services:
       - jobspy-scraper
     ports:
       - "9423:9423"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: scout
+      POSTGRES_PASSWORD: scout
+      POSTGRES_DB: scout
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scout"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5433:5432"
+
+volumes:
+  postgres-data:

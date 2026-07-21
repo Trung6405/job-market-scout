@@ -5,7 +5,7 @@ from google.adk.models.lite_llm import LiteLlm
 
 from scout.config import Settings
 from scout.prompts import build_scorer_instruction
-from scout.shared.schemas import Listing, ListingScore
+from scout.shared.schemas import Listing, ListingScoreBatch
 from scout.sub_agents.scorer.agent import build_scorer_agent
 
 def _make_listing(**overrides):
@@ -40,6 +40,14 @@ def test_build_scorer_instruction_includes_external_id_for_joining():
 
     assert "job-42" in instruction
 
+def test_build_scorer_instruction_includes_source_for_joining():
+    settings = Settings()
+    listings = [_make_listing(source="indeed")]
+
+    instruction = build_scorer_instruction(settings, listings)
+
+    assert "indeed" in instruction
+
 def test_build_scorer_instruction_excludes_url_and_scraped_at():
     settings = Settings()
     listings = [_make_listing(url="https://www.linkedin.com/jobs/view/999")]
@@ -58,6 +66,17 @@ def test_build_scorer_instruction_truncates_description_to_char_limit():
     assert "x" * 100 not in instruction
     assert "x" * 20 in instruction
 
+def test_build_scorer_instruction_directs_weighing_missing_required_skills():
+    instruction = build_scorer_instruction(Settings(), [_make_listing()])
+
+    assert "required" in instruction.lower()
+    assert "missing" in instruction.lower()
+
+def test_build_scorer_instruction_directs_weighing_overqualification():
+    instruction = build_scorer_instruction(Settings(), [_make_listing()])
+
+    assert "overqualif" in instruction.lower()
+
 def test_build_scorer_agent_uses_configured_model():
     settings = Settings(deepseek_model="deepseek/deepseek-reasoner")
 
@@ -72,10 +91,17 @@ def test_build_scorer_agent_uses_zero_temperature():
 
     assert agent.model._additional_args.get("temperature") == 0
 
-def test_build_scorer_agent_outputs_listing_score_list():
+def test_build_scorer_agent_outputs_listing_score_batch():
     agent = build_scorer_agent([_make_listing()], Settings())
 
-    assert agent.output_schema == list[ListingScore]
+    assert agent.output_schema == ListingScoreBatch
+
+def test_build_scorer_agent_requests_json_object_mode():
+    agent = build_scorer_agent([_make_listing()], Settings())
+
+    assert agent.model._additional_args.get("response_format") == {
+        "type": "json_object"
+    }
 
 def test_build_scorer_agent_excludes_rule_filtered_listings_from_instruction():
     settings = Settings(remote_only=True)

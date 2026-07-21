@@ -1,3 +1,4 @@
-Software Engineer with 5 years of experience building backend services in
-Python and Go. Comfortable with distributed systems, REST/gRPC APIs, and
-SQL databases. Looking for backend or platform engineering roles.
+Final-year Software Engineering student with hands-on experience building full-stack applications 
+using Python (FastAPI), React/TypeScript, and PostgreSQL, plus containerized deployment on Azure. 
+Brings several years of hospitality experience, contributing strong work ethic, communication, and 
+customer-facing skills. Looking for software engineering roles.

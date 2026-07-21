@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+.worktrees/
+
+# ADK local runtime session cache
+scout/.adk/

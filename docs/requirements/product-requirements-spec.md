@@ -56,28 +56,21 @@ A single job seeker (initially the author). Single-user by design in this versio
 
 ### 3.1 Pipeline
 
-The Scout App runs as a single containerised process. On each daily run, four stages execute in order, passing data through shared pipeline state (in-memory), not through per-stage database round trips.
+The Scout App runs as a single containerised process. On each daily run, four stages execute in order, passing data through shared pipeline state (in-memory), not through per-stage database round trips:
 
-```
-Scheduler (planned)
-   │ triggers daily run
-   ▼
-┌─────────────────────────────────────────────────────────┐
-│ Scout App (Docker container)                            │
-│                                                         │
-│  🤖 Scraper ──raw listings──► ⚙️ Tracker                │
-│                                  │                      │
-│                    relevant / new listings              │
-│                                  ▼                      │
-│                              🤖 Scorer                  │
-│                                  │                      │
-│                        listings + scores                │
-│                                  ▼                      │
-│                              🤖 Briefing ──► email      │
-└─────────────────────────────────────────────────────────┘
-```
+- Scheduler (planned) triggers the daily run
+- 🤖 **Scraper** → raw listings → ⚙️ **Tracker**
+- ⚙️ **Tracker** → relevant / new listings → 🤖 **Scorer**
+- 🤖 **Scorer** → listings + scores → 🤖 **Briefing**
+- 🤖 **Briefing** → email
 
 🤖 = LLM agent stage · ⚙️ = deterministic code stage
+
+![Job Market Scout — high-level architecture: Scheduler triggers the Scout App container, which runs Scraper → Tracker → Scorer → Briefing against their modules and external services](../diagrams/job-market-scout-simplified-1-high-level-architecture.png)
+
+*A day in the life, step by step:*
+
+![A day in the life — Scheduler starts the run, then Scraper, Tracker, Scorer, and Briefing execute in order, ending with the Job Seeker reading the daily briefing](../diagrams/job-market-scout-simplified-2-user-journey-daily-run.png)
 
 ### 3.2 Stage responsibilities
 
@@ -153,9 +146,9 @@ Scheduler (planned)
 |---|---|
 | Scout App code + Dockerfile (repo) | **Built** |
 | PostgreSQL (provisioned instance) | Planned |
-| Scheduler (daily trigger) | Planned — target: Azure Container Apps Jobs cron trigger |
-| Cloud host | Planned — Azure Container Apps Jobs |
-| CI/CD | Planned — GitHub Actions builds and deploys the container image on push |
+| Scheduler (daily trigger) | Planned — target: cron/systemd timer on the Azure VM |
+| Cloud host | Planned — Azure VM instance |
+| CI/CD | Planned — GitHub Actions builds the container image and deploys it to the Azure VM on push, gated on the pipeline running successfully |
 
 Source is hosted on GitHub. Until the scheduler exists, runs are triggered manually.
 
@@ -171,7 +164,7 @@ Source is hosted on GitHub. Until the scheduler exists, runs are triggered manua
 ## 8. Deferred / future work
 
 - `matches` table persisting scores + reasoning, correlated to config via a `config_version` hash (schema direction already agreed; deferred per D4)
-- Scheduler, Azure hosting, CI/CD (see §7)
+- Scheduler, Azure VM hosting, CI/CD (see §7)
 - Embeddings-based matching
 - Trend analysis over stored listings
 - Additional delivery channels (e.g. Teams)

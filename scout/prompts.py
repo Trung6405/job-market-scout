@@ -3,45 +3,11 @@ from __future__ import annotations
 import json
 
 from scout.config import Settings
-from scout.shared.schemas import Listing
-
-SCRAPER_INSTRUCTION_TEMPLATE = """\
-You are the job-listing scraper for Job Market Scout.
-
-Call the `search_jobs` tool once for each of these search roles: {roles}.
-For each call, use these locations: {locations}, request up to
-{results_wanted} results, and restrict results to postings from the last
-{hours_old} hours. Do not invent listings or call any other tool.
-
-Normalize every result the tool returns into the Listing schema:
-- Set `source` from the result's `site` field.
-- Set `external_id` from the result's `id` field.
-- Keep `title`, `company`, and `location` exactly as provided, and set
-  `url` from the result's `jobUrl` field.
-- Set `description` from the result's `description` field.
-- Set `is_remote` to true only if the listing is explicitly remote.
-- Set `date_posted` from the result's `datePosted` field when the source
-  provides one; otherwise leave it unset.
-- Set `salary_min`/`salary_max` from the result's `minAmount`/`maxAmount`
-  fields; leave them unset when the source does not provide them.
-- Set `scraped_at` to the current UTC time.
-
-Drop any result missing a `title`, `company`, or `url` instead of guessing
-values. Return only the normalized list of listings, no commentary.
-"""
-
-
-def build_scraper_instruction(settings: Settings) -> str:
-    return SCRAPER_INSTRUCTION_TEMPLATE.format(
-        roles=", ".join(settings.search_roles),
-        locations=", ".join(settings.search_locations),
-        results_wanted=settings.results_wanted,
-        hours_old=settings.hours_old,
-    )
-
+from scout.shared.schemas import Listing, MatchResult
 
 def _project_listing_for_scoring(listing: Listing, description_char_limit: int) -> dict:
     return {
+        "source": listing.source,
         "external_id": listing.external_id,
         "title": listing.title,
         "company": listing.company,
@@ -64,9 +30,44 @@ def build_scorer_instruction(settings: Settings, listings: list[Listing]) -> str
     return f"""\
 You are the job-match scorer for Job Market Scout.
 
-Score each listing below from 0 to 100 on how well it fits the resume and
-preferences, and give one short sentence of reasoning per listing. Do not
-invent listings beyond the ones provided, and do not call any tool.
+For each listing below, first identify the required skills and
+qualifications stated in its description — not nice-to-haves, the ones
+described as required, must-have, or similar. Check each one against the
+resume. A skill only counts as met if the resume states it or something
+clearly equivalent; do not assume a candidate has a skill just because it
+is adjacent to something they do have.
+
+Then compare seniority level: the years of experience, scope, and
+language of the listing (e.g. "1+ years," "entry-level," "associate,"
+"will receive guidance") against what the resume shows. A resume whose
+experience clearly exceeds what the listing asks for is overqualified —
+this is a real mismatch, not a bonus, because it raises the risk of
+being screened out or of a scope/pay mismatch, even when every required
+skill is met.
+
+Score from 0 to 100 using this rubric:
+- 90-100: the resume meets essentially all stated required skills, with
+  no missing skill category, and the seniority level is a good match
+  (neither overqualified nor underqualified).
+- 70-89: the resume meets most required skills, missing at most one
+  minor one, and seniority is a reasonable match.
+- 40-69: the resume meets most required skills, but is significantly
+  overqualified or underqualified for the listing's stated seniority
+  level, or is missing multiple required skills or an entire required
+  skill category (e.g. the listing requires cloud/DevOps tooling and
+  the resume has none).
+- 0-39: fundamental mismatch in role, seniority, or most required
+  skills.
+
+Matching on job title, seniority, or general domain alone is not enough
+to score high if specific required skills are missing — a partial skill
+match is a partial score, not a full one. Likewise, meeting every
+required skill is not enough to score high if the resume is
+overqualified for the listing's stated seniority level.
+
+Give one short sentence of reasoning per listing that names the most
+significant missing required skill or seniority mismatch, if any. Do
+not invent listings beyond the ones provided, and do not call any tool.
 
 Resume:
 {settings.resume_text}
@@ -78,7 +79,45 @@ Minimum salary: {settings.min_salary if settings.min_salary is not None else "no
 Listings to score:
 {listings_json}
 
-Return a JSON list of objects, each with "external_id" (copied exactly
-from the listing), "score" (integer 0-100), and "reasoning" (one short
-sentence). Return only the JSON list, no commentary.
+Return a JSON object with a single key "scores" containing a list of
+objects, each with "source" and "external_id" (copied exactly from the
+listing — together they identify it, since external_id alone may repeat
+across sources), "score" (integer 0-100), and "reasoning" (one short
+sentence). Return only the JSON object, no commentary.
+"""
+
+
+def _project_match_for_briefing(match: MatchResult) -> dict:
+    return {
+        "source": match.listing.source,
+        "external_id": match.listing.external_id,
+        "title": match.listing.title,
+        "company": match.listing.company,
+        "score": match.score,
+    }
+
+
+def build_briefing_instruction(
+    settings: Settings, top_matches: list[MatchResult]
+) -> str:
+    matches_json = json.dumps(
+        [_project_match_for_briefing(match) for match in top_matches], indent=2
+    )
+    return f"""\
+You are the briefing writer for Job Market Scout. Write a short, upbeat
+intro paragraph (2-3 sentences) for today's job matches, then one
+one-line takeaway per listing explaining why it's worth a look, based
+only on the title, company, and score given. Do not invent facts about
+any listing beyond what is given, and do not call any tool.
+
+Resume:
+{settings.resume_text}
+
+Today's top matches:
+{matches_json}
+
+Return a single JSON object with two keys: "intro" (string) and
+"takeaways" (a list of objects, each with "source" and "external_id"
+copied exactly from the match, and "takeaway", one short sentence).
+Return only the JSON object, no commentary.
 """

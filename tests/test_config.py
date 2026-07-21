@@ -90,3 +90,50 @@ def test_settings_raises_when_resume_path_missing(monkeypatch):
 
     with pytest.raises(FileNotFoundError):
         Settings()
+
+
+def test_settings_uses_database_url_default_when_env_unset(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    settings = Settings()
+
+    assert settings.database_url == "postgresql://scout:scout@localhost:5433/scout"
+
+
+def test_settings_reads_database_url_env_override(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test:test@localhost:5433/test")
+
+    settings = Settings()
+
+    assert settings.database_url == "postgresql://test:test@localhost:5433/test"
+
+
+def test_settings_uses_briefing_defaults_when_env_unset(monkeypatch):
+    for var in (
+        "BRIEFING_MAX_MATCHES",
+        "GMAIL_ADDRESS",
+        "GMAIL_APP_PASSWORD",
+        "GMAIL_RECIPIENT",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+    settings = Settings()
+
+    assert settings.briefing_max_matches == 5
+    assert settings.gmail_address == ""
+    assert settings.gmail_app_password == ""
+    assert settings.gmail_recipient == ""
+
+
+def test_settings_reads_briefing_env_overrides(monkeypatch):
+    monkeypatch.setenv("BRIEFING_MAX_MATCHES", "3")
+    monkeypatch.setenv("GMAIL_ADDRESS", "scout@example.com")
+    monkeypatch.setenv("GMAIL_APP_PASSWORD", "app-password")
+    monkeypatch.setenv("GMAIL_RECIPIENT", "me@example.com")
+
+    settings = Settings()
+
+    assert settings.briefing_max_matches == 3
+    assert settings.gmail_address == "scout@example.com"
+    assert settings.gmail_app_password == "app-password"
+    assert settings.gmail_recipient == "me@example.com"

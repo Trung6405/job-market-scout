@@ -26,6 +26,22 @@ class MatchResult(BaseModel):
 
 
 class ListingScore(BaseModel):
+    source: str
     external_id: str
     score: int = Field(ge=0, le=100)
     reasoning: str
+
+
+class ListingScoreBatch(BaseModel):
+    scores: list[ListingScore]
+
+
+class BriefingTakeaway(BaseModel):
+    source: str
+    external_id: str
+    takeaway: str
+
+
+class BriefingProse(BaseModel):
+    intro: str
+    takeaways: list[BriefingTakeaway]
