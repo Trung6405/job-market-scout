@@ -562,3 +562,46 @@ The tasks above are fully unit-testable without a live MCP server or DeepSeek AP
 3. Run the scraper via `adk run scout` (or `adk api_server scout` per the existing `Dockerfile` `CMD`) and confirm it returns real LinkedIn listings for the configured `SEARCH_ROLES`/`SEARCH_LOCATIONS`.
 
 This step needs a live DeepSeek key and network access, so it isn't part of the automated task loop above — do it once after Task 5.
+
+---
+
+## Amendments
+
+- 2026-07-21: Merged the `scraper-deterministic-normalization` plan
+  into this one (its single phase doc moved here as
+  [phase-2-deterministic-normalization.md](phase-2-deterministic-normalization.md)).
+  That plan replaced the `LlmAgent`-based scraper built by Tasks 1-5
+  above with a deterministic Python implementation, after live testing
+  found the LLM approach unreliable for a mechanical fetch-and-normalize
+  step (see the merged appendix in `docs/agent/specs/scraper-agent/spec.md`
+  for the failure modes that motivated the rewrite). `agent.py` and
+  `tools.py` from Tasks 3-4 above were deleted as part of that phase —
+  they're kept here only as a historical record of the original design.
+  Original `docs/agent/plans/scraper-deterministic-normalization/`
+  folder deleted.
+
+### Merged: Deterministic Scraper Normalization plan summary
+
+**Status:** Complete.
+
+**Goal:** replace the scraper's `LlmAgent` + ADK `Runner` with a plain
+deterministic Python pipeline that calls the `search_jobs` MCP tool
+directly and maps fields in code. `run_scraper(settings)` keeps its
+existing signature and return type.
+
+**Acceptance criteria (all met):**
+- `run_scraper` makes zero LLM calls and returns `list[Listing]` built
+  from a live `search_jobs` response.
+- `python -m scout.main` proceeds past the scraper stage without a
+  JSON/schema error.
+- Full test suite passes with no LLM/ADK mocking required for the
+  scraper's own tests.
+
+**Code that changed:** new `scout/sub_agents/scraper/mcp_client.py` and
+`normalize.py`, rewritten `runner.py`, deleted `agent.py` and
+`tools.py`; `scout/prompts.py` lost `build_scraper_instruction`/
+`SCRAPER_INSTRUCTION_TEMPLATE`.
+
+**Manual verification:** a real `python -m scout.main` run against the
+live `jobspy-mcp`/`postgres` containers completed the full pipeline —
+34 listings scraped, tracked, scored, and briefing email sent.

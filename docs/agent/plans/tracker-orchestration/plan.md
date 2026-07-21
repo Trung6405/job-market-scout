@@ -52,12 +52,27 @@ is callable in isolation with no other pipeline wiring required.
 |---|-------|----------|--------|
 | 1 | Storage module | [phase-1-storage-module.md](phase-1-storage-module.md) | Complete |
 | 2 | Tracker orchestration | [phase-2-tracker-orchestration.md](phase-2-tracker-orchestration.md) | Complete |
+| 3 | Pipeline: shared parsing helper *(merged from pipeline-orchestration)* | [phase-3-pipeline-shared-parsing.md](phase-3-pipeline-shared-parsing.md) | Complete |
+| 4 | Pipeline: Scraper/Scorer runners *(merged from pipeline-orchestration)* | [phase-4-pipeline-stage-runners.md](phase-4-pipeline-stage-runners.md) | Complete |
+| 5 | Pipeline: ScoutPipelineAgent *(merged from pipeline-orchestration)* | [phase-5-pipeline-agent.md](phase-5-pipeline-agent.md) | Complete |
+| 6 | Pipeline: batch entrypoint + Dockerfile *(merged from pipeline-orchestration)* | [phase-6-pipeline-batch-entrypoint.md](phase-6-pipeline-batch-entrypoint.md) | Complete |
 
 > Both phase documents were written up front at the human's explicit
 > request, overriding plan-standards' default lazy-creation guidance.
 > Phase 2 depends on Phase 1's Storage primitives (`create_pool`,
 > `apply_schema`, `upsert_listing`, `close_stale_listings`) being
 > implemented exactly as specified there before its tasks can run.
+>
+> Phases 3-6 are the `pipeline-orchestration` plan, merged in here
+> 2026-07-21 (see Amendments) — they built the `ScoutPipelineAgent`
+> orchestrator that runs Tracker (this plan's output) as one stage of
+> the full Scraper → Tracker → Scorer → Briefing sequence. Their phase
+> docs still refer to themselves as "Phase 1"-"Phase 4" internally;
+> the numbers above reflect this plan's combined sequence, not a
+> renumbering of the original files. Despite the original plan.md
+> header reading "Not started," `scout/agent.py`, `scout/main.py`, and
+> `scout/shared/parsing.py` all exist and are in active use — that
+> status was never updated after the work completed.
 
 ---
 
@@ -105,3 +120,42 @@ is callable in isolation with no other pipeline wiring required.
 - When a phase's scope changes, update its row here **in the same commit**.
 - On conflict, this file wins for *what* the phases are; the phase doc
   wins for *how* its tasks are done.
+
+## Amendments
+
+- 2026-07-21: Merged the `pipeline-orchestration` plan into this one as
+  Phases 3-6 (their phase docs moved here unchanged, files renamed
+  with a `pipeline-` prefix to avoid collisions). Rationale: that plan
+  built the root orchestrator that runs this plan's Tracker as one
+  stage of the full pipeline — the two are tightly coupled and
+  `pipeline-orchestration` was small enough not to warrant staying a
+  separate top-level plan. Original `docs/agent/plans/pipeline-orchestration/`
+  folder deleted. Summary of the merged plan's own metadata below.
+
+### Merged: Pipeline Orchestration plan summary
+
+**Goal:** wire Scraper, Tracker, Scorer, and Briefing together via a
+`ScoutPipelineAgent` (custom ADK `BaseAgent`) exported as `root_agent`
+for `adk web`, plus a `scout/main.py` batch entrypoint replacing the
+Dockerfile's `adk api_server` CMD.
+
+**Acceptance criteria (all met — see phase docs for verification detail):**
+- `adk web` discovers `root_agent`; sending it a message runs all four
+  stages with a distinct status message after each.
+- Zero new/changed listings short-circuits Scorer and Briefing.
+- `python -m scout.main` runs once, exits 0/non-zero correctly.
+- `Dockerfile`'s `CMD` runs `scout.main`, not `adk api_server`.
+
+**Key decisions carried forward:** no separate `run_scout` plain-function
+orchestrator — `ScoutPipelineAgent._run_async_impl` is the single place
+the four-stage sequence lives, shared by both `adk web` and the batch
+path; progress is reported via ADK `Event`s (short text), not by
+passing stage data through ADK session state (that still flows as
+typed Python values between direct function calls, preserving Decision
+D3 from this plan's own spec); a single `Settings` instance is threaded
+through every stage call within one run.
+
+**Out of scope (unchanged):** a scheduler/cron trigger for daily runs
+(see Appendix C in this plan's spec.md for the never-implemented
+Azure VM CI/CD design); persisting match scores to a `matches` table;
+retry or partial-failure recovery across stages.

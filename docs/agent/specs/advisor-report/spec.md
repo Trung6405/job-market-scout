@@ -181,4 +181,43 @@ report-link parameter.
 
 ## Amendments
 
-None.
+- 2026-07-21: Merged in the `profile-schema` spec (see appendix below) — the student-profile data model this Advisor feature reads via `load_profile`/`profile.json`. It was already independently useful and built before this spec existed (see this spec's Problem statement), but is small enough to fold in here rather than keep as its own top-level doc. Content unchanged in substance; original file deleted.
+
+---
+
+## Appendix: Student Profile Schema *(merged from `docs/agent/specs/profile-schema/spec.md`, approved 2026-07-21)*
+
+### Problem
+
+The `docs/project/prototypes/` HTML mockups for the Advisor report UI (dashboard, history, job-detail, profile) were built as throwaway static demos with hardcoded sample data. `profile.html` in particular assumes a structured student profile — categorised tech-stack proficiency, domain-knowledge levels, background, and tagged projects — that the pipeline had no way to represent. The only student-facing input the pipeline read was `scout/resume.txt`, a plain-text blob fed straight into the scorer's LLM prompt with no structure a program could reason over. Wiring the mockups to real pipeline output required a real data source for that structure — starting with a schema and loader for it.
+
+### Success Criteria
+
+- A student profile can be authored as a JSON file and loaded into a validated, typed Python object that mirrors every section shown in `profile.html` (identity/target, tech stack by category, domain knowledge, background, projects).
+- Malformed or missing profile data fails loudly and specifically (missing file vs. invalid schema), the same way the existing resume loader does.
+- The existing pipeline (scraper → scorer → tracker → briefing) is provably unaffected — nothing new is required at startup that isn't already required today.
+
+### Requirements
+
+**Must have:** Pydantic models for tech skill (name, 1-5 proficiency, optional note), tech category (freeform name + list of skills), domain knowledge (name, 0-100 proficiency, description), background (education, experience, preferred roles, locations), project (title, description, tags), and a top-level `Profile` tying them together with name, target role, and target locations. A `load_profile(path)` function reading a JSON file and returning a validated `Profile`, raising `FileNotFoundError` for a missing file and letting `pydantic.ValidationError` propagate for malformed data. An example profile file (`scout/profile.json.example`) populated with sample data, following the existing `resume.txt.example` convention.
+
+**Should have:** a single, unambiguous source of truth for the domain-knowledge "level" label (Solid/Good/Developing/Emerging) shown next to each proficiency bar, so the label can never disagree with the number.
+
+**Won't have:** rendering `profile.json` into any template (that's this spec's own Rendering layer, above); wiring `profile.json` into `scout.config.Settings`, the scorer, or the briefing pipeline; replacing `resume.txt` (it keeps driving the scorer's LLM prompt unchanged — `profile.json` is additive); GitHub resource verification for skill gaps.
+
+### Proposed Approach
+
+The profile data model lives in `scout/shared/schemas.py`, alongside the existing `Listing`/`MatchResult`/`BriefingProse` models. A small loader module, `scout/shared/profile.py`, mirrors the pattern already used for resume loading in `scout/config.py` (`_read_resume_text`): resolve the path, raise `FileNotFoundError` if missing, otherwise parse and validate. `scout/profile.json.example` ships as the reference instance.
+
+The domain-knowledge "level" label is derived from the stored 0-100 proficiency number via fixed thresholds (`>=70` Solid, `>=50` Good, `>=30` Developing, else Emerging — chosen to match the mockup's own worked examples), exposed as a computed property rather than a second stored field.
+
+Nothing wires this loader into `Settings` or any pipeline stage — it's a standalone schema + loader that this Advisor feature (and any future sub-project) imports.
+
+### Alternatives Considered
+
+| Alternative | Why rejected |
+|-------------|--------------|
+| Replace `resume.txt` with `profile.json` as the scorer's input | Bigger blast radius (touches the working scorer prompt) for no immediate benefit; the mockups only need profile data for the advisor report, not for re-scoring. Deferred. |
+| Fixed enum of tech-stack categories matching the mockup exactly | Stricter validation, but adding a category later (e.g. "Mobile") would require a code change; freeform strings cost nothing today. |
+| Store the domain-knowledge level label as its own authored field | More editorial control, but the label and the percentage bar could drift out of sync with no validation catching it. Deriving from a threshold keeps one source of truth. |
+| Render `profile.html` from real data ahead of the full report-rendering work | Would pull in a templating decision before that work had scoped it, and duplicate work once it started. Deferred. |

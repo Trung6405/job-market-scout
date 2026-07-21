@@ -72,6 +72,7 @@ files, and the email links to that day's report.
 
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
+| 0 | Student profile schema and loader *(merged from profile-schema)* | [phase-0-profile-schema.md](phase-0-profile-schema.md) | Complete |
 | 1 | Schema, db functions, and pipeline wiring (persistence) | [phase-1-persistence.md](phase-1-persistence.md) | Complete |
 | 2 | Success-band classification | [phase-2-bands.md](phase-2-bands.md) | Complete |
 | 3 | Requirements extraction & gap detection | [phase-3-gaps.md](phase-3-gaps.md) | Complete |
@@ -190,3 +191,41 @@ confirmed both fixes correct with no regressions.
 - When a phase's scope changes, update its row here **in the same commit**.
 - On conflict, this file wins for *what* the phases are; the phase doc
   wins for *how* its tasks are done.
+
+## Amendments
+
+- 2026-07-21: Merged the `profile-schema` plan into this one as Phase 0
+  (its phase doc moved here unchanged as `phase-0-profile-schema.md`).
+  Rationale: `profile.json`/`load_profile` is the data source this
+  Advisor feature's gap-detection and profile-rendering phases (2-5)
+  read from — the two were already described as one initiative in
+  spec.md's Problem statement, and `profile-schema` was small enough
+  not to warrant staying a separate top-level plan now that both are
+  complete. Original `docs/agent/plans/profile-schema/` folder deleted.
+
+### Merged: Student Profile Schema plan summary
+
+**Status:** Complete.
+
+**Goal:** a validated, typed data model for a student profile
+(tech-stack proficiency by category, domain knowledge, background,
+projects) plus a JSON loader for it, so the Advisor mockups have a
+real data source to render from.
+
+**Acceptance criteria (all met):**
+- `Profile` and its nested models exist in `scout/shared/schemas.py`
+  and validate every field shown in `profile.html`.
+- `load_profile(path)` in `scout/shared/profile.py` loads and
+  validates a profile JSON file, raising `FileNotFoundError` for a
+  missing file and `pydantic.ValidationError` for malformed data.
+- `scout/profile.json.example` parses successfully and matches the
+  mockup's sample data.
+- Full existing test suite passes unmodified.
+
+**Key decisions carried forward:** `profile.json` is additive
+alongside `resume.txt`, not a replacement; tech-stack categories are
+freeform strings, not an enum; the domain-knowledge level label is
+derived from the proficiency number, never stored separately; nothing
+in this phase wired the loader into `Settings` or any pipeline stage —
+that wiring is what Phases 1-5 of this plan (persistence, bands, gaps,
+templates, rendering) built on top of it.

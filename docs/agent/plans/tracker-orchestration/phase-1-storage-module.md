@@ -10,7 +10,9 @@
 
 Implement the Postgres schema and `scout/shared/db.py` primitives
 (`create_pool`, `apply_schema`, `upsert_listing`, `close_stale_listings`)
-per `docs/agent/specs/listings-db/spec.md`, wired up with a local `postgres`
+per Appendix A of `docs/agent/specs/tracker-orchestration/spec.md`
+(originally `docs/agent/specs/listings-db/spec.md`, merged 2026-07-21),
+wired up with a local `postgres`
 Docker service, `DATABASE_URL` config, and `asyncpg`/`pytest-asyncio`
 dependencies. We'll know it worked when `tests/test_db.py` passes against
 a locally running Postgres and `apply_schema` is safe to call twice.

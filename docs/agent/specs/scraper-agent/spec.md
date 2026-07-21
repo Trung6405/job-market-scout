@@ -102,3 +102,42 @@ Two services on a shared network:
 - Seek coverage: needs a dedicated data source (no existing MCP/library support found).
 - Company career-page search via web search API: separate tool/session.
 - Whether `jobspy-mcp-server`'s documented Docker image is fully self-contained (no docker-in-docker) is assumed from its README's `docker run` instructions but not verified against the actual Dockerfile — verify during implementation.
+
+## Amendments
+
+- 2026-07-21: Merged in the `scraper-deterministic-normalization` spec (see appendix below), which replaced this design's `LlmAgent`-based scraper with a deterministic Python implementation. Content unchanged in substance; original file deleted.
+
+---
+
+## Appendix: Deterministic Scraper Normalization *(merged from `docs/agent/specs/scraper-deterministic-normalization/spec.md`, approved 2026-07-20)*
+
+### Problem
+
+The scraper stage (`scout/sub_agents/scraper/`) originally used an `LlmAgent` to (a) call the `search_jobs` MCP tool with parameters taken verbatim from `Settings`, and (b) copy the tool's JSON response field-by-field into the `Listing` schema. Neither step involves judgment — both are fixed, mechanical transformations. Routing them through an LLM made the stage fail in four distinct ways during live testing: an upstream MCP server crash exposed a missing tool entirely; an unenforced `output_schema` let the model answer in prose instead of JSON; DeepSeek rejected the OpenAI-style strict `json_schema` response format LiteLLM sent; and, once that was worked around, DeepSeek corrupted JSON escaping while transcribing large (multi-KB) job descriptions verbatim. Each fix uncovered a new failure in the same code path, the signature of an architecture mismatch rather than a sequence of unrelated bugs.
+
+### Success Criteria
+
+- `run_scraper(settings)` returns normalized `Listing` objects sourced from a live `search_jobs` call and completes reliably regardless of description length or content.
+- The scraper stage makes zero LLM calls.
+- `python -m scout.main` gets past the scraper stage without a parsing or schema-enforcement failure.
+- Scorer and briefing stages are unaffected — they still use `LlmAgent` since they require judgment (fit scoring, prose writing).
+
+### Requirements
+
+**Must have:** `run_scraper` calls the `search_jobs` MCP tool directly (no `LlmAgent`/ADK `Runner`) once per role in `settings.search_roles`; each returned job dict is mapped to `Listing` in plain Python using the same field rules the original prompt encoded (`source` ← `site`, `external_id` ← `id`, `url` ← `jobUrl`, `is_remote` ← `isRemote` true only if explicitly true, etc.); rows missing `title`, `company`, or `url` are dropped, not guessed; duplicate `(source, external_id)` pairs across roles in one run are deduplicated; `run_scraper(settings)`'s public signature and behavior on callers is unchanged.
+
+**Should have:** the low-level "call the tool and parse the response" function is kept separate from the "manage the SSE session" function, so parsing logic is unit-testable without a live MCP server.
+
+**Won't have:** no new `Settings` field for choosing which job sites to search in this pass (default site list stays hardcoded); no change to the scorer or briefing stages' use of `LlmAgent`; no further changes to the vendored `jobspy-mcp-server` beyond the already-applied build-time patch.
+
+### Proposed Approach
+
+Replaced the scraper's `LlmAgent` + ADK `InMemoryRunner` with a plain async pipeline: a thin MCP client module wraps the official `mcp` SDK (`ClientSession` + `sse_client`) to open a session against `{settings.jobspy_mcp_url}/sse`, call `search_jobs`, and return the parsed `jobs` list — with the "call the tool given an open session" step split out as its own function so it's unit-testable against a fake session object. A normalization function maps one raw job dict to a `Listing`, returning `None` for rows that fail the required-field check instead of raising. `run_scraper` loops over `settings.search_roles`, calls the MCP client once per role, normalizes and deduplicates the results, and returns the combined list. `scout/sub_agents/scraper/agent.py`, `tools.py`, and the `build_scraper_instruction` prompt were deleted, since nothing calls an LLM for this stage anymore.
+
+### Alternatives Considered
+
+| Alternative | Why rejected |
+|-------------|--------------|
+| Keep the LLM approach; add a JSON-repair fallback and truncate/sanitize descriptions before they reach the model | Patches the fourth symptom, not the root cause. Long or unusually-formatted descriptions would keep finding new ways to break transcription; ongoing latency and DeepSeek cost for a step that makes no judgment calls. |
+| Keep the LLM approach but switch model/provider | Doesn't address the underlying issue — transcription-heavy structured output from large text blocks is fragile on any provider. |
+| Do nothing | Pipeline cannot complete a real run. |
