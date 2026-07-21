@@ -85,4 +85,4 @@ Secrets live in an Azure DevOps Library variable group (secret-masked), containi
 
 ## Amendments *(only after approval — never silently edit approved content)*
 
-- **2026-07-21 — CI system changed to GitHub Actions.** User reversed the original "Azure DevOps Pipelines" choice (see Alternatives Considered). Implementation now uses `.github/workflows/` instead of `azure-pipelines.yml`/`infra-provision.yml`. Two further consequences of the switch: (1) deploy is **runner checkout + rsync** to the VM rather than VM-side `git pull` — the VM needs no GitHub access, which also resolves the private-repo clone problem; (2) Azure auth for infra provisioning uses **OIDC federated credentials** (no stored service-principal secret) instead of an ADO service connection. The Bicep/IaC (`infra/`) is unchanged by this. See `docs/plans/azure-vm-cicd-deploy/{plan,deployment-setup}.md`.
+- None yet.

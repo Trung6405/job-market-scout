@@ -27,16 +27,33 @@ Implements [`docs/specs/azure-vm-cicd-deploy/spec.md`](../docs/specs/azure-vm-ci
 
 These are account/portal steps, outside the Bicep:
 
-1. **GitHub Actions** — configure the Azure OIDC federated credential and the
-   repo secrets/variables the workflows use. See
-   [`docs/plans/azure-vm-cicd-deploy/deployment-setup.md`](../docs/plans/azure-vm-cicd-deploy/deployment-setup.md).
-2. **Resource group** — pick a subscription and region, then:
+1. **GitHub Actions — Azure OIDC** (so `infra-provision.yml` can deploy without a
+   stored cloud secret): create an Azure AD app + service principal, grant it
+   Contributor on the RG, and add a federated credential for this repo:
+   ```bash
+   az ad app create --display-name "job-market-scout-gha"   # -> appId = AZURE_CLIENT_ID
+   az ad sp create --id <appId>
+   az role assignment create --assignee <appId> --role Contributor \
+     --scope /subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP>
+   az ad app federated-credential create --id <appId> --parameters '{
+     "name":"gha-main","issuer":"https://token.actions.githubusercontent.com",
+     "subject":"repo:Trung6405/job-market-scout:ref:refs/heads/main",
+     "audiences":["api://AzureADTokenExchange"]}'
+   ```
+2. **GitHub Actions — secrets & variables** (repo → Settings → Secrets and
+   variables → Actions):
+   - **Secrets:** the 18 keys from [`scout/.env.example`](../scout/.env.example),
+     plus `VM_SSH_PRIVATE_KEY` and `AZURE_CLIENT_ID` / `AZURE_TENANT_ID` /
+     `AZURE_SUBSCRIPTION_ID`.
+   - **Variables:** `VM_HOST` (VM public IP), `VM_USER` (default `azureuser`),
+     `RESOURCE_GROUP`, `AZURE_LOCATION`.
+3. **Resource group** — pick a subscription and region, then:
    ```bash
    az login
    az account set --subscription <SUBSCRIPTION_ID>
    az group create --name <RESOURCE_GROUP> --location <REGION>
    ```
-3. **SSH keypair** (if you don't have one):
+4. **SSH keypair** (if you don't have one):
    ```bash
    ssh-keygen -t rsa -b 4096 -f ~/.ssh/scout_vm
    cat ~/.ssh/scout_vm.pub   # paste into main.bicepparam -> adminSshPublicKey
