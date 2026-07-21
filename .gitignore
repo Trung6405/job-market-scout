@@ -220,3 +220,6 @@ __marimo__/
 
 # ADK local runtime session cache
 scout/.adk/
+
+# Personal resume (see scout/resume.txt.example for the template)
+scout/resume.txt
