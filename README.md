@@ -32,7 +32,14 @@ Multi-agent job market scout, scrapes listings, matches them to a resume, tracks
    ```
    cp scout/resume.txt.example scout/resume.txt
    ```
-4. Run the pipeline:
+4. (Optional) Copy the profile template and fill in your own tech stack,
+   domain knowledge, and background:
+   ```
+   cp scout/profile.json.example scout/profile.json
+   ```
+   Without this file, the pipeline still scores and emails matches as
+   normal — it just skips skill-gap detection for the Advisor report.
+5. Run the pipeline:
    ```
    docker compose up --build
    ```
@@ -41,6 +48,15 @@ Multi-agent job market scout, scrapes listings, matches them to a resume, tracks
    track → brief cycle via `python -m scout.main`. The Postgres schema is
    applied automatically on first run — no manual migration step needed.
    Matches above `MIN_MATCH_SCORE` are emailed to `GMAIL_RECIPIENT`.
+
+### Advisor report output
+
+Each run also renders an HTML report — a daily dashboard of scored
+listings (with success bands and skill gaps, if `scout/profile.json`
+exists), a per-role detail page, a history of past days, and a profile
+page — into `./reports` on the host (mounted from the container's
+`/app/reports`). The email links to that day's `dashboard.html`; open
+`./reports/history.html` to browse past days.
 
 ### Running tests
 ```

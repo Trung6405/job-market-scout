@@ -13,6 +13,8 @@ services:
       DATABASE_URL: postgresql://scout:scout@postgres:5432/scout
     ports:
       - "8000:8000"
+    volumes:
+      - ./reports:/app/reports
 
   # Built once so the `jobspy` image is available in the host Docker daemon
   # for jobspy-mcp to `docker run --rm jobspy ...` per search (see below).
