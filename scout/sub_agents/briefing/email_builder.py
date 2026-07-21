@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from email.message import EmailMessage
 from html import escape
+from pathlib import Path
 
 from scout.config import Settings
 from scout.shared.schemas import BriefingProse, MatchResult
@@ -31,6 +32,7 @@ def build_email(
     top_matches: list[MatchResult],
     prose: BriefingProse | None,
     settings: Settings,
+    report_path: Path | None = None,
 ) -> EmailMessage:
     message = EmailMessage()
     message["From"] = settings.gmail_address
@@ -39,8 +41,15 @@ def build_email(
     if not top_matches:
         message["Subject"] = "Job Market Scout: no strong matches today"
         text = "No listings met your match-score threshold today."
+        html = f"<p>{escape(text)}</p>"
+        if report_path is not None:
+            text += f"\n\nFull report: {report_path}"
+            html += (
+                f'<p>Full report: <a href="file://{report_path}">'
+                f"{escape(str(report_path))}</a></p>"
+            )
         message.set_content(text)
-        message.add_alternative(f"<p>{escape(text)}</p>", subtype="html")
+        message.add_alternative(html, subtype="html")
         return message
 
     count = len(top_matches)
@@ -68,8 +77,17 @@ def build_email(
             f"{escape(takeaway)}"
             "</li>"
         )
-    message.set_content("\n".join(text_lines))
-    message.add_alternative(
-        f"<p>{escape(intro)}</p><ul>{''.join(html_items)}</ul>", subtype="html"
-    )
+    if report_path is not None:
+        text_lines += [f"Full report: {report_path}", ""]
+    text = "\n".join(text_lines)
+
+    html = f"<p>{escape(intro)}</p><ul>{''.join(html_items)}</ul>"
+    if report_path is not None:
+        html += (
+            f'<p>Full report: <a href="file://{report_path}">'
+            f"{escape(str(report_path))}</a></p>"
+        )
+
+    message.set_content(text)
+    message.add_alternative(html, subtype="html")
     return message

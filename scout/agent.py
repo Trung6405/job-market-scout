@@ -139,7 +139,7 @@ class ScoutPipelineAgent(BaseAgent):
             await pool.close()
         yield _status_event(ctx, self.name, f"Run persisted: {run_date}")
 
-        await run_briefing(relevant, scores, settings)
+        await run_briefing(relevant, scores, settings, report_path=report_paths["dashboard"])
         yield _status_event(ctx, self.name, "Briefing: email sent")
 
 

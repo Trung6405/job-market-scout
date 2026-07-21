@@ -105,8 +105,8 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
         calls.append(("scorer", listings))
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings):
-        calls.append(("briefing", listings, scores))
+    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+        calls.append(("briefing", listings, scores, report_path))
         return EmailMessage()
 
     class _FakeConn:
@@ -185,7 +185,12 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     assert calls[8] == "render_history"
     # No profile file exists at the default path, so render_profile is skipped.
     assert calls[9] == "pool_closed"
-    assert calls[10] == ("briefing", [listing], [score])
+    assert calls[10] == (
+        "briefing",
+        [listing],
+        [score],
+        Path("reports/2026-07-21/dashboard.html"),
+    )
     assert "render_profile" not in calls
     assert any("Scraper: 1 listing" in t for t in texts)
     assert any("Tracker: 1 new/changed" in t for t in texts)
@@ -220,7 +225,7 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings):
+    async def _fake_run_briefing(listings, scores, settings, report_path=None):
         calls.append("briefing")
         return EmailMessage()
 
@@ -326,7 +331,7 @@ async def test_scout_pipeline_agent_short_circuits_when_nothing_relevant(
         calls.append("scorer")
         return []
 
-    async def _fake_run_briefing(listings, scores, settings):
+    async def _fake_run_briefing(listings, scores, settings, report_path=None):
         calls.append("briefing")
         return EmailMessage()
 
@@ -362,7 +367,7 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings):
+    async def _fake_run_briefing(listings, scores, settings, report_path=None):
         return EmailMessage()
 
     render_calls = []
@@ -424,7 +429,7 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings):
+    async def _fake_run_briefing(listings, scores, settings, report_path=None):
         calls.append("briefing")
         return EmailMessage()
 
@@ -535,7 +540,7 @@ async def test_scout_pipeline_agent_skips_gap_detection_when_no_profile(monkeypa
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings):
+    async def _fake_run_briefing(listings, scores, settings, report_path=None):
         calls.append("briefing")
         return EmailMessage()
 

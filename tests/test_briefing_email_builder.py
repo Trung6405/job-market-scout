@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from scout.config import Settings
 from scout.shared.schemas import BriefingProse, BriefingTakeaway
 from scout.sub_agents.briefing.email_builder import build_email
@@ -55,3 +57,45 @@ def test_build_email_escapes_html_special_characters():
 
     html_body = message.get_body(preferencelist=("html",)).get_content()
     assert "<script>alert(1)</script>" not in html_body
+
+
+def test_build_email_zero_matches_includes_report_path_when_given():
+    report_path = Path("reports/2026-07-21/dashboard.html")
+
+    message = build_email([], None, _settings(), report_path=report_path)
+
+    text_body = message.get_body(preferencelist=("plain",)).get_content()
+    html_body = message.get_body(preferencelist=("html",)).get_content()
+    assert str(report_path) in text_body
+    assert str(report_path) in html_body
+
+
+def test_build_email_with_matches_includes_report_path_when_given():
+    report_path = Path("reports/2026-07-21/dashboard.html")
+    match = _make_match("1", "Platform Engineer", 88)
+    prose = BriefingProse(intro="Nice matches.", takeaways=[])
+
+    message = build_email([match], prose, _settings(), report_path=report_path)
+
+    text_body = message.get_body(preferencelist=("plain",)).get_content()
+    html_body = message.get_body(preferencelist=("html",)).get_content()
+    assert str(report_path) in text_body
+    assert str(report_path) in html_body
+
+
+def test_build_email_omits_report_path_reference_when_not_given():
+    match = _make_match("1", "Platform Engineer", 88)
+    prose = BriefingProse(intro="Nice matches.", takeaways=[])
+
+    message = build_email([match], prose, _settings())
+
+    text_body = message.get_body(preferencelist=("plain",)).get_content()
+    html_body = message.get_body(preferencelist=("html",)).get_content()
+    assert "Full report" not in text_body
+    assert "Full report" not in html_body
+
+    zero_match_message = build_email([], None, _settings())
+    zero_text_body = zero_match_message.get_body(preferencelist=("plain",)).get_content()
+    zero_html_body = zero_match_message.get_body(preferencelist=("html",)).get_content()
+    assert "Full report" not in zero_text_body
+    assert "Full report" not in zero_html_body
