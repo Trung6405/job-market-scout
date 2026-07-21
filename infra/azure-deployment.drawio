@@ -1,0 +1,168 @@
+<mxfile host="app.diagrams.net" agent="job-market-scout/ak-cook" pages="2">
+  <diagram id="deploy" name="1. Azure Deployment (CI/CD)">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="d_title" parent="1" vertex="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=15;fontStyle=1;" value="Azure VM Deployment — CI/CD (Azure DevOps → single VM)">
+          <mxGeometry height="30" width="620" x="340" y="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="d_dev" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="&lt;b&gt;Developer&lt;/b&gt;&lt;br&gt;git push">
+          <mxGeometry height="60" width="150" x="40" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="d_cron" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 8;fillColor=#ffe6cc;strokeColor=#d79b00;" value="&lt;b&gt;Schedule&lt;/b&gt;&lt;br&gt;daily cron 21:00 UTC">
+          <mxGeometry height="60" width="150" x="40" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="d_github" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" value="&lt;b&gt;GitHub repo&lt;/b&gt;&lt;br&gt;job-market-scout (branch: main)">
+          <mxGeometry height="60" width="180" x="530" y="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="d_ado" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;spacingTop=6;" value="&lt;b&gt;Azure DevOps Pipelines&lt;/b&gt;">
+          <mxGeometry height="440" width="400" x="290" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="d_test" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="&lt;b&gt;Test&lt;/b&gt; stage&lt;br&gt;pytest&lt;br&gt;(push / manual only)">
+          <mxGeometry height="70" width="160" x="320" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="d_deploy" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="&lt;b&gt;Deploy&lt;/b&gt; stage&lt;br&gt;SSH: git pull → render .env&lt;br&gt;→ docker compose up -d --build">
+          <mxGeometry height="80" width="160" x="320" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="d_runjob" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="&lt;b&gt;RunJob&lt;/b&gt; stage&lt;br&gt;SSH: docker compose&lt;br&gt;run --rm app&lt;br&gt;(schedule only)">
+          <mxGeometry height="80" width="160" x="500" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="d_vargroup" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="&lt;b&gt;🔒 Variable group: scout-secrets&lt;/b&gt;&lt;br&gt;.env values + VM_SSH_PRIVATE_KEY + VM_HOST/VM_USER">
+          <mxGeometry height="60" width="340" x="320" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="d_infra" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="&lt;b&gt;infra-provision.yml&lt;/b&gt; (manual)&lt;br&gt;az deployment → infra/main.bicep">
+          <mxGeometry height="60" width="340" x="320" y="530" as="geometry" />
+        </mxCell>
+
+        <mxCell id="d_rg" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;spacingTop=6;dashed=1;" value="&lt;b&gt;Azure Resource Group&lt;/b&gt;">
+          <mxGeometry height="470" width="440" x="770" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="d_vm" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;spacingTop=6;" value="&lt;b&gt;Ubuntu 22.04 VM (Standard_B2s)&lt;/b&gt; — Docker Engine + Compose (cloud-init)">
+          <mxGeometry height="330" width="400" x="790" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="d_app" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" value="app&lt;br&gt;(scout pipeline)">
+          <mxGeometry height="50" width="150" x="810" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="d_mcp" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" value="jobspy-mcp&lt;br&gt;(:9423, docker.sock)">
+          <mxGeometry height="50" width="150" x="1000" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="d_pg" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" value="postgres:16&lt;br&gt;(volume)">
+          <mxGeometry height="50" width="150" x="810" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="d_scraper" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#ffffff;strokeColor=#82b366;" value="jobspy (image)&lt;br&gt;docker run per search">
+          <mxGeometry height="50" width="150" x="1000" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="d_env" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="🔒 scout/.env (rendered at deploy time, never committed)">
+          <mxGeometry height="50" width="340" x="810" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="d_deepseek" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="DeepSeek API">
+          <mxGeometry height="50" width="140" x="790" y="590" as="geometry" />
+        </mxCell>
+        <mxCell id="d_gmail" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="Gmail SMTP">
+          <mxGeometry height="50" width="140" x="1050" y="590" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e1" parent="1" edge="1" source="d_dev" target="d_github" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;" value="push to main">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" parent="1" edge="1" source="d_github" target="d_test" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;" value="CI trigger">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" parent="1" edge="1" source="d_cron" target="d_runjob" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;dashed=1;" value="daily">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" parent="1" edge="1" source="d_test" target="d_deploy" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;" value="on success">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" parent="1" edge="1" source="d_vargroup" target="d_deploy" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;dashed=1;endArrow=open;" value="secrets">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" parent="1" edge="1" source="d_deploy" target="d_vm" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;" value="SSH :22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" parent="1" edge="1" source="d_runjob" target="d_vm" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;" value="SSH :22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" parent="1" edge="1" source="d_vm" target="d_github" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;dashed=1;" value="git pull">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" parent="1" edge="1" source="d_infra" target="d_rg" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;dashed=1;" value="provisions">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" parent="1" edge="1" source="d_app" target="d_deepseek" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;dashed=1;endArrow=open;" value="scoring">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" parent="1" edge="1" source="d_app" target="d_gmail" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;dashed=1;endArrow=open;" value="briefing email">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="network" name="2. Network Topology">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n_title" parent="1" vertex="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=15;fontStyle=1;" value="Azure Network Topology — VNet / Subnet / NSG / VM (defined in infra/main.bicep)">
+          <mxGeometry height="30" width="760" x="270" y="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="n_internet" parent="1" vertex="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" value="&lt;b&gt;Internet&lt;/b&gt;">
+          <mxGeometry height="80" width="160" x="60" y="230" as="geometry" />
+        </mxCell>
+
+        <mxCell id="n_rg" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;spacingTop=6;dashed=1;" value="&lt;b&gt;Resource Group&lt;/b&gt; (region: australiaeast)">
+          <mxGeometry height="560" width="900" x="300" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="n_pip" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;Public IP&lt;/b&gt;&lt;br&gt;Standard SKU, Static">
+          <mxGeometry height="60" width="170" x="340" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="n_nsg" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="&lt;b&gt;NSG&lt;/b&gt; (scout-vm-nsg)&lt;br&gt;allow-ssh: TCP 22&lt;br&gt;from sshSourceAddressPrefix (default *)">
+          <mxGeometry height="80" width="200" x="340" y="360" as="geometry" />
+        </mxCell>
+
+        <mxCell id="n_vnet" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f0ff;strokeColor=#6c8ebf;verticalAlign=top;spacingTop=6;dashed=1;" value="&lt;b&gt;VNet scout-vm-vnet&lt;/b&gt; — 10.0.0.0/16">
+          <mxGeometry height="470" width="560" x="600" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="n_subnet" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f7ff;strokeColor=#6c8ebf;verticalAlign=top;spacingTop=6;dashed=1;" value="&lt;b&gt;Subnet default&lt;/b&gt; — 10.0.0.0/24">
+          <mxGeometry height="410" width="520" x="620" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="n_nic" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;NIC&lt;/b&gt; scout-vm-nic&lt;br&gt;(NSG attached, dynamic private IP)">
+          <mxGeometry height="70" width="220" x="660" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="n_vm" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;spacingTop=6;" value="&lt;b&gt;VM scout-vm&lt;/b&gt; — Ubuntu 22.04, Standard_B2s">
+          <mxGeometry height="240" width="480" x="640" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="n_docker" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;verticalAlign=top;spacingTop=6;dashed=1;" value="&lt;b&gt;Docker Compose bridge network&lt;/b&gt;">
+          <mxGeometry height="150" width="440" x="660" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="n_c_app" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#82b366;" value="app :8000">
+          <mxGeometry height="40" width="120" x="680" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="n_c_mcp" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#82b366;" value="jobspy-mcp :9423">
+          <mxGeometry height="40" width="140" x="820" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="n_c_pg" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#82b366;" value="postgres :5432">
+          <mxGeometry height="40" width="140" x="960" y="490" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ne1" parent="1" edge="1" source="n_internet" target="n_pip" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;" value="SSH :22 (deploy)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ne2" parent="1" edge="1" source="n_pip" target="n_nsg" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ne3" parent="1" edge="1" source="n_nsg" target="n_nic" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;" value="filtered">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ne4" parent="1" edge="1" source="n_nic" target="n_vm" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=1;" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
