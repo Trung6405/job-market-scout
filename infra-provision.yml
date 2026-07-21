@@ -1,0 +1,37 @@
+# Manual-only pipeline: provisions the Azure VM from infra/main.bicep.
+# Re-run this to apply infra changes (VM size, NSG rules). Never triggers on push.
+trigger: none
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  - name: azureServiceConnection
+    value: '<AZURE_SERVICE_CONNECTION>'
+  - name: resourceGroup
+    value: '<RESOURCE_GROUP>'
+  - name: location
+    value: 'australiaeast'
+
+stages:
+  - stage: Provision
+    displayName: Provision Azure VM infrastructure
+    jobs:
+      - job: DeployBicep
+        displayName: Deploy infra/main.bicep
+        steps:
+          - task: AzureCLI@2
+            displayName: az deployment group create
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                az group create --name "$(resourceGroup)" --location "$(location)"
+                az deployment group create \
+                  --resource-group "$(resourceGroup)" \
+                  --template-file infra/main.bicep \
+                  --parameters infra/main.bicepparam \
+                  --query "properties.outputs" -o json

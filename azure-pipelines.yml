@@ -1,0 +1,131 @@
+# CI/CD for job-market-scout.
+#   Push to main  -> Test (pytest) -> Deploy (SSH: render .env, git pull, compose up).
+#   Daily cron    -> RunJob (SSH: docker compose run --rm app), one scout cycle.
+# Secrets come from the 'scout-secrets' variable group (see docs/plans/azure-vm-cicd-deploy/deployment-setup.md).
+trigger:
+  branches:
+    include:
+      - main
+pr: none
+
+schedules:
+  - cron: "0 21 * * *"
+    displayName: Daily scout run (21:00 UTC)
+    branches:
+      include:
+        - main
+    always: true
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  - group: scout-secrets
+  - name: appDir
+    value: /opt/job-market-scout
+
+stages:
+  - stage: Test
+    displayName: Run tests
+    condition: ne(variables['Build.Reason'], 'Schedule')
+    jobs:
+      - job: Pytest
+        displayName: pytest
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.12'
+          - script: |
+              set -euo pipefail
+              python -m pip install --upgrade pip
+              pip install -r requirements.txt
+              pytest
+            displayName: Install deps and run pytest
+
+  - stage: Deploy
+    displayName: Deploy to VM
+    dependsOn: Test
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'Schedule'))
+    jobs:
+      - job: SshDeploy
+        displayName: Render .env, git pull, docker compose up
+        steps:
+          - task: Bash@3
+            displayName: SSH deploy
+            env:
+              VM_SSH_PRIVATE_KEY: $(VM_SSH_PRIVATE_KEY)
+              JOBSPY_MCP_URL: $(JOBSPY_MCP_URL)
+              DEEPSEEK_API_KEY: $(DEEPSEEK_API_KEY)
+              DEEPSEEK_MODEL: $(DEEPSEEK_MODEL)
+              SEARCH_ROLES: $(SEARCH_ROLES)
+              SEARCH_LOCATIONS: $(SEARCH_LOCATIONS)
+              RESULTS_WANTED: $(RESULTS_WANTED)
+              HOURS_OLD: $(HOURS_OLD)
+              RESUME_PATH: $(RESUME_PATH)
+              PREFERRED_LOCATIONS: $(PREFERRED_LOCATIONS)
+              REMOTE_ONLY: $(REMOTE_ONLY)
+              MIN_SALARY: $(MIN_SALARY)
+              MIN_MATCH_SCORE: $(MIN_MATCH_SCORE)
+              DESCRIPTION_CHAR_LIMIT: $(DESCRIPTION_CHAR_LIMIT)
+              DATABASE_URL: $(DATABASE_URL)
+              BRIEFING_MAX_MATCHES: $(BRIEFING_MAX_MATCHES)
+              GMAIL_ADDRESS: $(GMAIL_ADDRESS)
+              GMAIL_APP_PASSWORD: $(GMAIL_APP_PASSWORD)
+              GMAIL_RECIPIENT: $(GMAIL_RECIPIENT)
+            inputs:
+              targetType: inline
+              script: |
+                set -euo pipefail
+                install -m 700 -d ~/.ssh
+                printf '%s\n' "$VM_SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+                chmod 600 ~/.ssh/deploy_key
+                REMOTE="$(VM_USER)@$(VM_HOST)"
+                SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new $REMOTE"
+
+                $SSH "cd $(appDir) && git pull --ff-only"
+
+                $SSH "cat > $(appDir)/scout/.env" <<EOF
+                JOBSPY_MCP_URL=${JOBSPY_MCP_URL}
+                DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+                DEEPSEEK_MODEL=${DEEPSEEK_MODEL}
+                SEARCH_ROLES=${SEARCH_ROLES}
+                SEARCH_LOCATIONS=${SEARCH_LOCATIONS}
+                RESULTS_WANTED=${RESULTS_WANTED}
+                HOURS_OLD=${HOURS_OLD}
+                RESUME_PATH=${RESUME_PATH}
+                PREFERRED_LOCATIONS=${PREFERRED_LOCATIONS}
+                REMOTE_ONLY=${REMOTE_ONLY}
+                MIN_SALARY=${MIN_SALARY}
+                MIN_MATCH_SCORE=${MIN_MATCH_SCORE}
+                DESCRIPTION_CHAR_LIMIT=${DESCRIPTION_CHAR_LIMIT}
+                DATABASE_URL=${DATABASE_URL}
+                BRIEFING_MAX_MATCHES=${BRIEFING_MAX_MATCHES}
+                GMAIL_ADDRESS=${GMAIL_ADDRESS}
+                GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+                GMAIL_RECIPIENT=${GMAIL_RECIPIENT}
+                EOF
+
+                $SSH "cd $(appDir) && docker compose up -d --build"
+
+  - stage: RunJob
+    displayName: Scheduled scout run
+    dependsOn: []
+    condition: eq(variables['Build.Reason'], 'Schedule')
+    jobs:
+      - job: RunScout
+        displayName: docker compose run --rm app
+        steps:
+          - task: Bash@3
+            displayName: SSH run scout cycle
+            env:
+              VM_SSH_PRIVATE_KEY: $(VM_SSH_PRIVATE_KEY)
+            inputs:
+              targetType: inline
+              script: |
+                set -euo pipefail
+                install -m 700 -d ~/.ssh
+                printf '%s\n' "$VM_SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+                chmod 600 ~/.ssh/deploy_key
+                REMOTE="$(VM_USER)@$(VM_HOST)"
+                ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new "$REMOTE" \
+                  "cd $(appDir) && docker compose run --rm app"
