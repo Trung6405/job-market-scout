@@ -72,6 +72,13 @@ class Settings:
     resume_path: str = field(
         default_factory=partial(_env_str, "RESUME_PATH", _DEFAULT_RESUME_PATH)
     )
+    profile_path: str = field(
+        default_factory=partial(
+            _env_str,
+            "PROFILE_PATH",
+            str(Path(__file__).resolve().parent / "profile.json"),
+        )
+    )
     preferred_locations: list[str] = field(
         default_factory=partial(_env_csv, "PREFERRED_LOCATIONS", "")
     )

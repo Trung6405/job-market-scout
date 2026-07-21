@@ -9,13 +9,45 @@ from google.genai import types as genai_types
 
 from scout.config import settings as default_settings
 from scout.shared.db import get_run_by_date, get_run_listings, upsert_listing
-from scout.shared.schemas import Listing, ListingScore
+from scout.shared.schemas import (
+    Background,
+    Listing,
+    ListingRequirements,
+    ListingScore,
+    Profile,
+    TechCategory,
+    TechSkill,
+)
 from scout.sub_agents.advisor.bands import classify_band
 from scout.sub_agents.scorer.results import join_match_results
 
 _APP_NAME = "scout"
 _USER_ID = "scout"
 _SESSION_ID = "scout"
+
+
+def _make_profile(**overrides):
+    defaults = dict(
+        name="Test Student",
+        target_role="Junior Software Engineer",
+        target_locations=["Sydney"],
+        tech_stack=[
+            TechCategory(
+                category="Languages",
+                skills=[TechSkill(name="Python", proficiency=4)],
+            )
+        ],
+        domain_knowledge=[],
+        background=Background(
+            education="B.Sc. Computer Science",
+            experience="0.5 yrs",
+            preferred_roles=["Software Engineer"],
+            locations=["Sydney"],
+        ),
+        projects=[],
+    )
+    defaults.update(overrides)
+    return Profile(**defaults)
 
 
 def _make_listing(**overrides):
@@ -218,3 +250,184 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
         assert run_listings[0].reasoning == "Good fit."
 
     assert any(f"Run persisted: {run_date}" in t for t in texts)
+
+
+@pytest.mark.asyncio
+async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch):
+    listing = _make_listing()
+    score = ListingScore(source="linkedin", external_id="1", score=80, reasoning="Good fit.")
+    profile = _make_profile()
+    requirements = ListingRequirements(
+        source="linkedin",
+        external_id="1",
+        must_have=["Kubernetes"],
+        nice_to_have=[],
+    )
+
+    calls = []
+
+    async def _fake_run_scraper(settings):
+        return [listing]
+
+    async def _fake_track_listings(listings, settings=None):
+        return listings
+
+    async def _fake_run_scorer(listings, settings):
+        return [score]
+
+    async def _fake_run_briefing(listings, scores, settings):
+        calls.append("briefing")
+        return EmailMessage()
+
+    class _FakeConn:
+        pass
+
+    class _FakePoolAcquire:
+        async def __aenter__(self):
+            return _FakeConn()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakePool:
+        def acquire(self):
+            return _FakePoolAcquire()
+
+        async def close(self):
+            pass
+
+    async def _fake_create_pool(settings):
+        return _FakePool()
+
+    async def _fake_start_run(conn, run_date):
+        return 1
+
+    async def _fake_record_run_listings(conn, run_id, matches):
+        pass
+
+    async def _fake_finish_run(conn, run_id, *, listings_scraped, listings_scored):
+        pass
+
+    def _fake_load_profile(path):
+        calls.append(("load_profile", path))
+        return profile
+
+    async def _fake_run_requirements_extraction(listings, settings=None):
+        calls.append(("run_requirements_extraction", listings))
+        return [requirements]
+
+    async def _fake_record_listing_gaps(conn, run_id, gaps_by_match):
+        calls.append(("record_listing_gaps", run_id, gaps_by_match))
+
+    monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
+    monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
+    monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
+    monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
+    monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
+    monkeypatch.setattr("scout.agent.start_run", _fake_start_run)
+    monkeypatch.setattr("scout.agent.record_run_listings", _fake_record_run_listings)
+    monkeypatch.setattr("scout.agent.finish_run", _fake_finish_run)
+    monkeypatch.setattr("scout.agent.load_profile", _fake_load_profile)
+    monkeypatch.setattr(
+        "scout.agent.run_requirements_extraction", _fake_run_requirements_extraction
+    )
+    monkeypatch.setattr("scout.agent.record_listing_gaps", _fake_record_listing_gaps)
+
+    texts = await _run_pipeline_agent()
+
+    record_gaps_call = next(c for c in calls if c[0] == "record_listing_gaps")
+    _, run_id, gaps_by_match = record_gaps_call
+    assert run_id == 1
+    assert len(gaps_by_match) == 1
+    match, gaps = gaps_by_match[0]
+    assert match.listing.external_id == "1"
+    assert len(gaps) == 1
+    assert gaps[0].skill == "Kubernetes"
+    assert gaps[0].requirement_level == "must_have"
+
+    assert any("Gaps detected: 1" in t for t in texts)
+    assert calls[-1] == "briefing"
+    assert any("Run persisted:" in t for t in texts)
+
+
+@pytest.mark.asyncio
+async def test_scout_pipeline_agent_skips_gap_detection_when_no_profile(monkeypatch):
+    listing = _make_listing()
+    score = ListingScore(source="linkedin", external_id="1", score=80, reasoning="Good fit.")
+
+    calls = []
+
+    async def _fake_run_scraper(settings):
+        return [listing]
+
+    async def _fake_track_listings(listings, settings=None):
+        return listings
+
+    async def _fake_run_scorer(listings, settings):
+        return [score]
+
+    async def _fake_run_briefing(listings, scores, settings):
+        calls.append("briefing")
+        return EmailMessage()
+
+    class _FakeConn:
+        pass
+
+    class _FakePoolAcquire:
+        async def __aenter__(self):
+            return _FakeConn()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakePool:
+        def acquire(self):
+            return _FakePoolAcquire()
+
+        async def close(self):
+            pass
+
+    async def _fake_create_pool(settings):
+        return _FakePool()
+
+    async def _fake_start_run(conn, run_date):
+        return 1
+
+    async def _fake_record_run_listings(conn, run_id, matches):
+        pass
+
+    async def _fake_finish_run(conn, run_id, *, listings_scraped, listings_scored):
+        calls.append("finish_run")
+
+    def _fake_load_profile(path):
+        raise FileNotFoundError(f"profile file not found: {path}")
+
+    async def _fake_run_requirements_extraction(listings, settings=None):
+        calls.append("run_requirements_extraction")
+        return []
+
+    async def _fake_record_listing_gaps(conn, run_id, gaps_by_match):
+        calls.append("record_listing_gaps")
+
+    monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
+    monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
+    monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
+    monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
+    monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
+    monkeypatch.setattr("scout.agent.start_run", _fake_start_run)
+    monkeypatch.setattr("scout.agent.record_run_listings", _fake_record_run_listings)
+    monkeypatch.setattr("scout.agent.finish_run", _fake_finish_run)
+    monkeypatch.setattr("scout.agent.load_profile", _fake_load_profile)
+    monkeypatch.setattr(
+        "scout.agent.run_requirements_extraction", _fake_run_requirements_extraction
+    )
+    monkeypatch.setattr("scout.agent.record_listing_gaps", _fake_record_listing_gaps)
+
+    texts = await _run_pipeline_agent()
+
+    assert "run_requirements_extraction" not in calls
+    assert "record_listing_gaps" not in calls
+    assert "finish_run" in calls
+    assert "briefing" in calls
+    assert any("Gap detection: skipped" in t for t in texts)
+    assert any("Run persisted:" in t for t in texts)
