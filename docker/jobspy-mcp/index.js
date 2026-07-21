@@ -89,7 +89,7 @@ async function runServer() {
         });
 
         app.post('/api', async (req, res) => {
-          const data = searchJobsHandler(req.body);
+          const data = await searchJobsHandler(req.body);
           res.json(data);
         });
 

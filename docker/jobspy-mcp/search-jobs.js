@@ -1,8 +1,11 @@
 import logger from '../logger.js';
 import { searchParams } from '../schemas/searchParamsSchema.js';
-import { execSync } from 'node:child_process';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import { z } from 'zod';
 import changeCase from 'change-case-object';
+
+const execAsync = promisify(exec);
 
 /**
  * @typedef {Object} JobSearchParams
@@ -62,7 +65,7 @@ export const searchJobsTool = (server, sseManager) =>
         }
 
         // Execute job search
-        const result = searchJobsHandler(params);
+        const result = await searchJobsHandler(params);
 
         // Clean up progress interval
         if (progressInterval) {
@@ -145,7 +148,7 @@ function convertToISODate(dateStr) {
  * @param {JobSearchParams} params - Search parameters
  * @returns {Promise<object>} Search results
  */
-export function searchJobsHandler(params) {
+export async function searchJobsHandler(params) {
   let result;
   try {
     logger.info('Starting job search with parameters', { params });
@@ -181,7 +184,8 @@ export function searchJobsHandler(params) {
     logger.info(`Executing in container: ${cmd}`);
 
     const timeout = params.timeout || 60000; // Default timeout of 60 seconds
-    result = execSync(cmd, { timeout }).toString();
+    const { stdout } = await execAsync(cmd, { timeout });
+    result = stdout;
 
     const parsedData = JSON.parse(result);
 
