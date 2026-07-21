@@ -32,13 +32,15 @@ Multi-agent job market scout, scrapes listings, matches them to a resume, tracks
    ```
    cp scout/resume.txt.example scout/resume.txt
    ```
-4. (Optional) Copy the profile template and fill in your own tech stack,
-   domain knowledge, and background:
+4. (Optional) `scout/profile.json` ships with a placeholder profile so the
+   Advisor report has something to render out of the box. Replace it with
+   your own tech stack, domain knowledge, and background — `scout/profile.json.example`
+   shows the expected shape:
    ```
    cp scout/profile.json.example scout/profile.json
    ```
-   Without this file, the pipeline still scores and emails matches as
-   normal — it just skips skill-gap detection for the Advisor report.
+   The pipeline scores and emails matches either way; an accurate profile
+   just makes skill-gap detection in the Advisor report meaningful.
 5. Run the pipeline:
    ```
    docker compose up --build
