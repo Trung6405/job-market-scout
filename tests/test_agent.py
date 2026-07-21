@@ -7,8 +7,10 @@ import pytest
 from google.adk.runners import InMemoryRunner
 from google.genai import types as genai_types
 
+from scout.config import settings as default_settings
 from scout.shared.db import get_run_by_date, get_run_listings, upsert_listing
 from scout.shared.schemas import Listing, ListingScore
+from scout.sub_agents.advisor.bands import classify_band
 from scout.sub_agents.scorer.results import join_match_results
 
 _APP_NAME = "scout"
@@ -124,7 +126,12 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     assert calls[3] == "create_pool"
     assert calls[4][0] == "start_run"
     assert calls[5][0] == "record_run_listings"
-    assert calls[5][2] == join_match_results([listing], [score])
+    expected_matches = join_match_results([listing], [score])
+    expected_banded_matches = [
+        (match, classify_band(match.score, default_settings))
+        for match in expected_matches
+    ]
+    assert calls[5][2] == expected_banded_matches
     assert calls[6] == ("finish_run", 1, 1, 1)
     assert calls[7] == "pool_closed"
     assert calls[8] == ("briefing", [listing], [score])

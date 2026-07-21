@@ -10,6 +10,7 @@ from google.genai import types as genai_types
 
 from scout.config import settings as default_settings
 from scout.shared.db import create_pool, finish_run, record_run_listings, start_run
+from scout.sub_agents.advisor.bands import classify_band
 from scout.sub_agents.briefing.briefing import run_briefing
 from scout.sub_agents.scorer.results import join_match_results
 from scout.sub_agents.scorer.runner import run_scorer
@@ -58,12 +59,15 @@ class ScoutPipelineAgent(BaseAgent):
         yield _status_event(ctx, self.name, f"Scorer: {len(scores)} scored")
 
         matches = join_match_results(relevant, scores)
+        banded_matches = [
+            (match, classify_band(match.score, settings)) for match in matches
+        ]
         run_date = datetime.now(timezone.utc).date()
         pool = await create_pool(settings)
         try:
             async with pool.acquire() as conn:
                 run_id = await start_run(conn, run_date)
-                await record_run_listings(conn, run_id, matches)
+                await record_run_listings(conn, run_id, banded_matches)
                 await finish_run(
                     conn,
                     run_id,
