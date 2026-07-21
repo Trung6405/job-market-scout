@@ -55,8 +55,19 @@ Each run also renders an HTML report — a daily dashboard of scored
 listings (with success bands and skill gaps, if `scout/profile.json`
 exists), a per-role detail page, a history of past days, and a profile
 page — into `./reports` on the host (mounted from the container's
-`/app/reports`). The email links to that day's `dashboard.html`; open
-`./reports/history.html` to browse past days.
+`/app/reports`). Open `./reports/history.html` to browse past days.
+
+By default the briefing email just shows the report's path as plain
+text (e.g. `reports/2026-07-21/dashboard.html`) — the app runs inside a
+container, so it has no way to know the report's absolute location on
+your host machine, and a `file://` link built from the container's own
+path (`/app/reports/...`) would not open on your host. To get a
+clickable link in the email instead, set `REPORT_HOST_DIR` in your
+`.env` to the absolute path of this project's `reports` directory on
+your host machine, e.g.:
+```
+REPORT_HOST_DIR=/home/you/job-market-scout/reports
+```
 
 ### Running tests
 ```

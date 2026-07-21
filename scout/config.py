@@ -46,6 +46,11 @@ def _env_optional_float(name: str) -> float | None:
     return float(raw) if raw else None
 
 
+def _env_optional_str(name: str) -> str | None:
+    raw = os.getenv(name)
+    return raw if raw else None
+
+
 @dataclass(frozen=True)
 class Settings:
     jobspy_mcp_url: str = field(
@@ -81,6 +86,9 @@ class Settings:
     )
     report_output_dir: str = field(
         default_factory=partial(_env_str, "REPORT_OUTPUT_DIR", "reports")
+    )
+    report_host_dir: str | None = field(
+        default_factory=partial(_env_optional_str, "REPORT_HOST_DIR")
     )
     preferred_locations: list[str] = field(
         default_factory=partial(_env_csv, "PREFERRED_LOCATIONS", "")
