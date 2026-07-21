@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Profile · Job Market Scout</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#ffffff; --ink:#161a22; --muted:#697086;
+    --line:#e7e9ee; --accent:#4f46e5; --accent-soft:#eef0fe; --radius:14px;
+    --dot-on:#4f46e5; --dot-off:#e2e4ec;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:860px;margin:0 auto;padding:22px 20px 64px}
+  .back{color:var(--muted);font-size:13px;display:inline-flex;gap:6px;margin-bottom:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;margin-bottom:16px}
+  .id{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .avatar{width:56px;height:56px;border-radius:14px;background:var(--accent-soft);color:var(--accent);
+    display:grid;place-items:center;font-size:22px;font-weight:700}
+  h1{font-size:20px;margin:0;letter-spacing:-.02em}
+  .role{color:var(--muted);font-size:14px}
+  .note{font-size:12px;color:var(--muted);background:#fff9ec;border:1px solid #f2e4bf;
+    border-radius:10px;padding:10px 12px;margin-top:14px}
+  h2{font-size:13px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+  .h2sub{font-size:12.5px;color:var(--muted);margin:0 0 16px}
+
+  /* tech stack */
+  .stackgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 26px}
+  .cat{padding:10px 0;border-top:1px solid var(--line)}
+  .cat:nth-child(1),.cat:nth-child(2){border-top:none;padding-top:0}
+  .cat h3{font-size:12px;color:var(--muted);margin:0 0 10px;font-weight:600;letter-spacing:.02em}
+  .tech{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:7px 0}
+  .tech .n{font-size:13.5px}
+  .tech .n small{color:var(--muted);font-size:11.5px;margin-left:6px}
+  .dots{display:flex;gap:3px;flex:0 0 auto}
+  .dots i{width:8px;height:8px;border-radius:50%;background:var(--dot-off)}
+  .dots i.on{background:var(--dot-on)}
+  .legend{font-size:11.5px;color:var(--muted);margin-top:14px;display:flex;gap:16px;flex-wrap:wrap;
+    border-top:1px solid var(--line);padding-top:12px}
+
+  /* domain knowledge */
+  .domains{display:flex;flex-direction:column;gap:14px}
+  .domain{}
+  .domainhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .domain .t{font-size:14px;font-weight:600}
+  .domain .lvl{font-size:11.5px;color:var(--muted)}
+  .domain .d{font-size:12.5px;color:var(--muted);margin-top:3px}
+  .bar{height:6px;border-radius:999px;background:#eef0f3;margin-top:8px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,#6366f1,#4f46e5)}
+
+  .kv{display:grid;grid-template-columns:150px 1fr;gap:8px 18px;font-size:14px}
+  .kv .k{color:var(--muted)}
+  .proj{padding:12px 0;border-top:1px solid var(--line)}
+  .proj:first-child{border-top:none;padding-top:0}
+  .proj .t{font-weight:600;font-size:14px}
+  .proj .d{font-size:13px;color:var(--muted);margin-top:2px}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .tag{font-size:11px;background:#f1f2f6;color:#5a6072;border-radius:6px;padding:3px 8px}
+  .src{font-size:12px;color:var(--muted);margin-top:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  @media(max-width:600px){ .stackgrid{grid-template-columns:1fr} .cat:nth-child(2){border-top:1px solid var(--line);padding-top:10px} .kv{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="dashboard.html">‹ Back to briefing</a>
+
+  <div class="card">
+    <div class="id">
+      <div class="avatar">M</div>
+      <div>
+        <h1>Minh Nguyen</h1>
+        <div class="role">Target: Junior / Graduate Software Engineer · Sydney / Remote (AU)</div>
+      </div>
+    </div>
+    <div class="note">This is what the agent matches jobs against. It's loaded from <code>profile.json</code> — the tech-stack proficiency and domain areas below drive gap detection. (No editing in this prototype.)</div>
+  </div>
+
+  <div class="card">
+    <h2>Tech stack</h2>
+    <p class="h2sub">Self-rated proficiency. The Advisor compares these against each role's must-have / nice-to-have requirements.</p>
+    <div class="stackgrid">
+
+      <div class="cat">
+        <h3>LANGUAGES</h3>
+        <div class="tech"><span class="n">Python <small>2 yrs</small></span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div>
+        <div class="tech"><span class="n">JavaScript <small>1.5 yrs</small></span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+        <div class="tech"><span class="n">SQL <small>coursework</small></span><span class="dots"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></div>
+        <div class="tech"><span class="n">TypeScript <small>learning</small></span><span class="dots"><i class="on"></i><i></i><i></i><i></i><i></i></span></div>
+      </div>
+
+      <div class="cat">
+        <h3>FRONTEND</h3>
+        <div class="tech"><span class="n">React</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+        <div class="tech"><span class="n">HTML / CSS</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div>
+        <div class="tech"><span class="n">Responsive design</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+      </div>
+
+      <div class="cat">
+        <h3>BACKEND</h3>
+        <div class="tech"><span class="n">Flask</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+        <div class="tech"><span class="n">REST API design</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+        <div class="tech"><span class="n">FastAPI <small>light</small></span><span class="dots"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></div>
+      </div>
+
+      <div class="cat">
+        <h3>DATABASES</h3>
+        <div class="tech"><span class="n">SQLite</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+        <div class="tech"><span class="n">PostgreSQL <small>gap</small></span><span class="dots"><i class="on"></i><i></i><i></i><i></i><i></i></span></div>
+        <div class="tech"><span class="n">Data modelling</span><span class="dots"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></div>
+      </div>
+
+      <div class="cat">
+        <h3>TOOLING &amp; TESTING</h3>
+        <div class="tech"><span class="n">Git / GitHub</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div>
+        <div class="tech"><span class="n">pytest / unit testing</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+        <div class="tech"><span class="n">Docker <small>basics</small></span><span class="dots"><i class="on"></i><i></i><i></i><i></i><i></i></span></div>
+      </div>
+
+      <div class="cat">
+        <h3>CLOUD &amp; DEVOPS</h3>
+        <div class="tech"><span class="n">GitHub Pages / CI</span><span class="dots"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></div>
+        <div class="tech"><span class="n">AWS <small>gap</small></span><span class="dots"><i class="on"></i><i></i><i></i><i></i><i></i></span></div>
+        <div class="tech"><span class="n">Linux CLI</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+      </div>
+
+    </div>
+    <div class="legend">
+      <span>●●●●● proficiency, 1–5</span>
+      <span><strong>gap</strong> = flagged as low vs target roles</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Domain knowledge</h2>
+    <p class="h2sub">Problem areas Minh has worked in — used to judge domain fit beyond raw skills.</p>
+    <div class="domains">
+      <div class="domain">
+        <div class="domainhead"><span class="t">Web application development</span><span class="lvl">Solid</span></div>
+        <div class="d">Full request→DB→UI loop across 2 projects; understands client/server split, auth basics.</div>
+        <div class="bar"><i style="width:75%"></i></div>
+      </div>
+      <div class="domain">
+        <div class="domainhead"><span class="t">Automation &amp; bots</span><span class="lvl">Solid</span></div>
+        <div class="d">Built + shipped a Discord bot (~200 users): scheduling, event handling, API integration.</div>
+        <div class="bar"><i style="width:70%"></i></div>
+      </div>
+      <div class="domain">
+        <div class="domainhead"><span class="t">CS fundamentals</span><span class="lvl">Good</span></div>
+        <div class="d">Data structures, algorithms, complexity — strong coursework, moderate applied practice.</div>
+        <div class="bar"><i style="width:65%"></i></div>
+      </div>
+      <div class="domain">
+        <div class="domainhead"><span class="t">Data / backend systems</span><span class="lvl">Developing</span></div>
+        <div class="d">Comfortable with small SQLite apps; limited production database or scaling experience.</div>
+        <div class="bar"><i style="width:35%"></i></div>
+      </div>
+      <div class="domain">
+        <div class="domainhead"><span class="t">Cloud &amp; distributed systems</span><span class="lvl">Emerging</span></div>
+        <div class="d">Conceptual only — no hands-on AWS/containers-at-scale work yet.</div>
+        <div class="bar"><i style="width:20%"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Background</h2>
+    <div class="kv">
+      <div class="k">Education</div><div>B.Sc. Computer Science — Univ. of Melbourne (2026)</div>
+      <div class="k">Experience</div><div>0.5 yrs — 1 internship + coursework</div>
+      <div class="k">Preferred roles</div><div>Software Engineer, Backend Developer, Full-Stack</div>
+      <div class="k">Locations</div><div>Sydney, Melbourne, Remote (AU)</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Projects</h2>
+    <div class="proj">
+      <div class="t">Recipe-sharing web app</div>
+      <div class="d">React + Flask + REST API; 3-person uni team project.</div>
+      <div class="tags"><span class="tag">React</span><span class="tag">Flask</span><span class="tag">REST</span><span class="tag">SQLite</span><span class="tag">Git</span></div>
+    </div>
+    <div class="proj">
+      <div class="t">Discord study-group bot</div>
+      <div class="d">Python; scheduling, reminders, ~200 users on campus.</div>
+      <div class="tags"><span class="tag">Python</span><span class="tag">async</span><span class="tag">API integration</span><span class="tag">automation</span></div>
+    </div>
+    <div class="proj">
+      <div class="t">Personal portfolio site</div>
+      <div class="d">Static HTML/CSS/JS, deployed on GitHub Pages.</div>
+      <div class="tags"><span class="tag">HTML/CSS</span><span class="tag">JavaScript</span><span class="tag">CI</span></div>
+    </div>
+    <div class="src">source: scout/profile.json</div>
+  </div>
+</div>
+</body>
+</html>
