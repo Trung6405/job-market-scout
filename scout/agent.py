@@ -19,6 +19,7 @@ from scout.shared.db import (
 from scout.shared.profile import load_profile
 from scout.sub_agents.advisor.bands import classify_band
 from scout.sub_agents.advisor.gaps import detect_gaps
+from scout.sub_agents.advisor.report import render_history, render_profile, render_run
 from scout.sub_agents.advisor.runner import run_requirements_extraction
 from scout.sub_agents.briefing.briefing import run_briefing
 from scout.sub_agents.scorer.results import join_match_results
@@ -123,6 +124,16 @@ class ScoutPipelineAgent(BaseAgent):
                     run_id,
                     listings_scraped=len(listings),
                     listings_scored=len(scores),
+                )
+
+                report_paths = await render_run(conn, run_id, settings)
+                await render_history(conn, settings)
+                if profile is not None:
+                    render_profile(profile, settings)
+                yield _status_event(
+                    ctx,
+                    self.name,
+                    f"Report rendered: {report_paths['dashboard']}",
                 )
         finally:
             await pool.close()

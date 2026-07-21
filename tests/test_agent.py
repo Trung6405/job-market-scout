@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from email.message import EmailMessage
+from pathlib import Path
 
 import pytest
 from google.adk.runners import InMemoryRunner
@@ -141,6 +142,18 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
             ("finish_run", run_id, listings_scraped, listings_scored)
         )
 
+    async def _fake_render_run(conn, run_id, settings):
+        calls.append(("render_run", run_id))
+        return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
+
+    async def _fake_render_history(conn, settings):
+        calls.append("render_history")
+        return Path("reports/history.html")
+
+    def _fake_render_profile(profile, settings):
+        calls.append("render_profile")
+        return Path("reports/profile.html")
+
     monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
     monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
     monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
@@ -149,6 +162,9 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     monkeypatch.setattr("scout.agent.start_run", _fake_start_run)
     monkeypatch.setattr("scout.agent.record_run_listings", _fake_record_run_listings)
     monkeypatch.setattr("scout.agent.finish_run", _fake_finish_run)
+    monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
+    monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
+    monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
 
     texts = await _run_pipeline_agent()
 
@@ -165,13 +181,132 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     ]
     assert calls[5][2] == expected_banded_matches
     assert calls[6] == ("finish_run", 1, 1, 1)
-    assert calls[7] == "pool_closed"
-    assert calls[8] == ("briefing", [listing], [score])
+    assert calls[7] == ("render_run", 1)
+    assert calls[8] == "render_history"
+    # No profile file exists at the default path, so render_profile is skipped.
+    assert calls[9] == "pool_closed"
+    assert calls[10] == ("briefing", [listing], [score])
+    assert "render_profile" not in calls
     assert any("Scraper: 1 listing" in t for t in texts)
     assert any("Tracker: 1 new/changed" in t for t in texts)
     assert any("Scorer: 1 scored" in t for t in texts)
+    assert any("Report rendered:" in t for t in texts)
     assert any("Run persisted:" in t for t in texts)
     assert any("Briefing: email sent" in t for t in texts)
+
+
+@pytest.mark.asyncio
+async def test_scout_pipeline_agent_renders_report_after_persisting_run(
+    monkeypatch,
+):
+    listing = _make_listing()
+    score = ListingScore(source="linkedin", external_id="1", score=80, reasoning="Good fit.")
+    profile = _make_profile()
+    requirements = ListingRequirements(
+        source="linkedin",
+        external_id="1",
+        must_have=[],
+        nice_to_have=[],
+    )
+
+    calls = []
+
+    async def _fake_run_scraper(settings):
+        return [listing]
+
+    async def _fake_track_listings(listings, settings=None):
+        return listings
+
+    async def _fake_run_scorer(listings, settings):
+        return [score]
+
+    async def _fake_run_briefing(listings, scores, settings):
+        calls.append("briefing")
+        return EmailMessage()
+
+    class _FakeConn:
+        pass
+
+    class _FakePoolAcquire:
+        async def __aenter__(self):
+            return _FakeConn()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakePool:
+        def acquire(self):
+            return _FakePoolAcquire()
+
+        async def close(self):
+            calls.append("pool_closed")
+
+    async def _fake_create_pool(settings):
+        return _FakePool()
+
+    async def _fake_start_run(conn, run_date):
+        return 1
+
+    async def _fake_record_run_listings(conn, run_id, matches):
+        pass
+
+    async def _fake_finish_run(conn, run_id, *, listings_scraped, listings_scored):
+        calls.append("finish_run")
+
+    def _fake_load_profile(path):
+        return profile
+
+    async def _fake_run_requirements_extraction(listings, settings=None):
+        return [requirements]
+
+    async def _fake_record_listing_gaps(conn, run_id, gaps_by_match):
+        pass
+
+    async def _fake_render_run(conn, run_id, settings):
+        calls.append(("render_run", conn, run_id, settings))
+        return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
+
+    async def _fake_render_history(conn, settings):
+        calls.append(("render_history", conn, settings))
+        return Path("reports/history.html")
+
+    def _fake_render_profile(profile_arg, settings):
+        calls.append(("render_profile", profile_arg, settings))
+        return Path("reports/profile.html")
+
+    monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
+    monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
+    monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
+    monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
+    monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
+    monkeypatch.setattr("scout.agent.start_run", _fake_start_run)
+    monkeypatch.setattr("scout.agent.record_run_listings", _fake_record_run_listings)
+    monkeypatch.setattr("scout.agent.finish_run", _fake_finish_run)
+    monkeypatch.setattr("scout.agent.load_profile", _fake_load_profile)
+    monkeypatch.setattr(
+        "scout.agent.run_requirements_extraction", _fake_run_requirements_extraction
+    )
+    monkeypatch.setattr("scout.agent.record_listing_gaps", _fake_record_listing_gaps)
+    monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
+    monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
+    monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
+
+    texts = await _run_pipeline_agent()
+
+    assert calls[0] == "finish_run"
+    assert calls[1][0] == "render_run"
+    assert calls[1][2] == 1
+    assert calls[1][3] is default_settings
+    assert calls[2][0] == "render_history"
+    assert calls[2][2] is default_settings
+    assert calls[3][0] == "render_profile"
+    assert calls[3][1] is profile
+    assert calls[3][2] is default_settings
+    assert calls[4] == "pool_closed"
+    assert calls[5] == "briefing"
+    assert any("Report rendered:" in t for t in texts)
+    report_text = next(t for t in texts if "Report rendered:" in t)
+    assert "dashboard.html" in report_text
 
 
 @pytest.mark.asyncio
@@ -230,10 +365,22 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
     async def _fake_run_briefing(listings, scores, settings):
         return EmailMessage()
 
+    render_calls = []
+
+    async def _fake_render_run(conn, run_id, settings):
+        render_calls.append(("render_run", run_id))
+        return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
+
+    async def _fake_render_history(conn, settings):
+        render_calls.append("render_history")
+        return Path("reports/history.html")
+
     monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
     monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
     monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
     monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
+    monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
+    monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
 
     texts = await _run_pipeline_agent()
 
@@ -249,6 +396,8 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
         assert run_listings[0].score == 80
         assert run_listings[0].reasoning == "Good fit."
 
+    assert render_calls[0] == ("render_run", run.id)
+    assert render_calls[1] == "render_history"
     assert any(f"Run persisted: {run_date}" in t for t in texts)
 
 
@@ -319,6 +468,18 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
     async def _fake_record_listing_gaps(conn, run_id, gaps_by_match):
         calls.append(("record_listing_gaps", run_id, gaps_by_match))
 
+    async def _fake_render_run(conn, run_id, settings):
+        calls.append(("render_run", run_id))
+        return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
+
+    async def _fake_render_history(conn, settings):
+        calls.append("render_history")
+        return Path("reports/history.html")
+
+    def _fake_render_profile(profile_arg, settings):
+        calls.append(("render_profile", profile_arg))
+        return Path("reports/profile.html")
+
     monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
     monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
     monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
@@ -332,6 +493,9 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
         "scout.agent.run_requirements_extraction", _fake_run_requirements_extraction
     )
     monkeypatch.setattr("scout.agent.record_listing_gaps", _fake_record_listing_gaps)
+    monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
+    monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
+    monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
 
     texts = await _run_pipeline_agent()
 
@@ -346,7 +510,12 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
     assert gaps[0].requirement_level == "must_have"
 
     assert any("Gaps detected: 1" in t for t in texts)
+    assert ("render_run", 1) in calls
+    assert "render_history" in calls
+    assert ("render_profile", profile) in calls
+    assert calls.index(("render_profile", profile)) < calls.index("briefing")
     assert calls[-1] == "briefing"
+    assert any("Report rendered:" in t for t in texts)
     assert any("Run persisted:" in t for t in texts)
 
 
@@ -409,6 +578,18 @@ async def test_scout_pipeline_agent_skips_gap_detection_when_no_profile(monkeypa
     async def _fake_record_listing_gaps(conn, run_id, gaps_by_match):
         calls.append("record_listing_gaps")
 
+    async def _fake_render_run(conn, run_id, settings):
+        calls.append(("render_run", run_id))
+        return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
+
+    async def _fake_render_history(conn, settings):
+        calls.append("render_history")
+        return Path("reports/history.html")
+
+    def _fake_render_profile(profile_arg, settings):
+        calls.append(("render_profile", profile_arg))
+        return Path("reports/profile.html")
+
     monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
     monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
     monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
@@ -422,6 +603,9 @@ async def test_scout_pipeline_agent_skips_gap_detection_when_no_profile(monkeypa
         "scout.agent.run_requirements_extraction", _fake_run_requirements_extraction
     )
     monkeypatch.setattr("scout.agent.record_listing_gaps", _fake_record_listing_gaps)
+    monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
+    monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
+    monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
 
     texts = await _run_pipeline_agent()
 
@@ -429,5 +613,11 @@ async def test_scout_pipeline_agent_skips_gap_detection_when_no_profile(monkeypa
     assert "record_listing_gaps" not in calls
     assert "finish_run" in calls
     assert "briefing" in calls
+    assert ("render_run", 1) in calls
+    assert "render_history" in calls
+    assert not any(
+        isinstance(c, tuple) and c[0] == "render_profile" for c in calls
+    )
     assert any("Gap detection: skipped" in t for t in texts)
+    assert any("Report rendered:" in t for t in texts)
     assert any("Run persisted:" in t for t in texts)
