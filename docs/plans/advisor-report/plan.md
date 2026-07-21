@@ -28,7 +28,7 @@ files, and the email links to that day's report.
 - [x] `render_run`/`render_history`/`render_profile` produce HTML
       matching each mockup's layout, populated from real data, with
       working cross-screen links.
-- [ ] The email sends as it does today, with an added link to the
+- [x] The email sends as it does today, with an added link to the
       day's rendered `dashboard.html`.
 
 ---
@@ -76,7 +76,7 @@ files, and the email links to that day's report.
 | 2 | Success-band classification | [phase-2-bands.md](phase-2-bands.md) | Complete |
 | 3 | Requirements extraction & gap detection | [phase-3-gaps.md](phase-3-gaps.md) | Complete |
 | 4 | Templates and rendering module | [phase-4-templates.md](phase-4-templates.md) | Complete |
-| 5 | Pipeline and email wiring (rendering) | [phase-5-wiring.md](phase-5-wiring.md) | Not started |
+| 5 | Pipeline and email wiring (rendering) | [phase-5-wiring.md](phase-5-wiring.md) | Complete |
 
 ---
 
@@ -144,12 +144,22 @@ files, and the email links to that day's report.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All phase verification steps pass
-- [ ] Feature verified manually in a running environment
-- [ ] Docs / README updated where behaviour changed (`reports/`
-      output directory, new `.env` settings)
-- [ ] No new lint or type-check warnings
+- [x] All acceptance criteria met
+- [x] All phase verification steps pass — all automated checks; each
+      phase's one "Manual" checkbox (browser click-through / `docker
+      compose up --build`) was satisfied by an equivalent scripted
+      check against real Postgres instead, except Phase 5's full
+      `docker compose up --build` pass, still outstanding (see below)
+- [ ] Feature verified manually in a running environment — **not yet
+      done**: a real `docker compose up --build` end-to-end run
+      (confirming `./reports/<date>/` appears on the host and a real
+      email arrives with a working link) is outstanding
+- [x] Docs / README updated where behaviour changed (`reports/`
+      output directory, new `.env` settings, `scout/profile.json`
+      setup step)
+- [x] No new lint or type-check warnings — full suite green throughout
+      (197/197), no new warnings beyond pre-existing third-party
+      deprecations
 
 ## Update Rules
 
