@@ -11,7 +11,7 @@ from scout.config import settings as default_settings
 from scout.sub_agents.briefing.briefing import run_briefing
 from scout.sub_agents.scorer.runner import run_scorer
 from scout.sub_agents.scraper.runner import run_scraper
-from scout.tools.tracker import track_listings
+from scout.sub_agents.tracker.runner import track_listings
 
 
 def _status_event(ctx: InvocationContext, author: str, text: str) -> Event:

@@ -4,7 +4,7 @@ import asyncpg
 import pytest
 
 from scout.shared.db import upsert_listing
-from scout.tools.tracker import track_listings
+from scout.sub_agents.tracker.runner import track_listings
 from tests.test_db import _make_listing
 
 
@@ -71,7 +71,7 @@ async def test_track_listings_closes_self_managed_pool(db_pool, monkeypatch):
         return created_pool
 
     monkeypatch.setattr(
-        "scout.tools.tracker.create_pool", _tracking_create_pool
+        "scout.sub_agents.tracker.runner.create_pool", _tracking_create_pool
     )
 
     await track_listings(
