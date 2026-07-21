@@ -6,8 +6,15 @@ the GitHub Actions secrets/variables the workflows read.
 
 Workflows (`.github/workflows/`):
 - `infra-provision.yml` — manual (`workflow_dispatch`): deploys `infra/main.bicep` via OIDC.
-- `deploy.yml` — push to `main`: `test` (pytest) → `deploy` (rsync repo to VM, render `.env`, `docker compose up -d --build`).
-- `scheduled-run.yml` — daily cron 21:00 UTC (+ manual): SSH `docker compose run --rm app`.
+- `deploy.yml` — push to `main`: `test` (pytest) → `deploy` (rsync repo to VM, render `.env`, `docker compose … up -d --build`).
+- `scheduled-run.yml` — daily cron 21:00 UTC (+ manual): SSH `docker compose … run --rm app`.
+
+Both deploy/run commands layer the production overlay:
+`docker compose -f docker-compose.yaml -f docker-compose.prod.yaml …`. The base
+compose (local/dev) is untouched; `docker-compose.prod.yaml` adds the `hello`
+smoke-test page (nginx on port 80) and `restart: unless-stopped`. Browse
+`http://<VM_HOST>/` after a deploy to confirm reachability (needs NSG port 80,
+i.e. `httpSourceAddressPrefix` not empty).
 
 Deploy model: the runner checks out the repo and **rsyncs** it to the VM over
 SSH — the VM needs no GitHub access (no deploy key).

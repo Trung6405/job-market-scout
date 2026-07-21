@@ -18,13 +18,16 @@ param adminSshPublicKey string
 @description('Source CIDR/IP allowed to reach SSH (port 22). Default * relies on key-only auth; narrow this to harden.')
 param sshSourceAddressPrefix string = '*'
 
+@description('Source CIDR/IP allowed to reach HTTP (port 80) — the hello smoke-test page. Set to a narrow range or "" to disable public web access.')
+param httpSourceAddressPrefix string = '*'
+
 var subnetName = 'default'
 
 resource nsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
   name: '${vmName}-nsg'
   location: location
   properties: {
-    securityRules: [
+    securityRules: concat([
       {
         name: 'allow-ssh'
         properties: {
@@ -38,7 +41,21 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
           destinationAddressPrefix: '*'
         }
       }
-    ]
+    ], empty(httpSourceAddressPrefix) ? [] : [
+      {
+        name: 'allow-http'
+        properties: {
+          priority: 1010
+          direction: 'Inbound'
+          access: 'Allow'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '80'
+          sourceAddressPrefix: httpSourceAddressPrefix
+          destinationAddressPrefix: '*'
+        }
+      }
+    ])
   }
 }
 

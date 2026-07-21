@@ -105,8 +105,10 @@ Deliverable: the four files in `infra/`, such that `az deployment group create -
 
 ## Phase 3 — CI/CD workflows — ✅ done
 
-- **`deploy.yml`** (push to `main` + `workflow_dispatch`): `test` job (pytest, Python 3.12) → `deploy` job: `actions/checkout` (submodules) → **rsync** repo to VM over SSH (`--delete`, excludes `.git`/`scout/.env`) → render `.env` from Actions secrets (heredoc, secrets via `env:`) → `docker compose up -d --build`. VM needs **no** GitHub access.
-- **`scheduled-run.yml`** (`cron: "0 21 * * *"` + `workflow_dispatch`): SSH `docker compose run --rm app`. Runs whatever `deploy` last synced.
+- **`deploy.yml`** (push to `main` + `workflow_dispatch`): `test` job (pytest, Python 3.12) → `deploy` job: `actions/checkout` (submodules) → **rsync** repo to VM over SSH (`--delete`, excludes `.git`/`scout/.env`) → render `.env` from Actions secrets (heredoc, secrets via `env:`) → `docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --build`. VM needs **no** GitHub access.
+- **`scheduled-run.yml`** (`cron: "0 21 * * *"` + `workflow_dispatch`): SSH `docker compose -f docker-compose.yaml -f docker-compose.prod.yaml run --rm app`. Runs whatever `deploy` last synced.
+
+**Production compose overlay + smoke-test page (added 2026-07-21).** The base `docker-compose.yaml` (local/dev) is left untouched; production adds `docker-compose.prod.yaml` (layered via `-f … -f …`) which brings up a `hello` nginx service serving `hello/index.html` on port 80 and sets `restart: unless-stopped` on the long-lived services. `main.bicep` gains an NSG `allow-http` rule (param `httpSourceAddressPrefix`, default `*`, empty = closed). Opening `http://<VM_IP>/` shows "Hello World" — an end-to-end reachability check (public IP → NSG:80 → nginx).
 - `set -euo pipefail` throughout; SSH key `chmod 600` on the ephemeral runner; no `set -x`.
 
 ## Phase 4 — GitHub Actions secrets + manual setup — ✅ done

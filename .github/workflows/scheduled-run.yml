@@ -28,4 +28,5 @@ jobs:
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
-            "$VM_USER@$VM_HOST" "cd $APP_DIR && docker compose run --rm app"
+            "$VM_USER@$VM_HOST" \
+            "cd $APP_DIR && docker compose -f docker-compose.yaml -f docker-compose.prod.yaml run --rm app"
