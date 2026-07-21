@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -21,6 +21,23 @@ class Listing(BaseModel):
 
 class MatchResult(BaseModel):
     listing: Listing
+    score: int
+    reasoning: str
+
+
+class Run(BaseModel):
+    id: int
+    run_date: date
+    started_at: datetime
+    finished_at: datetime | None = None
+    listings_scraped: int
+    listings_scored: int
+
+
+class RunListing(BaseModel):
+    id: int
+    run_id: int
+    listing_id: int
     score: int
     reasoning: str
 

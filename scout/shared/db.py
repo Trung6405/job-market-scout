@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import date
 from pathlib import Path
 from typing import Literal
 
@@ -8,7 +9,7 @@ import asyncpg
 
 from scout.config import Settings
 from scout.config import settings as default_settings
-from scout.shared.schemas import Listing
+from scout.shared.schemas import Listing, MatchResult, Run, RunListing
 
 _SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 
@@ -118,3 +119,83 @@ async def close_stale_listings(
         external_ids,
     )
     return [row["external_id"] for row in rows]
+
+
+async def start_run(conn: asyncpg.Connection, run_date: date) -> int:
+    return await conn.fetchval(
+        """
+        INSERT INTO runs (run_date)
+        VALUES ($1)
+        ON CONFLICT (run_date) DO UPDATE SET started_at = now()
+        RETURNING id
+        """,
+        run_date,
+    )
+
+
+async def finish_run(
+    conn: asyncpg.Connection,
+    run_id: int,
+    listings_scraped: int,
+    listings_scored: int,
+) -> None:
+    await conn.execute(
+        """
+        UPDATE runs
+        SET listings_scraped = $2,
+            listings_scored = $3,
+            finished_at = now()
+        WHERE id = $1
+        """,
+        run_id,
+        listings_scraped,
+        listings_scored,
+    )
+
+
+async def record_run_listings(
+    conn: asyncpg.Connection, run_id: int, matches: list[MatchResult]
+) -> None:
+    sources = [match.listing.source for match in matches]
+    external_ids = [match.listing.external_id for match in matches]
+    scores = [match.score for match in matches]
+    reasonings = [match.reasoning for match in matches]
+    await conn.execute(
+        """
+        INSERT INTO run_listings (run_id, listing_id, score, reasoning)
+        SELECT $1, listings.id, data.score, data.reasoning
+        FROM unnest($2::text[], $3::text[], $4::int[], $5::text[])
+            AS data(source, external_id, score, reasoning)
+        JOIN listings
+            ON listings.source = data.source AND listings.external_id = data.external_id
+        ON CONFLICT (run_id, listing_id) DO UPDATE SET
+            score = EXCLUDED.score,
+            reasoning = EXCLUDED.reasoning
+        """,
+        run_id,
+        sources,
+        external_ids,
+        scores,
+        reasonings,
+    )
+
+
+async def get_run_by_date(conn: asyncpg.Connection, run_date: date) -> Run | None:
+    row = await conn.fetchrow("SELECT * FROM runs WHERE run_date = $1", run_date)
+    if row is None:
+        return None
+    return Run(**dict(row))
+
+
+async def list_runs(conn: asyncpg.Connection, limit: int) -> list[Run]:
+    rows = await conn.fetch(
+        "SELECT * FROM runs ORDER BY run_date DESC LIMIT $1", limit
+    )
+    return [Run(**dict(row)) for row in rows]
+
+
+async def get_run_listings(conn: asyncpg.Connection, run_id: int) -> list[RunListing]:
+    rows = await conn.fetch(
+        "SELECT * FROM run_listings WHERE run_id = $1", run_id
+    )
+    return [RunListing(**dict(row)) for row in rows]

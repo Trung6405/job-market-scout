@@ -1,11 +1,21 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 
-from scout.shared.db import apply_schema, close_stale_listings, upsert_listing
-from scout.shared.schemas import Listing
+from scout.shared.db import (
+    apply_schema,
+    close_stale_listings,
+    finish_run,
+    get_run_by_date,
+    get_run_listings,
+    list_runs,
+    record_run_listings,
+    start_run,
+    upsert_listing,
+)
+from scout.shared.schemas import Listing, MatchResult
 
 
 def _make_listing(**overrides) -> Listing:
@@ -269,3 +279,159 @@ async def test_run_listings_score_constraint_enforced(db_pool):
                 101,  # Invalid score > 100
                 "Test reasoning",
             )
+
+
+@pytest.mark.asyncio
+async def test_start_run_creates_row(db_pool):
+    async with db_pool.acquire() as conn:
+        run_id = await start_run(conn, date(2026, 7, 21))
+        row = await conn.fetchrow("SELECT id, run_date FROM runs WHERE id = $1", run_id)
+
+    assert row["id"] == run_id
+    assert row["run_date"] == date(2026, 7, 21)
+
+
+@pytest.mark.asyncio
+async def test_start_run_is_idempotent_per_run_date(db_pool):
+    run_date = date(2026, 7, 21)
+    async with db_pool.acquire() as conn:
+        first_id = await start_run(conn, run_date)
+        second_id = await start_run(conn, run_date)
+        count = await conn.fetchval(
+            "SELECT count(*) FROM runs WHERE run_date = $1", run_date
+        )
+
+    assert first_id == second_id
+    assert count == 1
+
+
+@pytest.mark.asyncio
+async def test_start_run_refreshes_started_at_on_conflict(db_pool):
+    run_date = date(2026, 7, 21)
+    async with db_pool.acquire() as conn:
+        run_id = await start_run(conn, run_date)
+        await conn.execute(
+            "UPDATE runs SET started_at = started_at - interval '1 day' WHERE id = $1",
+            run_id,
+        )
+        before = await conn.fetchval("SELECT started_at FROM runs WHERE id = $1", run_id)
+
+        await start_run(conn, run_date)
+        after = await conn.fetchval("SELECT started_at FROM runs WHERE id = $1", run_id)
+
+    assert after > before
+
+
+@pytest.mark.asyncio
+async def test_finish_run_updates_counts_and_finished_at(db_pool):
+    async with db_pool.acquire() as conn:
+        run_id = await start_run(conn, date(2026, 7, 21))
+        await finish_run(conn, run_id, listings_scraped=42, listings_scored=10)
+        row = await conn.fetchrow(
+            "SELECT listings_scraped, listings_scored, finished_at FROM runs WHERE id = $1",
+            run_id,
+        )
+
+    assert row["listings_scraped"] == 42
+    assert row["listings_scored"] == 10
+    assert row["finished_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_record_run_listings_inserts_scored_listings(db_pool):
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+
+        await record_run_listings(
+            conn,
+            run_id,
+            [MatchResult(listing=listing, score=87, reasoning="Great fit")],
+        )
+
+        row = await conn.fetchrow(
+            "SELECT score, reasoning FROM run_listings WHERE run_id = $1", run_id
+        )
+
+    assert row["score"] == 87
+    assert row["reasoning"] == "Great fit"
+
+
+@pytest.mark.asyncio
+async def test_record_run_listings_upserts_on_conflict(db_pool):
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+
+        await record_run_listings(
+            conn, run_id, [MatchResult(listing=listing, score=50, reasoning="Ok fit")]
+        )
+        await record_run_listings(
+            conn,
+            run_id,
+            [MatchResult(listing=listing, score=90, reasoning="Better fit")],
+        )
+
+        rows = await conn.fetch("SELECT score, reasoning FROM run_listings WHERE run_id = $1", run_id)
+
+    assert len(rows) == 1
+    assert rows[0]["score"] == 90
+    assert rows[0]["reasoning"] == "Better fit"
+
+
+@pytest.mark.asyncio
+async def test_get_run_by_date_returns_run(db_pool):
+    run_date = date(2026, 7, 21)
+    async with db_pool.acquire() as conn:
+        run_id = await start_run(conn, run_date)
+        run = await get_run_by_date(conn, run_date)
+
+    assert run is not None
+    assert run.id == run_id
+    assert run.run_date == run_date
+
+
+@pytest.mark.asyncio
+async def test_get_run_by_date_returns_none_when_missing(db_pool):
+    async with db_pool.acquire() as conn:
+        run = await get_run_by_date(conn, date(2099, 1, 1))
+
+    assert run is None
+
+
+@pytest.mark.asyncio
+async def test_list_runs_returns_most_recent_first(db_pool):
+    async with db_pool.acquire() as conn:
+        await start_run(conn, date(2026, 7, 19))
+        await start_run(conn, date(2026, 7, 21))
+        await start_run(conn, date(2026, 7, 20))
+
+        runs = await list_runs(conn, limit=2)
+
+    assert [run.run_date for run in runs] == [date(2026, 7, 21), date(2026, 7, 20)]
+
+
+@pytest.mark.asyncio
+async def test_get_run_listings_returns_scored_listings_for_run(db_pool):
+    listing_a = _make_listing(source="linkedin", external_id="job-a")
+    listing_b = _make_listing(source="linkedin", external_id="job-b")
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing_a)
+        await upsert_listing(conn, listing_b)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        await record_run_listings(
+            conn,
+            run_id,
+            [
+                MatchResult(listing=listing_a, score=80, reasoning="Good"),
+                MatchResult(listing=listing_b, score=60, reasoning="Ok"),
+            ],
+        )
+
+        run_listings = await get_run_listings(conn, run_id)
+
+    assert len(run_listings) == 2
+    assert {rl.score for rl in run_listings} == {80, 60}
+    assert all(rl.run_id == run_id for rl in run_listings)
