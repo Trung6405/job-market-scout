@@ -54,6 +54,17 @@ class ListingScoreBatch(BaseModel):
     scores: list[ListingScore]
 
 
+class ListingRequirements(BaseModel):
+    source: str
+    external_id: str
+    must_have: list[str]
+    nice_to_have: list[str]
+
+
+class ListingRequirementsBatch(BaseModel):
+    requirements: list[ListingRequirements]
+
+
 class BriefingTakeaway(BaseModel):
     source: str
     external_id: str

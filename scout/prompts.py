@@ -87,6 +87,44 @@ sentence). Return only the JSON object, no commentary.
 """
 
 
+def build_requirements_instruction(settings: Settings, listings: list[Listing]) -> str:
+    listings_json = json.dumps(
+        [
+            _project_listing_for_scoring(listing, settings.description_char_limit)
+            for listing in listings
+        ],
+        indent=2,
+    )
+    return f"""\
+You are the requirements extractor for Job Market Scout.
+
+For each listing below, read its description and identify two separate
+lists of skills and qualifications:
+- "must_have": skills and qualifications explicitly stated as required,
+  must-have, mandatory, or similar.
+- "nice_to_have": skills and qualifications explicitly marked as
+  preferred, nice-to-have, bonus, a plus, or similar.
+
+Only extract what the listing's description actually states. Do not
+invent requirements that aren't stated in the text, and do not infer or
+assume requirements that are merely implied. Do not merge the two
+categories — a skill belongs in exactly one list, based on how the
+listing describes it. If a listing does not clearly state any
+requirements in a category, return an empty list for that category. Do
+not invent listings beyond the ones provided, and do not call any tool.
+
+Listings to extract requirements from:
+{listings_json}
+
+Return a JSON object with a single key "requirements" containing a list
+of objects, each with "source" and "external_id" (copied exactly from
+the listing — together they identify it, since external_id alone may
+repeat across sources), "must_have" (a list of short strings), and
+"nice_to_have" (a list of short strings). Return only the JSON object,
+no commentary.
+"""
+
+
 def _project_match_for_briefing(match: MatchResult) -> dict:
     return {
         "source": match.listing.source,
