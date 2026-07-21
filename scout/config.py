@@ -70,6 +70,13 @@ class Settings:
     search_locations: list[str] = field(
         default_factory=partial(_env_csv, "SEARCH_LOCATIONS", "Remote")
     )
+    search_site_names: list[str] = field(
+        default_factory=partial(
+            _env_csv,
+            "SEARCH_SITE_NAMES",
+            "indeed,linkedin,zip_recruiter,glassdoor,google",
+        )
+    )
     results_wanted: int = field(
         default_factory=partial(_env_int, "RESULTS_WANTED", 20)
     )

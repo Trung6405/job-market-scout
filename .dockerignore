@@ -1,0 +1,49 @@
+.git
+.gitignore
+.gitmodules
+
+# Python
+__pycache__/
+*.py[codz]
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# Environments
+.venv
+venv/
+env/
+.env
+
+# Docs / non-runtime
+docs/
+README.md
+LICENSE
+
+# Tests
+tests/
+
+# Editor / tooling
+.claude/
+.superpowers/
+.worktrees/
+.vscode/
+.idea/
+
+# ADK local runtime session cache
+scout/.adk/
+
+# Personal resume / profile
+scout/resume.txt
+scout/profile.json
+
+# Docker itself
+Dockerfile
+docker-compose.yaml
+.dockerignore

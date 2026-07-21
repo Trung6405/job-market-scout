@@ -1,0 +1,47 @@
+{
+  "name": "Candidate",
+  "target_role": "Backend / Platform Engineer",
+  "target_locations": ["Remote"],
+  "tech_stack": [
+    {
+      "category": "Languages",
+      "skills": [
+        {"name": "Python", "proficiency": 4},
+        {"name": "Go", "proficiency": 3}
+      ]
+    },
+    {
+      "category": "Backend",
+      "skills": [
+        {"name": "REST API design", "proficiency": 4},
+        {"name": "gRPC", "proficiency": 3},
+        {"name": "Distributed systems", "proficiency": 3}
+      ]
+    },
+    {
+      "category": "Databases",
+      "skills": [
+        {"name": "SQL", "proficiency": 3}
+      ]
+    }
+  ],
+  "domain_knowledge": [
+    {
+      "name": "Backend / platform engineering",
+      "proficiency": 60,
+      "description": "Builds backend services in Python and Go; comfortable with REST/gRPC APIs and SQL databases."
+    },
+    {
+      "name": "Distributed systems",
+      "proficiency": 40,
+      "description": "Working familiarity from resume; no further detail available yet."
+    }
+  ],
+  "background": {
+    "education": "Not specified",
+    "experience": "Not specified",
+    "preferred_roles": ["Backend Engineer", "Platform Engineer"],
+    "locations": ["Remote"]
+  },
+  "projects": []
+}

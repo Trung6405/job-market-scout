@@ -15,45 +15,53 @@ services:
       - "8000:8000"
     volumes:
       - ./reports:/app/reports
+      - ./scout/resume.txt:/app/scout/resume.txt:ro
+      - ./scout/profile.json:/app/scout/profile.json:ro
 
-  # Built once so the `jobspy` image is available in the host Docker daemon
-  # for jobspy-mcp to `docker run --rm jobspy ...` per search (see below).
+  # Kept running (not one-shot) so jobspy-mcp can `docker exec` into it per
+  # search instead of paying `docker run` container-startup cost every time.
   jobspy-scraper:
     build:
       context: ./vendor/jobspy-mcp-server/jobspy
     image: jobspy
-    command: ["--help"]
+    container_name: jobspy-scraper
+    entrypoint: ["tail", "-f", "/dev/null"]
+    restart: unless-stopped
 
   # jobspy-mcp-server doesn't ship a self-contained Docker image: at runtime it
-  # shells out to `docker run --rm jobspy ...` to launch the scraper container
-  # per search. So this container gets the host's Docker socket mounted in,
-  # rather than its own nested Docker daemon.
+  # shells out to `docker exec jobspy-scraper ...` to run a search in the
+  # long-lived scraper container above. So this container gets the host's
+  # Docker socket mounted in, rather than its own nested Docker daemon.
   jobspy-mcp:
     build:
-      context: ./vendor/jobspy-mcp-server
+      context: .
       dockerfile_inline: |
         FROM node:20-alpine
         RUN apk add --no-cache docker-cli
         WORKDIR /app
-        COPY package.json package-lock.json ./
+        COPY vendor/jobspy-mcp-server/package.json vendor/jobspy-mcp-server/package-lock.json ./
         RUN npm ci --omit=dev
-        COPY . .
-        # Upstream's prompt registrations pass z.object(...) where the MCP SDK
-        # expects a raw Zod shape, crashing the server before it can bind its
-        # port (see https://github.com/borgius/jobspy-mcp-server, src/index.js).
-        # We only need the search_jobs tool, not these prompts, so drop the
-        # calls at build time rather than patching the tracked submodule.
-        RUN sed -i \
-          -e "/^searchJobsPrompt(server);/d" \
-          -e "/^jobRecommendationsPrompt(server);/d" \
-          -e "/^resumeFeedbackPrompt(server);/d" \
-          src/index.js
+        COPY vendor/jobspy-mcp-server .
+        # Our overrides fix two upstream issues instead of patching the
+        # tracked submodule with sed:
+        #  - index.js/sseManager.js: upstream shares one MCP `Server`
+        #    instance across all SSE connections and crashes on a second
+        #    concurrent connection, so our version creates one per
+        #    connection (also drops upstream's prompt registrations, which
+        #    pass z.object(...) where the SDK expects a raw Zod shape and
+        #    crash the server before it can bind its port).
+        #  - tools/search-jobs.js: execs into the long-lived jobspy-scraper
+        #    container instead of `docker run --rm` per search.
+        COPY docker/jobspy-mcp/index.js src/index.js
+        COPY docker/jobspy-mcp/sseManager.js src/sseManager.js
+        COPY docker/jobspy-mcp/search-jobs.js src/tools/search-jobs.js
         EXPOSE 9423
         CMD ["node", "src/index.js"]
     environment:
       ENABLE_SSE: "1"
       JOBSPY_PORT: "9423"
       JOBSPY_HOST: "0.0.0.0"
+      JOBSPY_CONTAINER_NAME: "jobspy-scraper"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
