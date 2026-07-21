@@ -79,6 +79,9 @@ class Settings:
             str(Path(__file__).resolve().parent / "profile.json"),
         )
     )
+    report_output_dir: str = field(
+        default_factory=partial(_env_str, "REPORT_OUTPUT_DIR", "reports")
+    )
     preferred_locations: list[str] = field(
         default_factory=partial(_env_csv, "PREFERRED_LOCATIONS", "")
     )

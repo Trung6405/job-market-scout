@@ -121,6 +121,15 @@ class Project(BaseModel):
     tags: list[str]
 
 
+class RunListingDetail(BaseModel):
+    run_listing_id: int
+    listing: Listing
+    score: int
+    reasoning: str
+    band: str
+    gaps: list[SkillGap]
+
+
 class Profile(BaseModel):
     name: str
     target_role: str

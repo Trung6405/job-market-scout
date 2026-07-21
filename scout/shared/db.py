@@ -9,7 +9,14 @@ import asyncpg
 
 from scout.config import Settings
 from scout.config import settings as default_settings
-from scout.shared.schemas import Listing, MatchResult, Run, RunListing, SkillGap
+from scout.shared.schemas import (
+    Listing,
+    MatchResult,
+    Run,
+    RunListing,
+    RunListingDetail,
+    SkillGap,
+)
 
 _SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 
@@ -262,3 +269,60 @@ async def get_listing_gaps(conn: asyncpg.Connection, run_listing_id: int) -> lis
         run_listing_id,
     )
     return [SkillGap(**dict(row)) for row in rows]
+
+
+async def get_run(conn: asyncpg.Connection, run_id: int) -> Run | None:
+    row = await conn.fetchrow("SELECT * FROM runs WHERE id = $1", run_id)
+    if row is None:
+        return None
+    return Run(**dict(row))
+
+
+async def get_run_details(conn: asyncpg.Connection, run_id: int) -> list[RunListingDetail]:
+    rows = await conn.fetch(
+        """
+        SELECT run_listings.id AS run_listing_id, run_listings.score, run_listings.reasoning, run_listings.band,
+               listings.source, listings.external_id, listings.title, listings.company, listings.location,
+               listings.is_remote, listings.url, listings.description, listings.salary_min, listings.salary_max,
+               listings.date_posted, listings.scraped_at
+        FROM run_listings
+        JOIN listings ON listings.id = run_listings.listing_id
+        WHERE run_listings.run_id = $1
+        ORDER BY run_listings.score DESC
+        """,
+        run_id,
+    )
+
+    run_listing_ids = [row["run_listing_id"] for row in rows]
+    gap_rows = await conn.fetch(
+        """
+        SELECT run_listing_id, skill, requirement_level
+        FROM listing_gaps
+        WHERE run_listing_id = ANY($1::bigint[])
+        """,
+        run_listing_ids,
+    )
+    gaps_by_id: dict[int, list[SkillGap]] = {}
+    for gap_row in gap_rows:
+        gaps_by_id.setdefault(gap_row["run_listing_id"], []).append(
+            SkillGap(skill=gap_row["skill"], requirement_level=gap_row["requirement_level"])
+        )
+
+    details: list[RunListingDetail] = []
+    for row in rows:
+        data = dict(row)
+        run_listing_id = data.pop("run_listing_id")
+        score = data.pop("score")
+        reasoning = data.pop("reasoning")
+        band = data.pop("band")
+        details.append(
+            RunListingDetail(
+                run_listing_id=run_listing_id,
+                listing=Listing(**data),
+                score=score,
+                reasoning=reasoning,
+                band=band,
+                gaps=gaps_by_id.get(run_listing_id, []),
+            )
+        )
+    return details

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daily Reports · Job Market Scout</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#ffffff; --ink:#161a22; --muted:#697086;
+    --line:#e7e9ee; --accent:#4f46e5; --accent-soft:#eef0fe;
+    --strong-ink:#1c7c43; --comp-ink:#9a6a10; --reach-ink:#b23434;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:820px;margin:0 auto;padding:28px 20px 64px}
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.01em}
+  .brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);
+    display:grid;place-items:center;color:#fff;font-size:15px}
+  .nav{display:flex;gap:6px}
+  .nav a{font-size:13px;color:var(--muted);padding:7px 12px;border-radius:9px}
+  .nav a.active{color:var(--ink);background:var(--panel);border:1px solid var(--line)}
+  h1{font-size:23px;margin:0 0 2px;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 22px}
+  .month{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+    margin:22px 0 10px}
+  .day{display:flex;align-items:center;gap:16px;background:var(--panel);border:1px solid var(--line);
+    border-radius:var(--radius);padding:14px 18px;margin-bottom:10px;transition:border-color .15s}
+  .day:hover{border-color:#cfd3de}
+  .date{flex:0 0 auto;width:58px;text-align:center}
+  .date .d{font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1}
+  .date .w{font-size:11px;color:var(--muted);margin-top:2px}
+  .info{flex:1 1 auto;min-width:0}
+  .info .h{font-weight:600;font-size:14.5px}
+  .info .m{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .bands{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .pill{font-size:11.5px;border-radius:999px;padding:2px 9px;font-weight:600}
+  .pill.s{color:var(--strong-ink);background:#e7f6ec}
+  .pill.c{color:var(--comp-ink);background:#fdf2df}
+  .pill.r{color:var(--reach-ink);background:#fdecec}
+  .arrow{flex:0 0 auto;color:#c2c6d2;font-size:18px}
+  .day.empty{opacity:.75}
+  .day.empty .info .h{color:var(--muted);font-weight:500}
+  .newtag{font-size:10px;font-weight:700;color:#fff;background:var(--accent);border-radius:5px;
+    padding:1px 6px;margin-left:8px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="dot">◎</span> Job Market Scout</div>
+    <nav class="nav">
+      {% if days %}
+      <a href="{{ days[0].run.run_date }}/dashboard.html">Today</a>
+      {% else %}
+      <span style="opacity:.4">Today</span>
+      {% endif %}
+      <a class="active" href="history.html">History</a>
+      <a href="profile.html">My Profile</a>
+    </nav>
+  </header>
+
+  <h1>Daily reports</h1>
+  <p class="sub">One briefing per day. Each run is scored and archived — open any day to see that day's matches.</p>
+
+  {% set ns = namespace(current_month=None) %}
+  {% for day in days %}
+    {% set month_label = day.run.run_date.strftime('%B %Y') %}
+    {% if month_label != ns.current_month %}
+      <div class="month">{{ month_label }}</div>
+      {% set ns.current_month = month_label %}
+    {% endif %}
+
+    {% if day.details %}
+    <a class="day" href="{{ day.run.run_date }}/dashboard.html">
+      <div class="date"><div class="d">{{ day.run.run_date.strftime('%d') }}</div><div class="w">{{ day.run.run_date.strftime('%a') }}</div></div>
+      <div class="info">
+        <div class="h">{{ day.run.run_date.strftime('%A') }} briefing{% if loop.first %} <span class="newtag">NEW</span>{% endif %}</div>
+        <div class="m">{{ day.stats.scored }} scored · avg fit {{ day.stats.avg_score }} · {{ day.stats.gaps }} gaps to close</div>
+        <div class="bands">
+          {% if day.stats.strong %}<span class="pill s">{{ day.stats.strong }} Strong</span>{% endif %}
+          {% if day.stats.competitive %}<span class="pill c">{{ day.stats.competitive }} Competitive</span>{% endif %}
+          {% if day.stats.reach %}<span class="pill r">{{ day.stats.reach }} Reach</span>{% endif %}
+        </div>
+      </div>
+      <span class="arrow">›</span>
+    </a>
+    {% else %}
+    <div class="day empty">
+      <div class="date"><div class="d">{{ day.run.run_date.strftime('%d') }}</div><div class="w">{{ day.run.run_date.strftime('%a') }}</div></div>
+      <div class="info">
+        <div class="h">No new or changed listings — nothing to score</div>
+        <div class="m">{{ day.run.listings_scraped }} listings seen</div>
+      </div>
+    </div>
+    {% endif %}
+  {% endfor %}
+</div>
+</body>
+</html>
