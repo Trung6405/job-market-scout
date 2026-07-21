@@ -146,9 +146,9 @@ The Scout App runs as a single containerised process. On each daily run, four st
 |---|---|
 | Scout App code + Dockerfile (repo) | **Built** |
 | PostgreSQL (provisioned instance) | Planned |
-| Scheduler (daily trigger) | Planned — target: Azure Container Apps Jobs cron trigger |
-| Cloud host | Planned — Azure Container Apps Jobs |
-| CI/CD | Planned — GitHub Actions builds and deploys the container image on push |
+| Scheduler (daily trigger) | Planned — target: cron/systemd timer on the Azure VM |
+| Cloud host | Planned — Azure VM instance |
+| CI/CD | Planned — GitHub Actions builds the container image and deploys it to the Azure VM on push, gated on the pipeline running successfully |
 
 Source is hosted on GitHub. Until the scheduler exists, runs are triggered manually.
 
@@ -164,7 +164,7 @@ Source is hosted on GitHub. Until the scheduler exists, runs are triggered manua
 ## 8. Deferred / future work
 
 - `matches` table persisting scores + reasoning, correlated to config via a `config_version` hash (schema direction already agreed; deferred per D4)
-- Scheduler, Azure hosting, CI/CD (see §7)
+- Scheduler, Azure VM hosting, CI/CD (see §7)
 - Embeddings-based matching
 - Trend analysis over stored listings
 - Additional delivery channels (e.g. Teams)
