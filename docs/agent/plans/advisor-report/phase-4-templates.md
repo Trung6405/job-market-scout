@@ -46,7 +46,7 @@ tasks. See Notes / Learnings.)*
         `history.html` reflecting `list_runs()`, including a zero-match
         day; `render_profile` writes `profile.html` from a `Profile`
   - [x] Verify it fails (`./.venv/Scripts/python.exe -m pytest tests/test_advisor_report.py -q`)
-  - [x] Copy `docs/prototypes/{dashboard,history,job-detail,profile}.html`
+  - [x] Copy `docs/project/prototypes/{dashboard,history,job-detail,profile}.html`
         into `scout/sub_agents/advisor/templates/` as `.html.jinja`,
         replacing hardcoded sample content with `{{ }}`/`{% %}`
         template expressions. Add `jinja2` to `requirements.txt`; add
@@ -105,7 +105,7 @@ Delete `scout/sub_agents/advisor/report.py`,
   full requirements-vs-profile checklist, positioning tips) beyond
   what the implementer's own self-review named — reviewer assessed all
   drops as justified by genuine data gaps in `RunListingDetail`, not
-  laziness, since `docs/prototypes/job-detail.html`'s underlying data
+  laziness, since `docs/project/prototypes/job-detail.html`'s underlying data
   (e.g. per-category score breakdowns, full satisfied-requirements
   list) was never built by earlier phases. Revisit only if a later
   phase adds that structured data.

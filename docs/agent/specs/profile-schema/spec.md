@@ -8,7 +8,7 @@
 
 ## Problem
 
-The `docs/prototypes/` HTML mockups for the Advisor report UI (dashboard,
+The `docs/project/prototypes/` HTML mockups for the Advisor report UI (dashboard,
 history, job-detail, profile) were built as throwaway static demos with
 hardcoded sample data. `profile.html` in particular assumes a structured
 student profile — categorised tech-stack proficiency, domain-knowledge
@@ -119,8 +119,8 @@ None — all resolved during brainstorming before implementation started.
 - 2026-07-21: The "report rendering" and "gap detection" sub-projects
   referenced above (Won't Have, Proposed Approach, Alternatives
   Considered) were merged into a single spec/plan,
-  [`docs/specs/advisor-report/spec.md`](../advisor-report/spec.md) /
-  [`docs/plans/advisor-report/plan.md`](../../plans/advisor-report/plan.md),
+  [`docs/agent/specs/advisor-report/spec.md`](../advisor-report/spec.md) /
+  [`docs/agent/plans/advisor-report/plan.md`](../../plans/advisor-report/plan.md),
   since persistence, band/gap enrichment, and rendering turned out to
   be one initiative delivered in ordered phases, not independent
   sub-projects. No requirement or decision in this spec changed.

@@ -11,7 +11,7 @@
 Implements the Tracker stage of the Scraper → Tracker → Scorer → Briefing
 pipeline: a Postgres-backed Storage module (`scout/shared/schema.sql`,
 `scout/shared/db.py`) per the approved design in
-`docs/specs/listings-db/spec.md`, plus the orchestration entry point
+`docs/agent/specs/listings-db/spec.md`, plus the orchestration entry point
 `track_listings()` in `scout/tools/tracker.py` that upserts a scraped
 batch, classifies each listing new/changed/unchanged/closed, and returns
 only new/changed listings for the Scorer. Done means both empty stub files

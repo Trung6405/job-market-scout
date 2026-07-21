@@ -7,7 +7,7 @@ Status: Approved
 
 `job-market-scout` is a multi-agent job search pipeline (Scraper → Scorer → Briefing, plus a Tracker) built on Google ADK, LiteLLM, and DeepSeek, deployed via Docker. The project is currently an empty scaffold. This spec covers only the **scraper sub-agent** — the first stage of the pipeline, responsible for fetching job listings.
 
-The system-context diagram (`docs/diagrams/Solution Diagram.drawio`) describes the scraper as fetching listings from job boards (Seek, LinkedIn) via "MCP/API" and searching company career pages via a web search API. This session narrows that to: job-board fetching via MCP only. Company career-page search and Seek coverage are explicitly deferred (see Out of Scope).
+The system-context diagram (`docs/project/diagrams/Solution Diagram.drawio`) describes the scraper as fetching listings from job boards (Seek, LinkedIn) via "MCP/API" and searching company career pages via a web search API. This session narrows that to: job-board fetching via MCP only. Company career-page search and Seek coverage are explicitly deferred (see Out of Scope).
 
 ## Goals
 

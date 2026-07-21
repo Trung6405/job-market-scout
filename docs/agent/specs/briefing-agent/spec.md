@@ -23,7 +23,7 @@
 
 ### Must have
 
-- Deterministic selection of which matches to include: apply `min_match_score` and cap to a configurable maximum count, sorted by score descending. (The Scorer applies no threshold itself — see Decision 4 precedent in `docs/plans/scorer-agent/plan.md`; thresholding happens here.)
+- Deterministic selection of which matches to include: apply `min_match_score` and cap to a configurable maximum count, sorted by score descending. (The Scorer applies no threshold itself — see Decision 4 precedent in `docs/agent/plans/scorer-agent/plan.md`; thresholding happens here.)
 - Reuse the existing `join_match_results` (`scout/sub_agents/scorer/results.py`) to pair `ListingScore` back to `Listing` by `(source, external_id)` — no second join implementation.
 - An `LlmAgent` (DeepSeek via LiteLLM, no tools) that generates summary prose (an intro paragraph plus a one-line takeaway per included listing) from the selected matches — never asked to reproduce URLs, titles, or other factual fields verbatim.
 - A deterministic email builder that merges real listing fields with the LLM's prose into an HTML + plain-text multipart email, including the zero-matches template (which requires no LLM call).

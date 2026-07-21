@@ -10,7 +10,7 @@
 
 Add a validated, typed data model for a student profile (tech-stack
 proficiency by category, domain knowledge, background, projects) plus a
-JSON loader for it, so the Advisor report mockups in `docs/prototypes/`
+JSON loader for it, so the Advisor report mockups in `docs/project/prototypes/`
 have a real data source to eventually render from. Done when the schema,
 loader, and example file exist, are fully tested, and the existing
 pipeline is untouched.

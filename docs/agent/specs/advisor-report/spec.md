@@ -8,7 +8,7 @@
 
 ## Problem
 
-The `docs/prototypes/` HTML mockups (dashboard, history, job-detail,
+The `docs/project/prototypes/` HTML mockups (dashboard, history, job-detail,
 profile) are throwaway static demos with hardcoded sample data — that's
 the whole reason this line of work exists (the original ask: "wire the
 pipeline output to these mockups"). Making them real requires three
@@ -23,7 +23,7 @@ nothing renders any of it into the actual HTML screens. Because
 persisted data with no bands/gaps is dead weight, and rendering has
 nothing to read without persistence and enrichment, these are one
 initiative delivered across ordered phases, not independent sub-projects
-— unlike the student-profile schema (`docs/specs/profile-schema/spec.md`),
+— unlike the student-profile schema (`docs/agent/specs/profile-schema/spec.md`),
 which is useful standalone and is already built.
 
 ## Success Criteria

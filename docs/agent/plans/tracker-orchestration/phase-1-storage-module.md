@@ -10,7 +10,7 @@
 
 Implement the Postgres schema and `scout/shared/db.py` primitives
 (`create_pool`, `apply_schema`, `upsert_listing`, `close_stale_listings`)
-per `docs/specs/listings-db/spec.md`, wired up with a local `postgres`
+per `docs/agent/specs/listings-db/spec.md`, wired up with a local `postgres`
 Docker service, `DATABASE_URL` config, and `asyncpg`/`pytest-asyncio`
 dependencies. We'll know it worked when `tests/test_db.py` passes against
 a locally running Postgres and `apply_schema` is safe to call twice.
@@ -61,7 +61,7 @@ a locally running Postgres and `apply_schema` is safe to call twice.
             )
         )
     ```
-    (Host port 5433, not Postgres's usual 5432 — see plan Amendments / `docs/specs/listings-db/spec.md` Amendments: a native Postgres service on the dev machine already owns 5432.)
+    (Host port 5433, not Postgres's usual 5432 — see plan Amendments / `docs/agent/specs/listings-db/spec.md` Amendments: a native Postgres service on the dev machine already owns 5432.)
   - [ ] Append to `scout/.env.example` (new line at end of file):
     ```
     DATABASE_URL=postgresql://scout:scout@localhost:5433/scout

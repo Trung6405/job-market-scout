@@ -27,7 +27,7 @@ That fix was reverted after live testing. Wrapping the schema makes ADK send `re
 
 ## Global Constraints
 
-- Spec: `docs/specs/scorer-agent/spec.md` — this plan implements it in full; do not add DB persistence, the briefing agent, root pipeline wiring, or skill/seniority rule-filters (out of scope per that spec).
+- Spec: `docs/agent/specs/scorer-agent/spec.md` — this plan implements it in full; do not add DB persistence, the briefing agent, root pipeline wiring, or skill/seniority rule-filters (out of scope per that spec).
 - **Update (2026-07-16): the scraper worktree has merged into `main` and this branch.** `scout/shared/schemas.py`, `scout/config.py`, and `scout/prompts.py` are no longer empty — they hold the scraper sub-agent's real implementation. Concretely:
   - `scout/shared/schemas.py` already defines `Listing` exactly as this plan needs it (`source`, `external_id`, `title`, `company`, `location`, `is_remote`, `url`, `description`, `salary_min`, `salary_max`, `date_posted`, `scraped_at`). Task 1 must **add `MatchResult` to the existing file**, not write `Listing` again.
   - `scout/config.py` already defines a frozen `Settings` dataclass with scraper fields (`jobspy_mcp_url`, `deepseek_api_key`, `deepseek_model`, `search_roles`, `search_locations`, `results_wanted`, `hours_old`) and a module-level `settings` instance, but **no `__post_init__`**. Task 2 must **extend this existing `Settings`** with the scorer's new fields (`resume_path`, `resume_text`, `preferred_locations`, `remote_only`, `min_salary`, `min_match_score`) and add a `__post_init__` for `resume_text` — do not replace the scraper fields.

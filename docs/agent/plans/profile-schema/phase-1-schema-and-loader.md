@@ -76,7 +76,7 @@ the new models yet.
 
 - Domain-knowledge level thresholds (Solid ≥70, Good ≥50, Developing
   ≥30, else Emerging) were reverse-engineered from the five worked
-  examples in `docs/prototypes/profile.html` (75/70→Solid, 65→Good,
+  examples in `docs/project/prototypes/profile.html` (75/70→Solid, 65→Good,
   35→Developing, 20→Emerging) rather than an explicit spec — flagged as
   an accepted risk in `plan.md`.
 - Test commands in this doc use the project's `.venv`
