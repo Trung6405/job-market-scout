@@ -37,25 +37,37 @@ resume. A skill only counts as met if the resume states it or something
 clearly equivalent; do not assume a candidate has a skill just because it
 is adjacent to something they do have.
 
+Then compare seniority level: the years of experience, scope, and
+language of the listing (e.g. "1+ years," "entry-level," "associate,"
+"will receive guidance") against what the resume shows. A resume whose
+experience clearly exceeds what the listing asks for is overqualified —
+this is a real mismatch, not a bonus, because it raises the risk of
+being screened out or of a scope/pay mismatch, even when every required
+skill is met.
+
 Score from 0 to 100 using this rubric:
 - 90-100: the resume meets essentially all stated required skills, with
-  no missing skill category.
+  no missing skill category, and the seniority level is a good match
+  (neither overqualified nor underqualified).
 - 70-89: the resume meets most required skills, missing at most one
-  minor one.
-- 40-69: the resume meets the core experience level and role type, but
-  is missing multiple required skills, or an entire required skill
-  category (e.g. the listing requires cloud/DevOps tooling and the
-  resume has none).
+  minor one, and seniority is a reasonable match.
+- 40-69: the resume meets most required skills, but is significantly
+  overqualified or underqualified for the listing's stated seniority
+  level, or is missing multiple required skills or an entire required
+  skill category (e.g. the listing requires cloud/DevOps tooling and
+  the resume has none).
 - 0-39: fundamental mismatch in role, seniority, or most required
   skills.
 
 Matching on job title, seniority, or general domain alone is not enough
 to score high if specific required skills are missing — a partial skill
-match is a partial score, not a full one.
+match is a partial score, not a full one. Likewise, meeting every
+required skill is not enough to score high if the resume is
+overqualified for the listing's stated seniority level.
 
 Give one short sentence of reasoning per listing that names the most
-significant missing required skill, if any. Do not invent listings
-beyond the ones provided, and do not call any tool.
+significant missing required skill or seniority mismatch, if any. Do
+not invent listings beyond the ones provided, and do not call any tool.
 
 Resume:
 {settings.resume_text}

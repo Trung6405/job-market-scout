@@ -72,6 +72,11 @@ def test_build_scorer_instruction_directs_weighing_missing_required_skills():
     assert "required" in instruction.lower()
     assert "missing" in instruction.lower()
 
+def test_build_scorer_instruction_directs_weighing_overqualification():
+    instruction = build_scorer_instruction(Settings(), [_make_listing()])
+
+    assert "overqualif" in instruction.lower()
+
 def test_build_scorer_agent_uses_configured_model():
     settings = Settings(deepseek_model="deepseek/deepseek-reasoner")
 

@@ -18,7 +18,7 @@ async def track_listings(
     settings: Settings | None = None,
 ) -> list[Listing]:
     owns_pool = pool is None
-    active_pool = pool if pool is not None else await create_pool(settings)
+    active_pool = pool or await create_pool(settings)
 
     try:
         if owns_pool:
