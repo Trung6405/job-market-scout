@@ -84,6 +84,9 @@ class Settings:
     min_match_score: int = field(
         default_factory=partial(_env_int, "MIN_MATCH_SCORE", 60)
     )
+    strong_match_score: int = field(
+        default_factory=partial(_env_int, "STRONG_MATCH_SCORE", 85)
+    )
     description_char_limit: int = field(
         default_factory=partial(_env_int, "DESCRIPTION_CHAR_LIMIT", 1500)
     )
