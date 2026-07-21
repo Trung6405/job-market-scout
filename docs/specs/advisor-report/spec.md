@@ -97,10 +97,45 @@ sub-agent package:
 **Persistence** — additive tables in `scout/shared/schema.sql`
 (`runs`, `run_listings`), applied automatically via the existing
 `apply_schema` (no manual migration step, matching the `listings` table
-convention). New read/write functions in `scout/shared/db.py`
-(`start_run`, `finish_run`, `record_run_listings`,
-`get_run_by_date`, `list_runs`, `get_run_listings`), wired into
-`ScoutPipelineAgent` right after `run_scorer`.
+convention):
+
+```sql
+CREATE TABLE IF NOT EXISTS runs (
+    id BIGSERIAL PRIMARY KEY,
+    run_date DATE NOT NULL UNIQUE,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    finished_at TIMESTAMPTZ,
+    listings_scraped INT NOT NULL DEFAULT 0,
+    listings_scored INT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS run_listings (
+    id BIGSERIAL PRIMARY KEY,
+    run_id BIGINT NOT NULL REFERENCES runs (id) ON DELETE CASCADE,
+    listing_id BIGINT NOT NULL REFERENCES listings (id),
+    score INT NOT NULL CHECK (score BETWEEN 0 AND 100),
+    reasoning TEXT NOT NULL,
+    UNIQUE (run_id, listing_id)
+);
+```
+
+New read/write functions in `scout/shared/db.py`:
+
+- `start_run(conn, run_date) -> int` — `INSERT ... ON CONFLICT (run_date)
+  DO UPDATE SET started_at = now() RETURNING id`, so a same-day re-run
+  reuses the row.
+- `finish_run(conn, run_id, listings_scraped, listings_scored)` —
+  updates counts and `finished_at`.
+- `record_run_listings(conn, run_id, matches: list[MatchResult])` —
+  bulk-inserts scored listings for the run, `ON CONFLICT (run_id,
+  listing_id) DO UPDATE` so a re-run overwrites rather than duplicates.
+- `get_run_by_date(conn, run_date) -> Run | None` and `list_runs(conn,
+  limit) -> list[Run]` for history navigation.
+- `get_run_listings(conn, run_id) -> list[RunListing]` for the dashboard
+  view of one run.
+
+Wired into `ScoutPipelineAgent` right after `run_scorer`, before
+`run_briefing`.
 
 **Enrichment** — a new `scout/sub_agents/advisor/` package, mirroring
 the existing `scorer` sub-agent's shape: `bands.py` (pure
