@@ -1,6 +1,6 @@
 # Plan: Advisor Report
 
-> **Status:** Not started
+> **Status:** In progress
 > **Created:** 2026-07-21 · **Last updated:** 2026-07-21
 > **Spec:** [spec.md](../../specs/advisor-report/spec.md)
 
@@ -17,7 +17,7 @@ files, and the email links to that day's report.
 
 ## Acceptance Criteria
 
-- [ ] `runs`/`run_listings` persist a run's scored listings, readable
+- [x] `runs`/`run_listings` persist a run's scored listings, readable
       back by date; a same-day re-run updates rather than duplicates.
 - [ ] `classify_band` returns the correct band for scores at and around
       each threshold boundary; every persisted `run_listing` has a band.
@@ -71,7 +71,7 @@ files, and the email links to that day's report.
 
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
-| 1 | Schema, db functions, and pipeline wiring (persistence) | [phase-1-persistence.md](phase-1-persistence.md) | Not started |
+| 1 | Schema, db functions, and pipeline wiring (persistence) | [phase-1-persistence.md](phase-1-persistence.md) | Complete |
 | 2 | Success-band classification | [phase-2-bands.md](phase-2-bands.md) | Not started |
 | 3 | Requirements extraction & gap detection | [phase-3-gaps.md](phase-3-gaps.md) | Not started |
 | 4 | Templates and rendering module | [phase-4-templates.md](phase-4-templates.md) | Not started |
