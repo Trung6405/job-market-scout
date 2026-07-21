@@ -39,3 +39,5 @@ CREATE TABLE IF NOT EXISTS run_listings (
     reasoning TEXT NOT NULL,
     UNIQUE (run_id, listing_id)
 );
+
+ALTER TABLE run_listings ADD COLUMN IF NOT EXISTS band TEXT;

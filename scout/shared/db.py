@@ -154,29 +154,32 @@ async def finish_run(
 
 
 async def record_run_listings(
-    conn: asyncpg.Connection, run_id: int, matches: list[MatchResult]
+    conn: asyncpg.Connection, run_id: int, matches: list[tuple[MatchResult, str]]
 ) -> None:
-    sources = [match.listing.source for match in matches]
-    external_ids = [match.listing.external_id for match in matches]
-    scores = [match.score for match in matches]
-    reasonings = [match.reasoning for match in matches]
+    sources = [match.listing.source for match, _band in matches]
+    external_ids = [match.listing.external_id for match, _band in matches]
+    scores = [match.score for match, _band in matches]
+    reasonings = [match.reasoning for match, _band in matches]
+    bands = [band for _match, band in matches]
     await conn.execute(
         """
-        INSERT INTO run_listings (run_id, listing_id, score, reasoning)
-        SELECT $1, listings.id, data.score, data.reasoning
-        FROM unnest($2::text[], $3::text[], $4::int[], $5::text[])
-            AS data(source, external_id, score, reasoning)
+        INSERT INTO run_listings (run_id, listing_id, score, reasoning, band)
+        SELECT $1, listings.id, data.score, data.reasoning, data.band
+        FROM unnest($2::text[], $3::text[], $4::int[], $5::text[], $6::text[])
+            AS data(source, external_id, score, reasoning, band)
         JOIN listings
             ON listings.source = data.source AND listings.external_id = data.external_id
         ON CONFLICT (run_id, listing_id) DO UPDATE SET
             score = EXCLUDED.score,
-            reasoning = EXCLUDED.reasoning
+            reasoning = EXCLUDED.reasoning,
+            band = EXCLUDED.band
         """,
         run_id,
         sources,
         external_ids,
         scores,
         reasonings,
+        bands,
     )
 
 

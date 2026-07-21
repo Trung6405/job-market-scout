@@ -347,15 +347,21 @@ async def test_record_run_listings_inserts_scored_listings(db_pool):
         await record_run_listings(
             conn,
             run_id,
-            [MatchResult(listing=listing, score=87, reasoning="Great fit")],
+            [
+                (
+                    MatchResult(listing=listing, score=87, reasoning="Great fit"),
+                    "strong_match",
+                )
+            ],
         )
 
         row = await conn.fetchrow(
-            "SELECT score, reasoning FROM run_listings WHERE run_id = $1", run_id
+            "SELECT score, reasoning, band FROM run_listings WHERE run_id = $1", run_id
         )
 
     assert row["score"] == 87
     assert row["reasoning"] == "Great fit"
+    assert row["band"] == "strong_match"
 
 
 @pytest.mark.asyncio
@@ -366,19 +372,34 @@ async def test_record_run_listings_upserts_on_conflict(db_pool):
         run_id = await start_run(conn, date(2026, 7, 21))
 
         await record_run_listings(
-            conn, run_id, [MatchResult(listing=listing, score=50, reasoning="Ok fit")]
+            conn,
+            run_id,
+            [
+                (
+                    MatchResult(listing=listing, score=50, reasoning="Ok fit"),
+                    "reach",
+                )
+            ],
         )
         await record_run_listings(
             conn,
             run_id,
-            [MatchResult(listing=listing, score=90, reasoning="Better fit")],
+            [
+                (
+                    MatchResult(listing=listing, score=90, reasoning="Better fit"),
+                    "strong_match",
+                )
+            ],
         )
 
-        rows = await conn.fetch("SELECT score, reasoning FROM run_listings WHERE run_id = $1", run_id)
+        rows = await conn.fetch(
+            "SELECT score, reasoning, band FROM run_listings WHERE run_id = $1", run_id
+        )
 
     assert len(rows) == 1
     assert rows[0]["score"] == 90
     assert rows[0]["reasoning"] == "Better fit"
+    assert rows[0]["band"] == "strong_match"
 
 
 @pytest.mark.asyncio
@@ -425,8 +446,8 @@ async def test_get_run_listings_returns_scored_listings_for_run(db_pool):
             conn,
             run_id,
             [
-                MatchResult(listing=listing_a, score=80, reasoning="Good"),
-                MatchResult(listing=listing_b, score=60, reasoning="Ok"),
+                (MatchResult(listing=listing_a, score=80, reasoning="Good"), "competitive"),
+                (MatchResult(listing=listing_b, score=60, reasoning="Ok"), "reach"),
             ],
         )
 
@@ -434,4 +455,5 @@ async def test_get_run_listings_returns_scored_listings_for_run(db_pool):
 
     assert len(run_listings) == 2
     assert {rl.score for rl in run_listings} == {80, 60}
+    assert {rl.band for rl in run_listings} == {"competitive", "reach"}
     assert all(rl.run_id == run_id for rl in run_listings)

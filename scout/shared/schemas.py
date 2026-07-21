@@ -40,6 +40,7 @@ class RunListing(BaseModel):
     listing_id: int
     score: int
     reasoning: str
+    band: str
 
 
 class ListingScore(BaseModel):
