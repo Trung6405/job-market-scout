@@ -142,11 +142,11 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
             ("finish_run", run_id, listings_scraped, listings_scored)
         )
 
-    async def _fake_render_run(conn, run_id, settings):
+    async def _fake_render_run(conn, run_id, settings, has_profile=False):
         calls.append(("render_run", run_id))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
-    async def _fake_render_history(conn, settings):
+    async def _fake_render_history(conn, settings, has_profile=False):
         calls.append("render_history")
         return Path("reports/history.html")
 
@@ -267,12 +267,12 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
     async def _fake_record_listing_gaps(conn, run_id, gaps_by_match):
         pass
 
-    async def _fake_render_run(conn, run_id, settings):
-        calls.append(("render_run", conn, run_id, settings))
+    async def _fake_render_run(conn, run_id, settings, has_profile=False):
+        calls.append(("render_run", conn, run_id, settings, has_profile))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
-    async def _fake_render_history(conn, settings):
-        calls.append(("render_history", conn, settings))
+    async def _fake_render_history(conn, settings, has_profile=False):
+        calls.append(("render_history", conn, settings, has_profile))
         return Path("reports/history.html")
 
     def _fake_render_profile(profile_arg, settings):
@@ -302,8 +302,10 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
     assert calls[1][0] == "render_run"
     assert calls[1][2] == 1
     assert calls[1][3] is default_settings
+    assert calls[1][4] is True  # has_profile — a profile was loaded
     assert calls[2][0] == "render_history"
     assert calls[2][2] is default_settings
+    assert calls[2][3] is True  # has_profile
     assert calls[3][0] == "render_profile"
     assert calls[3][1] is profile
     assert calls[3][2] is default_settings
@@ -372,11 +374,11 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
 
     render_calls = []
 
-    async def _fake_render_run(conn, run_id, settings):
+    async def _fake_render_run(conn, run_id, settings, has_profile=False):
         render_calls.append(("render_run", run_id))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
-    async def _fake_render_history(conn, settings):
+    async def _fake_render_history(conn, settings, has_profile=False):
         render_calls.append("render_history")
         return Path("reports/history.html")
 
@@ -473,11 +475,11 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
     async def _fake_record_listing_gaps(conn, run_id, gaps_by_match):
         calls.append(("record_listing_gaps", run_id, gaps_by_match))
 
-    async def _fake_render_run(conn, run_id, settings):
+    async def _fake_render_run(conn, run_id, settings, has_profile=False):
         calls.append(("render_run", run_id))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
-    async def _fake_render_history(conn, settings):
+    async def _fake_render_history(conn, settings, has_profile=False):
         calls.append("render_history")
         return Path("reports/history.html")
 
@@ -583,12 +585,12 @@ async def test_scout_pipeline_agent_skips_gap_detection_when_no_profile(monkeypa
     async def _fake_record_listing_gaps(conn, run_id, gaps_by_match):
         calls.append("record_listing_gaps")
 
-    async def _fake_render_run(conn, run_id, settings):
-        calls.append(("render_run", run_id))
+    async def _fake_render_run(conn, run_id, settings, has_profile=False):
+        calls.append(("render_run", run_id, has_profile))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
-    async def _fake_render_history(conn, settings):
-        calls.append("render_history")
+    async def _fake_render_history(conn, settings, has_profile=False):
+        calls.append(("render_history", has_profile))
         return Path("reports/history.html")
 
     def _fake_render_profile(profile_arg, settings):
@@ -618,8 +620,8 @@ async def test_scout_pipeline_agent_skips_gap_detection_when_no_profile(monkeypa
     assert "record_listing_gaps" not in calls
     assert "finish_run" in calls
     assert "briefing" in calls
-    assert ("render_run", 1) in calls
-    assert "render_history" in calls
+    assert ("render_run", 1, False) in calls  # has_profile is False — no profile.json
+    assert ("render_history", False) in calls
     assert not any(
         isinstance(c, tuple) and c[0] == "render_profile" for c in calls
     )

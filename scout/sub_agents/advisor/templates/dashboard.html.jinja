@@ -81,7 +81,11 @@
     <nav class="nav">
       <a class="active" href="dashboard.html">Today</a>
       <a href="../history.html">History</a>
+      {% if has_profile %}
       <a href="../profile.html">My Profile</a>
+      {% else %}
+      <span style="opacity:.4">My Profile</span>
+      {% endif %}
     </nav>
   </header>
 

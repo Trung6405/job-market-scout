@@ -126,8 +126,11 @@ class ScoutPipelineAgent(BaseAgent):
                     listings_scored=len(scores),
                 )
 
-                report_paths = await render_run(conn, run_id, settings)
-                await render_history(conn, settings)
+                has_profile = profile is not None
+                report_paths = await render_run(
+                    conn, run_id, settings, has_profile=has_profile
+                )
+                await render_history(conn, settings, has_profile=has_profile)
                 if profile is not None:
                     render_profile(profile, settings)
                 yield _status_event(
