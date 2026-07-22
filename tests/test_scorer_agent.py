@@ -5,6 +5,7 @@ from google.adk.models.lite_llm import LiteLlm
 
 from scout.config import Settings
 from scout.prompts import build_scorer_instruction
+from scout.shared.profile import render_profile_text
 from scout.shared.schemas import Listing, ListingScoreBatch
 from scout.sub_agents.scorer.agent import build_scorer_agent
 
@@ -23,13 +24,14 @@ def _make_listing(**overrides):
     defaults.update(overrides)
     return Listing(**defaults)
 
-def test_build_scorer_instruction_includes_resume_and_listing_titles():
+def test_build_scorer_instruction_includes_profile_and_listing_titles():
     settings = Settings()
     listings = [_make_listing(title="Platform Engineer")]
 
     instruction = build_scorer_instruction(settings, listings)
 
-    assert settings.resume_text in instruction
+    assert render_profile_text(settings.profile) in instruction
+    assert "Candidate profile:" in instruction
     assert "Platform Engineer" in instruction
 
 def test_build_scorer_instruction_includes_external_id_for_joining():
