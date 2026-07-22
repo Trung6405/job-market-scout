@@ -14,11 +14,37 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # The pipeline's persist step opens a real Postgres connection (scout/agent.py),
+    # so the test suite needs a live DB — matching the compose stack the app runs
+    # against everywhere else. Published on 5433 to line up with the default
+    # DATABASE_URL (postgresql://scout:scout@localhost:5433/scout).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: scout
+          POSTGRES_PASSWORD: scout
+          POSTGRES_DB: scout
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U scout"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://scout:scout@localhost:5433/scout
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Provide resume placeholder for tests
+        run: cp scout/resume.txt.example scout/resume.txt
+      - name: Load DB schema
+        # The persist path assumes tables already exist (schema is normally applied
+        # inside track_listings, which the entrypoint test mocks). Apply it up front.
+        run: PGPASSWORD=scout psql -h localhost -p 5433 -U scout -d scout -f scout/shared/schema.sql
       - name: Install deps and run pytest
         run: |
           python -m pip install --upgrade pip
@@ -27,6 +53,9 @@ jobs:
 
   deploy:
     needs: test
+    # Only deploy from main. A manual dispatch on a feature branch then runs the
+    # test job alone — useful for verifying CI without touching the VM.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
       APP_DIR: /opt/job-market-scout

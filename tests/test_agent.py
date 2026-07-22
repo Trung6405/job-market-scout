@@ -27,6 +27,22 @@ _USER_ID = "scout"
 _SESSION_ID = "scout"
 
 
+@pytest.fixture(autouse=True)
+def _gmail_configured_for_briefing():
+    """The pipeline only runs briefing when Gmail creds are set
+    (scout/agent.py). Configure them on the shared settings singleton so these
+    tests exercise the briefing path deterministically, independent of whether
+    a local scout/.env supplies GMAIL_ADDRESS / GMAIL_APP_PASSWORD."""
+    saved = (default_settings.gmail_address, default_settings.gmail_app_password)
+    object.__setattr__(default_settings, "gmail_address", "scout@example.com")
+    object.__setattr__(default_settings, "gmail_app_password", "app-password")
+    try:
+        yield
+    finally:
+        object.__setattr__(default_settings, "gmail_address", saved[0])
+        object.__setattr__(default_settings, "gmail_app_password", saved[1])
+
+
 def _make_profile(**overrides):
     defaults = dict(
         name="Test Student",
@@ -410,6 +426,11 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
     monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
     monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
     monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
+    # scout/profile.json is a tracked placeholder present in CI, which would send
+    # this test down the advisor's real LLM call. Gap detection has its own test
+    # (test_scout_pipeline_agent_records_gaps_when_profile_exists); here we take
+    # the documented no-profile path to keep the persist assertions hermetic.
+    monkeypatch.setattr("scout.agent.load_profile", lambda path: None)
 
     texts = await _run_pipeline_agent()
 
