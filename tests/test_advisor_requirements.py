@@ -9,6 +9,7 @@ from google.adk.models.lite_llm import LiteLlm
 
 from scout.config import Settings
 from scout.prompts import build_requirements_instruction
+from scout.shared.profile import render_profile_text
 from scout.shared.schemas import Listing, ListingRequirements, ListingRequirementsBatch
 from scout.sub_agents.advisor.agent import build_requirements_agent
 from scout.sub_agents.advisor.runner import parse_requirements, run_requirements_extraction
@@ -134,13 +135,13 @@ def test_build_requirements_instruction_truncates_description_to_char_limit():
     assert "x" * 20 in instruction
 
 
-def test_build_requirements_instruction_does_not_include_resume():
+def test_build_requirements_instruction_does_not_include_profile():
     settings = Settings()
     listings = [_make_listing()]
 
     instruction = build_requirements_instruction(settings, listings)
 
-    assert settings.resume_text not in instruction
+    assert render_profile_text(settings.profile) not in instruction
 
 
 def test_build_requirements_instruction_distinguishes_must_have_and_nice_to_have():

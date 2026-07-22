@@ -72,7 +72,6 @@ def test_settings_report_host_dir_reads_env_override(monkeypatch):
 
 def test_settings_uses_scorer_defaults_when_env_unset(monkeypatch):
     for var in (
-        "RESUME_PATH",
         "PREFERRED_LOCATIONS",
         "REMOTE_ONLY",
         "MIN_SALARY",
@@ -90,15 +89,7 @@ def test_settings_uses_scorer_defaults_when_env_unset(monkeypatch):
     assert settings.description_char_limit == 1500
 
 
-def test_settings_reads_resume_text_from_default_resume_path():
-    settings = Settings()
-
-    assert settings.resume_text.strip() != ""
-
-def test_settings_reads_scorer_env_overrides(monkeypatch, tmp_path):
-    resume_file = tmp_path / "custom_resume.txt"
-    resume_file.write_text("Senior backend engineer, 6 years Python.")
-    monkeypatch.setenv("RESUME_PATH", str(resume_file))
+def test_settings_reads_scorer_env_overrides(monkeypatch):
     monkeypatch.setenv("PREFERRED_LOCATIONS", "Sydney, Remote")
     monkeypatch.setenv("REMOTE_ONLY", "true")
     monkeypatch.setenv("MIN_SALARY", "120000")
@@ -107,19 +98,11 @@ def test_settings_reads_scorer_env_overrides(monkeypatch, tmp_path):
 
     settings = Settings()
 
-    assert settings.resume_text == "Senior backend engineer, 6 years Python."
     assert settings.preferred_locations == ["Sydney", "Remote"]
     assert settings.remote_only is True
     assert settings.min_salary == 120000.0
     assert settings.min_match_score == 75
     assert settings.description_char_limit == 800
-
-def test_settings_raises_when_resume_path_missing(monkeypatch):
-    monkeypatch.setenv("RESUME_PATH", "does/not/exist.txt")
-
-    with pytest.raises(FileNotFoundError):
-        Settings()
-
 
 def test_settings_uses_database_url_default_when_env_unset(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
