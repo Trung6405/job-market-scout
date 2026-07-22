@@ -53,6 +53,9 @@ jobs:
 
   deploy:
     needs: test
+    # Only deploy from main. A manual dispatch on a feature branch then runs the
+    # test job alone — useful for verifying CI without touching the VM.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
       APP_DIR: /opt/job-market-scout
