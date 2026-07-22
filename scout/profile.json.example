@@ -1,0 +1,106 @@
+{
+  "name": "Minh Nguyen",
+  "target_role": "Junior / Graduate Software Engineer",
+  "target_locations": ["Sydney", "Melbourne", "Remote (AU)"],
+  "tech_stack": [
+    {
+      "category": "Languages",
+      "skills": [
+        {"name": "Python", "proficiency": 4, "note": "2 yrs"},
+        {"name": "JavaScript", "proficiency": 3, "note": "1.5 yrs"},
+        {"name": "SQL", "proficiency": 2, "note": "coursework"},
+        {"name": "TypeScript", "proficiency": 1, "note": "learning"}
+      ]
+    },
+    {
+      "category": "Frontend",
+      "skills": [
+        {"name": "React", "proficiency": 3},
+        {"name": "HTML / CSS", "proficiency": 4},
+        {"name": "Responsive design", "proficiency": 3}
+      ]
+    },
+    {
+      "category": "Backend",
+      "skills": [
+        {"name": "Flask", "proficiency": 3},
+        {"name": "REST API design", "proficiency": 3},
+        {"name": "FastAPI", "proficiency": 2, "note": "light"}
+      ]
+    },
+    {
+      "category": "Databases",
+      "skills": [
+        {"name": "SQLite", "proficiency": 3},
+        {"name": "PostgreSQL", "proficiency": 1, "note": "gap"},
+        {"name": "Data modelling", "proficiency": 2}
+      ]
+    },
+    {
+      "category": "Tooling & Testing",
+      "skills": [
+        {"name": "Git / GitHub", "proficiency": 4},
+        {"name": "pytest / unit testing", "proficiency": 3},
+        {"name": "Docker", "proficiency": 1, "note": "basics"}
+      ]
+    },
+    {
+      "category": "Cloud & DevOps",
+      "skills": [
+        {"name": "GitHub Pages / CI", "proficiency": 2},
+        {"name": "AWS", "proficiency": 1, "note": "gap"},
+        {"name": "Linux CLI", "proficiency": 3}
+      ]
+    }
+  ],
+  "domain_knowledge": [
+    {
+      "name": "Web application development",
+      "proficiency": 75,
+      "description": "Full request-to-DB-to-UI loop across 2 projects; understands client/server split, auth basics."
+    },
+    {
+      "name": "Automation & bots",
+      "proficiency": 70,
+      "description": "Built and shipped a Discord bot (~200 users): scheduling, event handling, API integration."
+    },
+    {
+      "name": "CS fundamentals",
+      "proficiency": 65,
+      "description": "Data structures, algorithms, complexity - strong coursework, moderate applied practice."
+    },
+    {
+      "name": "Data / backend systems",
+      "proficiency": 35,
+      "description": "Comfortable with small SQLite apps; limited production database or scaling experience."
+    },
+    {
+      "name": "Cloud & distributed systems",
+      "proficiency": 20,
+      "description": "Conceptual only - no hands-on AWS/containers-at-scale work yet."
+    }
+  ],
+  "background": {
+    "education": "B.Sc. Computer Science - Univ. of Melbourne (2026)",
+    "experience": "0.5 yrs - 1 internship + coursework",
+    "preferred_roles": ["Software Engineer", "Backend Developer", "Full-Stack"],
+    "locations": ["Sydney", "Melbourne", "Remote (AU)"]
+  },
+  "projects": [
+    {
+      "title": "Recipe-sharing web app",
+      "description": "React + Flask + REST API; 3-person uni team project.",
+      "tags": ["React", "Flask", "REST", "SQLite", "Git"]
+    },
+    {
+      "title": "Discord study-group bot",
+      "description": "Python; scheduling, reminders, ~200 users on campus.",
+      "tags": ["Python", "async", "API integration", "automation"]
+    },
+    {
+      "title": "Personal portfolio site",
+      "description": "Static HTML/CSS/JS, deployed on GitHub Pages.",
+      "tags": ["HTML/CSS", "JavaScript", "CI"]
+    }
+  ]
+}

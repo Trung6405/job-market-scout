@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daily Briefing · Job Market Scout</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#ffffff; --ink:#161a22; --muted:#697086;
+    --line:#e7e9ee; --accent:#4f46e5; --accent-soft:#eef0fe;
+    --strong-bg:#e7f6ec; --strong-ink:#1c7c43;
+    --comp-bg:#fdf2df; --comp-ink:#9a6a10;
+    --reach-bg:#fdecec; --reach-ink:#b23434;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:960px;margin:0 auto;padding:28px 20px 64px}
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:6px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.01em}
+  .brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);
+    display:grid;place-items:center;color:#fff;font-size:15px}
+  .nav{display:flex;gap:6px}
+  .nav a{font-size:13px;color:var(--muted);padding:7px 12px;border-radius:9px}
+  .nav a.active{color:var(--ink);background:var(--panel);border:1px solid var(--line)}
+  .daybar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin:4px 0 8px}
+  .daynav{font-size:13px;color:var(--muted);padding:6px 10px;border-radius:8px}
+  .daynav:hover{background:var(--bg)}
+  .daynav.disabled{opacity:.4;pointer-events:none}
+  .today{display:flex;align-items:center;gap:8px}
+  .today .cur{font-weight:650;font-size:14px}
+  .tag-today{font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-soft);
+    border-radius:999px;padding:2px 9px}
+  .run-meta{color:var(--muted);font-size:13px;margin:2px 0 22px}
+  .run-meta a{text-decoration:none}
+  h1{font-size:23px;margin:0 0 2px;letter-spacing:-.02em}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 22px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+  .stat .n{font-size:24px;font-weight:700;letter-spacing:-.02em}
+  .stat .l{font-size:12px;color:var(--muted);margin-top:2px}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .chip{font-size:12.5px;border:1px solid var(--line);background:var(--panel);color:var(--muted);
+    padding:6px 12px;border-radius:999px;cursor:pointer;user-select:none}
+  .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .list{display:flex;flex-direction:column;gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 18px;display:flex;gap:16px;align-items:center;transition:border-color .15s,transform .05s}
+  .card:hover{border-color:#cfd3de}
+  .card:active{transform:translateY(1px)}
+  .score{flex:0 0 auto;width:58px;height:58px;border-radius:12px;background:var(--accent-soft);
+    color:var(--accent);display:grid;place-items:center;font-weight:700;font-size:20px;position:relative}
+  .score small{position:absolute;bottom:6px;font-size:9px;font-weight:600;color:#8b8ff0}
+  .main{flex:1 1 auto;min-width:0}
+  .title{font-weight:650;font-size:15.5px;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:13px;margin-top:2px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .sub .sep{opacity:.5}
+  .gaps{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+  .gap{font-size:11.5px;background:#f1f2f6;color:#5a6072;border-radius:6px;padding:3px 8px}
+  .gap.must{background:#fdecec;color:#b23434}
+  .band{flex:0 0 auto;font-size:12px;font-weight:650;padding:6px 12px;border-radius:999px;white-space:nowrap}
+  .band.strong{background:var(--strong-bg);color:var(--strong-ink)}
+  .band.comp{background:var(--comp-bg);color:var(--comp-ink)}
+  .band.reach{background:var(--reach-bg);color:var(--reach-ink)}
+  .arrow{flex:0 0 auto;color:#c2c6d2;font-size:18px}
+  .disclaimer{margin-top:26px;font-size:12px;color:var(--muted);background:var(--panel);
+    border:1px dashed var(--line);border-radius:12px;padding:12px 14px}
+  @media(max-width:640px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .band{display:none}
+    .nav a:not(.active){display:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="dot">◎</span> Job Market Scout</div>
+    <nav class="nav">
+      <a class="active" href="dashboard.html">Today</a>
+      <a href="../history.html">History</a>
+      {% if has_profile %}
+      <a href="../profile.html">My Profile</a>
+      {% else %}
+      <span style="opacity:.4">My Profile</span>
+      {% endif %}
+    </nav>
+  </header>
+
+  <div class="daybar">
+    <span class="daynav disabled" title="Previous day">‹</span>
+    <div class="today">
+      <span class="cur">{{ run.run_date.strftime('%a %d %b %Y') }}</span>
+      <span class="tag-today">Today</span>
+    </div>
+    <span class="daynav disabled" title="Next day">›</span>
+  </div>
+  <div class="run-meta">Run started {{ run.started_at.strftime('%H:%M') }} · {{ run.listings_scraped }} listings scraped · {{ run.listings_scored }} new/changed scored · <a href="../history.html" style="color:var(--accent)">all daily reports ›</a></div>
+
+  <h1>Today's briefing</h1>
+  <p class="run-meta" style="margin-top:0">Here are today's best-matched roles.</p>
+
+  <div class="stats">
+    <div class="stat"><div class="n">{{ stats.scored }}</div><div class="l">Roles scored</div></div>
+    <div class="stat"><div class="n">{{ stats.strong }}</div><div class="l">Strong matches</div></div>
+    <div class="stat"><div class="n">{{ stats.avg_score }}</div><div class="l">Avg fit score</div></div>
+    <div class="stat"><div class="n">{{ stats.gaps }}</div><div class="l">Skill gaps to close</div></div>
+  </div>
+
+  <div class="filters">
+    <span class="chip on">All bands</span>
+    <span class="chip">Strong-match</span>
+    <span class="chip">Competitive</span>
+    <span class="chip">Reach</span>
+  </div>
+
+  <div class="list">
+    {% for detail in details %}
+    <a class="card" href="job-detail-{{ detail.run_listing_id }}.html">
+      <div class="score">{{ detail.score }}<small>FIT</small></div>
+      <div class="main">
+        <div class="title">{{ detail.listing.title }}</div>
+        <div class="sub">
+          <span>{{ detail.listing.company }}</span><span class="sep">·</span>
+          <span>{{ detail.listing.location }}{% if detail.listing.is_remote %} (Remote){% endif %}</span><span class="sep">·</span>
+          <span>{{ detail.listing|format_salary }}</span>
+        </div>
+        <div class="gaps">
+          {% for gap in detail.gaps %}
+          <span class="gap{% if gap.requirement_level == 'must_have' %} must{% endif %}">{{ gap.skill }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      <span class="band {{ detail.band|band_css }}">{{ detail.band|band_label }}</span>
+      <span class="arrow">›</span>
+    </a>
+    {% endfor %}
+  </div>
+
+  <div class="disclaimer">
+    <strong>How to read this:</strong> the <em>fit score</em> measures how well a role matches your profile.
+    The <em>band</em> is a rough estimate of fit — <strong>not a guarantee of an offer</strong>. Success also depends
+    on the applicant pool and interview performance. Skill gaps come with free learning resources on each job's page.
+  </div>
+</div>
+
+<script>
+  // Prototype-only: band filter + chip toggle (no backend)
+  const chips = document.querySelectorAll('.filters .chip');
+  const cards = document.querySelectorAll('.list .card');
+  const bandClass = {'Strong-match':'strong','Competitive':'comp','Reach':'reach'};
+  chips.forEach(chip => chip.addEventListener('click', () => {
+    chips.forEach(c => c.classList.remove('on'));
+    chip.classList.add('on');
+    const want = chip.textContent.trim();
+    cards.forEach(card => {
+      const b = card.querySelector('.band');
+      const show = want === 'All bands' || (b && b.classList.contains(bandClass[want]));
+      card.style.display = show ? '' : 'none';
+    });
+  }));
+</script>
+</body>
+</html>

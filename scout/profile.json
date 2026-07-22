@@ -1,0 +1,84 @@
+{
+  "name": "Candidate",
+  "target_role": "Backend / Platform Engineer",
+  "target_locations": ["Remote", "Ho Chi Minh City"],
+  "tech_stack": [
+    {
+      "category": "Languages",
+      "skills": [
+        {"name": "Python", "proficiency": 4, "note": "Primary language for 3+ years; FastAPI, asyncio, pytest"},
+        {"name": "Go", "proficiency": 3, "note": "Built two internal CLI tools and a gRPC microservice"},
+        {"name": "SQL", "proficiency": 3, "note": "Comfortable with joins, window functions, query tuning"}
+      ]
+    },
+    {
+      "category": "Backend",
+      "skills": [
+        {"name": "REST API design", "proficiency": 4, "note": null},
+        {"name": "gRPC", "proficiency": 3, "note": null},
+        {"name": "Distributed systems", "proficiency": 3, "note": "Studied via coursework and side projects, not production scale"},
+        {"name": "Message queues (Kafka/RabbitMQ)", "proficiency": 2, "note": "Used RabbitMQ in one project, mostly tutorial-level"}
+      ]
+    },
+    {
+      "category": "Infrastructure",
+      "skills": [
+        {"name": "Docker", "proficiency": 4, "note": null},
+        {"name": "Kubernetes", "proficiency": 2, "note": "Deployed toy apps to a local minikube cluster"},
+        {"name": "CI/CD (GitHub Actions)", "proficiency": 3, "note": null}
+      ]
+    },
+    {
+      "category": "Databases",
+      "skills": [
+        {"name": "PostgreSQL", "proficiency": 3, "note": null},
+        {"name": "Redis", "proficiency": 2, "note": "Used for caching and rate limiting"}
+      ]
+    }
+  ],
+  "domain_knowledge": [
+    {
+      "name": "Backend / platform engineering",
+      "proficiency": 60,
+      "description": "Builds backend services in Python and Go; comfortable with REST/gRPC APIs and SQL databases."
+    },
+    {
+      "name": "Distributed systems",
+      "proficiency": 40,
+      "description": "Working familiarity from resume; no further detail available yet."
+    },
+    {
+      "name": "Cloud infrastructure",
+      "proficiency": 35,
+      "description": "Hands-on with Docker and basic Kubernetes; limited production experience with cloud providers (AWS/GCP)."
+    },
+    {
+      "name": "Data pipelines",
+      "proficiency": 20,
+      "description": "Minimal exposure; one coursework project using Airflow."
+    }
+  ],
+  "background": {
+    "education": "B.S. in Computer Science, FPT University (expected 2026)",
+    "experience": "6-month backend engineering internship building internal REST APIs and CI pipelines; contributor to two open-source Python tooling projects",
+    "preferred_roles": ["Backend Engineer", "Platform Engineer", "Site Reliability Engineer"],
+    "locations": ["Remote", "Ho Chi Minh City"]
+  },
+  "projects": [
+    {
+      "title": "Job Market Scout",
+      "description": "Multi-agent pipeline that scrapes job listings, scores them against a candidate profile, and generates advisor reports.",
+      "tags": ["Python", "FastAPI", "LLM agents", "SQL"]
+    },
+    {
+      "title": "Order Processing Service",
+      "description": "Internship project: a Go microservice handling order events over gRPC with a PostgreSQL-backed store and Redis caching.",
+      "tags": ["Go", "gRPC", "PostgreSQL", "Redis"]
+    },
+    {
+      "title": "Log Aggregation CLI",
+      "description": "Command-line tool in Python for tailing and filtering structured logs across multiple services, with a plugin system for custom parsers.",
+      "tags": ["Python", "CLI", "Open source"]
+    }
+  ]
+}

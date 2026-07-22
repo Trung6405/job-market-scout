@@ -46,6 +46,11 @@ def _env_optional_float(name: str) -> float | None:
     return float(raw) if raw else None
 
 
+def _env_optional_str(name: str) -> str | None:
+    raw = os.getenv(name)
+    return raw if raw else None
+
+
 @dataclass(frozen=True)
 class Settings:
     jobspy_mcp_url: str = field(
@@ -65,12 +70,32 @@ class Settings:
     search_locations: list[str] = field(
         default_factory=partial(_env_csv, "SEARCH_LOCATIONS", "Remote")
     )
+    search_site_names: list[str] = field(
+        default_factory=partial(
+            _env_csv,
+            "SEARCH_SITE_NAMES",
+            "indeed,linkedin,zip_recruiter,glassdoor,google",
+        )
+    )
     results_wanted: int = field(
         default_factory=partial(_env_int, "RESULTS_WANTED", 20)
     )
     hours_old: int = field(default_factory=partial(_env_int, "HOURS_OLD", 72))
     resume_path: str = field(
         default_factory=partial(_env_str, "RESUME_PATH", _DEFAULT_RESUME_PATH)
+    )
+    profile_path: str = field(
+        default_factory=partial(
+            _env_str,
+            "PROFILE_PATH",
+            str(Path(__file__).resolve().parent / "profile.json"),
+        )
+    )
+    report_output_dir: str = field(
+        default_factory=partial(_env_str, "REPORT_OUTPUT_DIR", "reports")
+    )
+    report_host_dir: str | None = field(
+        default_factory=partial(_env_optional_str, "REPORT_HOST_DIR")
     )
     preferred_locations: list[str] = field(
         default_factory=partial(_env_csv, "PREFERRED_LOCATIONS", "")
@@ -84,8 +109,14 @@ class Settings:
     min_match_score: int = field(
         default_factory=partial(_env_int, "MIN_MATCH_SCORE", 60)
     )
+    strong_match_score: int = field(
+        default_factory=partial(_env_int, "STRONG_MATCH_SCORE", 85)
+    )
     description_char_limit: int = field(
         default_factory=partial(_env_int, "DESCRIPTION_CHAR_LIMIT", 1500)
+    )
+    run_date_override: str | None = field(
+        default_factory=partial(_env_optional_str, "RUN_DATE")
     )
     database_url: str = field(
         default_factory=partial(

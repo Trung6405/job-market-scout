@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from email.message import EmailMessage
+from pathlib import Path
 
 from scout.config import Settings
 from scout.config import settings as default_settings
@@ -16,6 +17,7 @@ async def run_briefing(
     listings: list[Listing],
     scores: list[ListingScore],
     settings: Settings | None = None,
+    report_path: Path | None = None,
 ) -> EmailMessage:
     active_settings = settings or default_settings
     ensure_gmail_configured(active_settings)
@@ -26,6 +28,6 @@ async def run_briefing(
         if top_matches
         else None
     )
-    message = build_email(top_matches, prose, active_settings)
+    message = build_email(top_matches, prose, active_settings, report_path=report_path)
     send_email(message, active_settings)
     return message

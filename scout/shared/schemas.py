@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -25,6 +25,24 @@ class MatchResult(BaseModel):
     reasoning: str
 
 
+class Run(BaseModel):
+    id: int
+    run_date: date
+    started_at: datetime
+    finished_at: datetime | None = None
+    listings_scraped: int
+    listings_scored: int
+
+
+class RunListing(BaseModel):
+    id: int
+    run_id: int
+    listing_id: int
+    score: int
+    reasoning: str
+    band: str
+
+
 class ListingScore(BaseModel):
     source: str
     external_id: str
@@ -36,6 +54,22 @@ class ListingScoreBatch(BaseModel):
     scores: list[ListingScore]
 
 
+class ListingRequirements(BaseModel):
+    source: str
+    external_id: str
+    must_have: list[str]
+    nice_to_have: list[str]
+
+
+class ListingRequirementsBatch(BaseModel):
+    requirements: list[ListingRequirements]
+
+
+class SkillGap(BaseModel):
+    skill: str
+    requirement_level: str
+
+
 class BriefingTakeaway(BaseModel):
     source: str
     external_id: str
@@ -45,3 +79,62 @@ class BriefingTakeaway(BaseModel):
 class BriefingProse(BaseModel):
     intro: str
     takeaways: list[BriefingTakeaway]
+
+
+class TechSkill(BaseModel):
+    name: str
+    proficiency: int = Field(ge=1, le=5)
+    note: str | None = None
+
+
+class TechCategory(BaseModel):
+    category: str
+    skills: list[TechSkill]
+
+
+class DomainKnowledge(BaseModel):
+    name: str
+    proficiency: int = Field(ge=0, le=100)
+    description: str
+
+    @property
+    def level(self) -> str:
+        if self.proficiency >= 70:
+            return "Solid"
+        if self.proficiency >= 50:
+            return "Good"
+        if self.proficiency >= 30:
+            return "Developing"
+        return "Emerging"
+
+
+class Background(BaseModel):
+    education: str
+    experience: str
+    preferred_roles: list[str]
+    locations: list[str]
+
+
+class Project(BaseModel):
+    title: str
+    description: str
+    tags: list[str]
+
+
+class RunListingDetail(BaseModel):
+    run_listing_id: int
+    listing: Listing
+    score: int
+    reasoning: str
+    band: str
+    gaps: list[SkillGap]
+
+
+class Profile(BaseModel):
+    name: str
+    target_role: str
+    target_locations: list[str]
+    tech_stack: list[TechCategory]
+    domain_knowledge: list[DomainKnowledge]
+    background: Background
+    projects: list[Project]

@@ -217,6 +217,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 .worktrees/
+.claude/worktrees/
 
 # ADK local runtime session cache
 scout/.adk/
@@ -227,4 +228,9 @@ scout/resume.txt
 
 agent_plans/
 agent_docs/
-plans/
+
+# subagent-driven-development scratch (task briefs, reports, review diffs)
+.superpowers/
+
+# Advisor report output (rendered HTML, mounted as a Docker volume)
+/reports/

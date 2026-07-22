@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from email.message import EmailMessage
+from pathlib import Path
 
 import pytest
 
@@ -37,7 +38,7 @@ async def test_run_briefing_summarizes_and_sends_when_matches_qualify(monkeypatc
         summarize_calls.append(top_matches)
         return BriefingProse(intro="Nice matches.", takeaways=[])
 
-    def _fake_build(top_matches, prose, active_settings):
+    def _fake_build(top_matches, prose, active_settings, report_path=None):
         build_calls.append((top_matches, prose))
         return EmailMessage()
 
@@ -63,6 +64,44 @@ async def test_run_briefing_summarizes_and_sends_when_matches_qualify(monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_run_briefing_threads_report_path_to_build_email(monkeypatch):
+    match = _make_match("1", "Platform Engineer", 88)
+    listing, score = _listing_and_score(match)
+    settings = Settings(
+        min_match_score=60,
+        gmail_address="scout@example.com",
+        gmail_app_password="secret",
+    )
+    report_path = Path("reports/2026-07-21/dashboard.html")
+
+    build_calls = []
+
+    async def _fake_summarize(top_matches, active_settings):
+        return BriefingProse(intro="Nice matches.", takeaways=[])
+
+    def _fake_build(top_matches, prose, active_settings, report_path=None):
+        build_calls.append(report_path)
+        return EmailMessage()
+
+    def _fake_send(message, active_settings):
+        pass
+
+    monkeypatch.setattr(
+        "scout.sub_agents.briefing.briefing.summarize_matches", _fake_summarize
+    )
+    monkeypatch.setattr(
+        "scout.sub_agents.briefing.briefing.build_email", _fake_build
+    )
+    monkeypatch.setattr(
+        "scout.sub_agents.briefing.briefing.send_email", _fake_send
+    )
+
+    await run_briefing([listing], [score], settings, report_path=report_path)
+
+    assert build_calls == [report_path]
+
+
+@pytest.mark.asyncio
 async def test_run_briefing_skips_summarize_when_no_matches_qualify(monkeypatch):
     match = _make_match("1", "Platform Engineer", 10)
     listing, score = _listing_and_score(match)
@@ -79,7 +118,7 @@ async def test_run_briefing_skips_summarize_when_no_matches_qualify(monkeypatch)
         summarize_calls.append(top_matches)
         return BriefingProse(intro="", takeaways=[])
 
-    def _fake_build(top_matches, prose, active_settings):
+    def _fake_build(top_matches, prose, active_settings, report_path=None):
         build_calls.append((top_matches, prose))
         return EmailMessage()
 

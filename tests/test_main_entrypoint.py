@@ -38,7 +38,7 @@ async def test_run_once_completes_without_raising(monkeypatch):
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings):
+    async def _fake_run_briefing(listings, scores, settings, report_path=None):
         return EmailMessage()
 
     monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
