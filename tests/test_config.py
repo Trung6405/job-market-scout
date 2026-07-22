@@ -2,6 +2,19 @@ from scout.config import Settings
 
 import pytest
 
+
+def test_settings_loads_profile_object():
+    # Default PROFILE_PATH points at the committed scout/profile.json.
+    settings = Settings()
+    assert settings.profile.name  # a Profile object with a name
+
+
+def test_settings_missing_profile_raises(monkeypatch, tmp_path):
+    monkeypatch.setenv("PROFILE_PATH", str(tmp_path / "nope.json"))
+    with pytest.raises(FileNotFoundError):
+        Settings()
+
+
 def test_settings_uses_defaults_when_env_unset(monkeypatch):
     for var in (
         "JOBSPY_MCP_URL",

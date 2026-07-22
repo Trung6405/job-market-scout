@@ -7,6 +7,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from scout.shared.profile import load_profile
+from scout.shared.schemas import Profile
+
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
 _DEFAULT_RESUME_PATH = str(Path(__file__).resolve().parent / "resume.txt")
@@ -133,9 +136,11 @@ class Settings:
         default_factory=partial(_env_str, "GMAIL_RECIPIENT", "")
     )
     resume_text: str = field(init=False)
+    profile: Profile = field(init=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "resume_text", _read_resume_text(self.resume_path))
+        object.__setattr__(self, "profile", load_profile(self.profile_path))
 
 
 settings = Settings()
