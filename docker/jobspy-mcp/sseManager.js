@@ -65,17 +65,26 @@ class SseManager {
   /**
    * Sends an update to the client for a given session, via that session's
    * own server instance.
+   *
+   * Per the MCP spec, progressToken is required on notifications/progress —
+   * and only present if the client asked for progress tracking on its
+   * request. Skip sending when there's no token to attach, since a
+   * tokenless progress notification fails client-side schema validation
+   * (it can't be distinguished from a malformed message of some other
+   * notification type).
    * @param {object} message - Message to broadcast
    * @param {string} sessionId - Session ID to notify
    */
   async notificationProgress(message, sessionId) {
     const entry = this.transports[sessionId];
     if (!entry) {return;}
+    const progressToken = this.progressTokens[sessionId];
+    if (!progressToken) {return;}
     await entry.server.server.notification({
       method: 'notifications/progress',
       params: {
         ...message,
-        progressToken: this.progressTokens[sessionId],
+        progressToken,
       },
     });
   }
