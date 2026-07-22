@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from scout.config import Settings
+from scout.shared.profile import render_profile_text
 from scout.shared.schemas import Listing, MatchResult
 
 def _project_listing_for_scoring(listing: Listing, description_char_limit: int) -> dict:
@@ -69,8 +70,8 @@ Give one short sentence of reasoning per listing that names the most
 significant missing required skill or seniority mismatch, if any. Do
 not invent listings beyond the ones provided, and do not call any tool.
 
-Resume:
-{settings.resume_text}
+Candidate profile:
+{render_profile_text(settings.profile)}
 
 Preferred locations: {settings.preferred_locations or "no preference"}
 Remote only: {settings.remote_only}
@@ -161,8 +162,8 @@ one-line takeaway per listing explaining why it's worth a look, based
 only on the title, company, and score given. Do not invent facts about
 any listing beyond what is given, and do not call any tool.
 
-Resume:
-{settings.resume_text}
+Candidate profile:
+{render_profile_text(settings.profile)}
 
 Today's top matches:
 {matches_json}

@@ -80,50 +80,38 @@ class ScoutPipelineAgent(BaseAgent):
                 run_id = await start_run(conn, run_date)
                 await record_run_listings(conn, run_id, banded_matches)
 
-                try:
-                    profile = load_profile(settings.profile_path)
-                except FileNotFoundError:
-                    profile = None
+                profile = load_profile(settings.profile_path)
 
-                if profile is None:
-                    yield _status_event(
-                        ctx,
-                        self.name,
-                        f"Gap detection: skipped (no profile at {settings.profile_path})",
+                requirements = await run_requirements_extraction(relevant, settings)
+                requirements_by_key = {
+                    (r.source, r.external_id): r for r in requirements
+                }
+                matches_with_requirements = [
+                    (
+                        match,
+                        requirements_by_key[
+                            (match.listing.source, match.listing.external_id)
+                        ],
                     )
-                else:
-                    requirements = await run_requirements_extraction(
-                        relevant, settings
-                    )
-                    requirements_by_key = {
-                        (r.source, r.external_id): r for r in requirements
-                    }
-                    matches_with_requirements = [
-                        (
-                            match,
-                            requirements_by_key[
-                                (match.listing.source, match.listing.external_id)
-                            ],
-                        )
-                        for match in matches
-                        if (match.listing.source, match.listing.external_id)
-                        in requirements_by_key
-                    ]
-                    checks_by_match = [
-                        (match, evaluate_requirements(req, profile))
-                        for match, req in matches_with_requirements
-                    ]
-                    await record_listing_gaps(conn, run_id, checks_by_match)
-                    await record_listing_meta(conn, run_id, matches_with_requirements)
-                    gap_count = sum(
-                        1 for _, checks in checks_by_match for c in checks if not c.met
-                    )
-                    yield _status_event(
-                        ctx,
-                        self.name,
-                        f"Gaps detected: {gap_count} "
-                        f"across {len(checks_by_match)} listing(s)",
-                    )
+                    for match in matches
+                    if (match.listing.source, match.listing.external_id)
+                    in requirements_by_key
+                ]
+                checks_by_match = [
+                    (match, evaluate_requirements(req, profile))
+                    for match, req in matches_with_requirements
+                ]
+                await record_listing_gaps(conn, run_id, checks_by_match)
+                await record_listing_meta(conn, run_id, matches_with_requirements)
+                gap_count = sum(
+                    1 for _, checks in checks_by_match for c in checks if not c.met
+                )
+                yield _status_event(
+                    ctx,
+                    self.name,
+                    f"Gaps detected: {gap_count} "
+                    f"across {len(checks_by_match)} listing(s)",
+                )
 
                 await finish_run(
                     conn,
@@ -132,13 +120,11 @@ class ScoutPipelineAgent(BaseAgent):
                     listings_scored=len(matches),
                 )
 
-                has_profile = profile is not None
                 report_paths = await render_run(
-                    conn, run_id, settings, has_profile=has_profile
+                    conn, run_id, settings, has_profile=True
                 )
-                await render_history(conn, settings, has_profile=has_profile)
-                if profile is not None:
-                    render_profile(profile, settings)
+                await render_history(conn, settings, has_profile=True)
+                render_profile(profile, settings)
                 yield _status_event(
                     ctx,
                     self.name,

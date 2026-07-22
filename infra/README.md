@@ -42,11 +42,11 @@ These are account/portal steps, outside the Bicep:
    ```
 2. **GitHub Actions — secrets & variables** (repo → Settings → Secrets and
    variables → Actions):
-   - **Secrets:** the 18 keys from [`scout/.env.example`](../scout/.env.example),
-     plus `VM_SSH_PRIVATE_KEY`, `RESUME_TEXT` (full contents of your
-     `scout/resume.txt` — it's gitignored, so `deploy.yml` renders it onto
-     the VM from this secret the same way it renders `.env`), and
+   - **Secrets:** the keys from [`scout/.env.example`](../scout/.env.example),
+     plus `VM_SSH_PRIVATE_KEY` and
      `AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID`.
+     The candidate source is `scout/profile.json`, which is committed and
+     reaches the VM via rsync — no resume secret is needed.
    - **Variables:** `VM_HOST` (VM public IP), `VM_USER` (default `azureuser`),
      `RESOURCE_GROUP`, `AZURE_LOCATION`.
 3. **Resource group** — pick a subscription and region, then:

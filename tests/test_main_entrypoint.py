@@ -45,10 +45,12 @@ async def test_run_once_completes_without_raising(monkeypatch):
     monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
     monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
     monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
-    # scout/profile.json is a tracked placeholder present in CI; without this stub
-    # run_once would take the advisor's real LLM path and fail on a missing API
-    # key. Skip the profile-dependent path to keep this smoke test hermetic.
-    monkeypatch.setattr("scout.agent.load_profile", lambda path: None)
+    # Profile is always present now (committed profile.json), so gap detection
+    # runs; mock the advisor LLM call so this smoke test stays hermetic.
+    async def _fake_requirements(listings, settings=None):
+        return []
+
+    monkeypatch.setattr("scout.agent.run_requirements_extraction", _fake_requirements)
 
     from scout.main import run_once
 

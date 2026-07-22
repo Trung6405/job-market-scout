@@ -39,8 +39,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Provide resume placeholder for tests
-        run: cp scout/resume.txt.example scout/resume.txt
       - name: Load DB schema
         # The persist path assumes tables already exist (schema is normally applied
         # inside track_listings, which the entrypoint test mocks). Apply it up front.
@@ -92,7 +90,6 @@ jobs:
           SEARCH_LOCATIONS: ${{ secrets.SEARCH_LOCATIONS }}
           RESULTS_WANTED: ${{ secrets.RESULTS_WANTED }}
           HOURS_OLD: ${{ secrets.HOURS_OLD }}
-          RESUME_PATH: ${{ secrets.RESUME_PATH }}
           PREFERRED_LOCATIONS: ${{ secrets.PREFERRED_LOCATIONS }}
           REMOTE_ONLY: ${{ secrets.REMOTE_ONLY }}
           MIN_SALARY: ${{ secrets.MIN_SALARY }}
@@ -114,7 +111,6 @@ jobs:
           SEARCH_LOCATIONS=${SEARCH_LOCATIONS}
           RESULTS_WANTED=${RESULTS_WANTED}
           HOURS_OLD=${HOURS_OLD}
-          RESUME_PATH=${RESUME_PATH}
           PREFERRED_LOCATIONS=${PREFERRED_LOCATIONS}
           REMOTE_ONLY=${REMOTE_ONLY}
           MIN_SALARY=${MIN_SALARY}
@@ -126,14 +122,6 @@ jobs:
           GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
           GMAIL_RECIPIENT=${GMAIL_RECIPIENT}
           __SCOUT_ENV_EOF__
-
-      - name: Render resume.txt on VM
-        env:
-          RESUME_TEXT: ${{ secrets.RESUME_TEXT }}
-        run: |
-          set -euo pipefail
-          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new $VM_USER@$VM_HOST"
-          printf '%s' "$RESUME_TEXT" | $SSH "cat > $APP_DIR/scout/resume.txt"
 
       - name: Bring up containers
         run: |
