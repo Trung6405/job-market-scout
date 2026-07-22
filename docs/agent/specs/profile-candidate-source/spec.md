@@ -108,4 +108,12 @@ VM via rsync, so no secret-injection step replaces the resume one.
 
 ## Amendments *(only after approval — never silently edit approved content)*
 
-- —
+- 2026-07-22: The pipeline keeps a **required** `load_profile(settings.profile_path)`
+  call for gap detection rather than reading `settings.profile`. Reason: `Settings`
+  is a `frozen=True` import-time singleton, so tests cannot inject a profile by
+  patching it; several agent tests inject via the `scout.agent.load_profile` seam
+  (notably `records_gaps`, which needs a known profile). Keeping the required call
+  preserves that seam and still meets every observable requirement (profile
+  required, gaps always run, fail-fast, profile is the single candidate source).
+  Trade-off: `profile.json` is read twice per daily run (config for scoring/
+  briefing, pipeline for gaps) — negligible.

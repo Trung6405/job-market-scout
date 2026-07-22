@@ -1,7 +1,7 @@
 # Phase 2: Wire prompts + pipeline to the profile
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** Phase 1 complete (`render_profile_text` and `settings.profile` exist)
 
 ---
@@ -200,4 +200,13 @@ pipeline returns to reading `resume_text`.
 
 ## Notes / Learnings
 
-<Filled in during execution.>
+- **Deviation from Task 2.3 as written:** the pipeline keeps a *required*
+  `load_profile(settings.profile_path)` call instead of reading `settings.profile`.
+  `Settings` is a `frozen=True` import-time singleton, so tests can't inject a
+  profile by patching it; several agent tests (esp. `records_gaps`) inject via the
+  `scout.agent.load_profile` seam. Keeping the required call preserves that seam
+  and meets all observable requirements. Recorded as a spec amendment (2026-07-22).
+- The scorer prompt test lives in `tests/test_scorer_agent.py` (not `test_prompts.py`);
+  the briefing prompt test lives in `tests/test_prompts.py`.
+- Deleted `test_scout_pipeline_agent_skips_gap_detection_when_no_profile` — the
+  no-profile skip path no longer exists.
