@@ -408,6 +408,11 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
     monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
     monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
     monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
+    # scout/profile.json is a tracked placeholder present in CI, which would send
+    # this test down the advisor's real LLM call. Gap detection has its own test
+    # (test_scout_pipeline_agent_records_gaps_when_profile_exists); here we take
+    # the documented no-profile path to keep the persist assertions hermetic.
+    monkeypatch.setattr("scout.agent.load_profile", lambda path: None)
 
     texts = await _run_pipeline_agent()
 
