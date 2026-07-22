@@ -1,0 +1,19 @@
+# Production overlay — layered on top of docker-compose.yaml:
+#   docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --build
+# Leaves the base (local/dev) compose untouched. Adds the hello smoke-test page
+# and restart policies for the long-lived services.
+services:
+  # Open http://<VM_PUBLIC_IP>/ in a browser to confirm the VM is up and reachable.
+  hello:
+    image: nginx:alpine
+    volumes:
+      - ./hello:/usr/share/nginx/html:ro
+    ports:
+      - "80:80"
+    restart: unless-stopped
+
+  jobspy-mcp:
+    restart: unless-stopped
+
+  postgres:
+    restart: unless-stopped
