@@ -19,6 +19,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Provide resume placeholder for tests
+        run: cp scout/resume.txt.example scout/resume.txt
       - name: Install deps and run pytest
         run: |
           python -m pip install --upgrade pip
