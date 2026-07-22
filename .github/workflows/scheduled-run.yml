@@ -1,0 +1,32 @@
+# Daily scout run: SSH into the VM and run one scout cycle.
+# Runs whatever code the last Deploy rsynced onto the VM.
+name: Scheduled run
+
+on:
+  schedule:
+    - cron: "0 21 * * *"
+  workflow_dispatch:
+
+jobs:
+  run-job:
+    runs-on: ubuntu-latest
+    env:
+      APP_DIR: /opt/job-market-scout
+      VM_USER: ${{ vars.VM_USER }}
+      VM_HOST: ${{ vars.VM_HOST }}
+    steps:
+      - name: Set up SSH
+        env:
+          VM_SSH_PRIVATE_KEY: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Run scout cycle
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "$VM_USER@$VM_HOST" \
+            "cd $APP_DIR && docker compose -f docker-compose.yaml -f docker-compose.prod.yaml run --rm app"

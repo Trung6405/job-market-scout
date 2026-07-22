@@ -1,0 +1,114 @@
+# CI/CD: on push to main, run tests then deploy to the Azure VM.
+# Code reaches the VM via rsync from the runner (no git access needed on the VM).
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deps and run pytest
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pytest
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      APP_DIR: /opt/job-market-scout
+      VM_USER: ${{ vars.VM_USER }}
+      VM_HOST: ${{ vars.VM_HOST }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up SSH
+        env:
+          VM_SSH_PRIVATE_KEY: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Rsync repo to VM
+        run: |
+          set -euo pipefail
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new" \
+            --exclude '.git' --exclude 'scout/.env' \
+            ./ "$VM_USER@$VM_HOST:$APP_DIR/"
+
+      - name: Render .env on VM
+        env:
+          JOBSPY_MCP_URL: ${{ secrets.JOBSPY_MCP_URL }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_MODEL: ${{ secrets.DEEPSEEK_MODEL }}
+          SEARCH_ROLES: ${{ secrets.SEARCH_ROLES }}
+          SEARCH_LOCATIONS: ${{ secrets.SEARCH_LOCATIONS }}
+          RESULTS_WANTED: ${{ secrets.RESULTS_WANTED }}
+          HOURS_OLD: ${{ secrets.HOURS_OLD }}
+          RESUME_PATH: ${{ secrets.RESUME_PATH }}
+          PREFERRED_LOCATIONS: ${{ secrets.PREFERRED_LOCATIONS }}
+          REMOTE_ONLY: ${{ secrets.REMOTE_ONLY }}
+          MIN_SALARY: ${{ secrets.MIN_SALARY }}
+          MIN_MATCH_SCORE: ${{ secrets.MIN_MATCH_SCORE }}
+          DESCRIPTION_CHAR_LIMIT: ${{ secrets.DESCRIPTION_CHAR_LIMIT }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BRIEFING_MAX_MATCHES: ${{ secrets.BRIEFING_MAX_MATCHES }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          GMAIL_RECIPIENT: ${{ secrets.GMAIL_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new $VM_USER@$VM_HOST"
+          $SSH "cat > $APP_DIR/scout/.env" <<__SCOUT_ENV_EOF__
+          JOBSPY_MCP_URL=${JOBSPY_MCP_URL}
+          DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+          DEEPSEEK_MODEL=${DEEPSEEK_MODEL}
+          SEARCH_ROLES=${SEARCH_ROLES}
+          SEARCH_LOCATIONS=${SEARCH_LOCATIONS}
+          RESULTS_WANTED=${RESULTS_WANTED}
+          HOURS_OLD=${HOURS_OLD}
+          RESUME_PATH=${RESUME_PATH}
+          PREFERRED_LOCATIONS=${PREFERRED_LOCATIONS}
+          REMOTE_ONLY=${REMOTE_ONLY}
+          MIN_SALARY=${MIN_SALARY}
+          MIN_MATCH_SCORE=${MIN_MATCH_SCORE}
+          DESCRIPTION_CHAR_LIMIT=${DESCRIPTION_CHAR_LIMIT}
+          DATABASE_URL=${DATABASE_URL}
+          BRIEFING_MAX_MATCHES=${BRIEFING_MAX_MATCHES}
+          GMAIL_ADDRESS=${GMAIL_ADDRESS}
+          GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+          GMAIL_RECIPIENT=${GMAIL_RECIPIENT}
+          __SCOUT_ENV_EOF__
+
+      - name: Render resume.txt on VM
+        env:
+          RESUME_TEXT: ${{ secrets.RESUME_TEXT }}
+        run: |
+          set -euo pipefail
+          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new $VM_USER@$VM_HOST"
+          printf '%s' "$RESUME_TEXT" | $SSH "cat > $APP_DIR/scout/resume.txt"
+
+      - name: Bring up containers
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "$VM_USER@$VM_HOST" \
+            "cd $APP_DIR && docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --build"
