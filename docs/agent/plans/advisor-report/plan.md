@@ -194,6 +194,14 @@ confirmed both fixes correct with no regressions.
 
 ## Amendments
 
+- 2026-07-22: Fixed a `listings_scored` miscount and dead prev/next
+  day links, and closed the job-detail template gap Phase 4 flagged
+  and deferred (role snapshot, match-breakdown bars, full requirements
+  checklist, positioning tips) by adding the structured data it needed
+  (`evaluate_requirements`, `seniority`/`work_type`/`team` extraction).
+  GitHub resource cards remain out of scope. Full detail:
+  [phase-4-templates.md](phase-4-templates.md) Notes / Learnings and
+  [spec.md](../../specs/advisor-report/spec.md) Amendments.
 - 2026-07-21: Merged the `profile-schema` plan into this one as Phase 0
   (its phase doc moved here unchanged as `phase-0-profile-schema.md`).
   Rationale: `profile.json`/`load_profile` is the data source this

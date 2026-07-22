@@ -59,6 +59,9 @@ class ListingRequirements(BaseModel):
     external_id: str
     must_have: list[str]
     nice_to_have: list[str]
+    seniority: str | None = None
+    work_type: str | None = None
+    team: str | None = None
 
 
 class ListingRequirementsBatch(BaseModel):
@@ -68,6 +71,7 @@ class ListingRequirementsBatch(BaseModel):
 class SkillGap(BaseModel):
     skill: str
     requirement_level: str
+    met: bool = False
 
 
 class BriefingTakeaway(BaseModel):
@@ -128,6 +132,10 @@ class RunListingDetail(BaseModel):
     reasoning: str
     band: str
     gaps: list[SkillGap]
+    requirements: list[SkillGap] = []
+    seniority: str | None = None
+    work_type: str | None = None
+    team: str | None = None
 
 
 class Profile(BaseModel):

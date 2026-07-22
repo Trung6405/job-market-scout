@@ -55,9 +55,14 @@ Multi-agent job market scout, scrapes listings, matches them to a resume, tracks
 
 Each run also renders an HTML report — a daily dashboard of scored
 listings (with success bands and skill gaps, if `scout/profile.json`
-exists), a per-role detail page, a history of past days, and a profile
-page — into `./reports` on the host (mounted from the container's
-`/app/reports`). Open `./reports/history.html` to browse past days.
+exists) with prev/next links to adjacent days, a per-role detail page
+(role snapshot, match-breakdown bars, a full requirements-vs-profile
+checklist, and gap-closing coaching tips when a profile exists), a
+history of past days, and a profile page — into `./reports` on the
+host (mounted from the container's `/app/reports`). Open
+`./reports/history.html` to browse past days. GitHub learning-resource
+links per skill gap are not implemented yet — gaps are shown by name
+only.
 
 By default the briefing email just shows the report's path as plain
 text (e.g. `reports/2026-07-21/dashboard.html`) — the app runs inside a

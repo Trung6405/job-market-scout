@@ -116,3 +116,18 @@ Delete `scout/sub_agents/advisor/report.py`,
   rather than a literal manual browser click-through — verifies the
   same thing the task asked for. 23/23 links resolved on the first
   pass; no fixes needed.
+- 2026-07-22: Closed the gap flagged above ("role-snapshot grid,
+  per-category match-breakdown bars, full requirements-vs-profile
+  checklist, positioning tips ... revisit only if a later phase adds
+  that structured data"). Added the missing structured data —
+  `evaluate_requirements()` (full met/unmet checklist, not just gaps),
+  `seniority`/`work_type`/`team` extraction on `ListingRequirements` —
+  and rendered role snapshot, must-have/nice-to-have coverage bars, the
+  full requirements checklist, and derived positioning tips in
+  `job-detail.html.jinja`. Per-category score breakdowns (e.g. a
+  separate "domain knowledge fit" bar) stay dropped — nothing extracts
+  per-category scores, and fabricating one would violate the report's
+  own "band is an estimate, not a guarantee" framing. See spec.md
+  Amendments (2026-07-22) for the full change list, including two
+  unrelated bugs fixed in the same pass (`listings_scored` miscount,
+  dead prev/next day links).

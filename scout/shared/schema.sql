@@ -41,6 +41,9 @@ CREATE TABLE IF NOT EXISTS run_listings (
 );
 
 ALTER TABLE run_listings ADD COLUMN IF NOT EXISTS band TEXT;
+ALTER TABLE run_listings ADD COLUMN IF NOT EXISTS seniority TEXT;
+ALTER TABLE run_listings ADD COLUMN IF NOT EXISTS work_type TEXT;
+ALTER TABLE run_listings ADD COLUMN IF NOT EXISTS team TEXT;
 
 CREATE TABLE IF NOT EXISTS listing_gaps (
     id BIGSERIAL PRIMARY KEY,
@@ -48,3 +51,5 @@ CREATE TABLE IF NOT EXISTS listing_gaps (
     skill TEXT NOT NULL,
     requirement_level TEXT NOT NULL CHECK (requirement_level IN ('must_have', 'nice_to_have'))
 );
+
+ALTER TABLE listing_gaps ADD COLUMN IF NOT EXISTS met BOOLEAN NOT NULL DEFAULT false;

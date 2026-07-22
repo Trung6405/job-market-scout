@@ -11,6 +11,7 @@ from scout.config import Settings
 from scout.config import settings as default_settings
 from scout.shared.schemas import (
     Listing,
+    ListingRequirements,
     MatchResult,
     Run,
     RunListing,
@@ -190,6 +191,40 @@ async def record_run_listings(
     )
 
 
+async def record_listing_meta(
+    conn: asyncpg.Connection,
+    run_id: int,
+    meta_by_match: list[tuple[MatchResult, ListingRequirements]],
+) -> None:
+    if not meta_by_match:
+        return
+    sources = [match.listing.source for match, _req in meta_by_match]
+    external_ids = [match.listing.external_id for match, _req in meta_by_match]
+    seniorities = [req.seniority for _match, req in meta_by_match]
+    work_types = [req.work_type for _match, req in meta_by_match]
+    teams = [req.team for _match, req in meta_by_match]
+    await conn.execute(
+        """
+        UPDATE run_listings
+        SET seniority = data.seniority,
+            work_type = data.work_type,
+            team = data.team
+        FROM unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::text[])
+            AS data(source, external_id, seniority, work_type, team)
+        JOIN listings
+            ON listings.source = data.source AND listings.external_id = data.external_id
+        WHERE run_listings.run_id = $1
+            AND run_listings.listing_id = listings.id
+        """,
+        run_id,
+        sources,
+        external_ids,
+        seniorities,
+        work_types,
+        teams,
+    )
+
+
 async def get_run_by_date(conn: asyncpg.Connection, run_date: date) -> Run | None:
     row = await conn.fetchrow("SELECT * FROM runs WHERE run_date = $1", run_date)
     if row is None:
@@ -202,6 +237,22 @@ async def list_runs(conn: asyncpg.Connection, limit: int) -> list[Run]:
         "SELECT * FROM runs ORDER BY run_date DESC LIMIT $1", limit
     )
     return [Run(**dict(row)) for row in rows]
+
+
+async def get_adjacent_runs(
+    conn: asyncpg.Connection, run_date: date
+) -> tuple[Run | None, Run | None]:
+    prev_row = await conn.fetchrow(
+        "SELECT * FROM runs WHERE run_date < $1 ORDER BY run_date DESC LIMIT 1",
+        run_date,
+    )
+    next_row = await conn.fetchrow(
+        "SELECT * FROM runs WHERE run_date > $1 ORDER BY run_date ASC LIMIT 1",
+        run_date,
+    )
+    prev_run = Run(**dict(prev_row)) if prev_row else None
+    next_run = Run(**dict(next_row)) if next_row else None
+    return prev_run, next_run
 
 
 async def get_run_listings(conn: asyncpg.Connection, run_id: int) -> list[RunListing]:
@@ -234,22 +285,24 @@ async def record_listing_gaps(
         external_ids: list[str] = []
         skills: list[str] = []
         requirement_levels: list[str] = []
-        for match, gaps in gaps_by_match:
-            for gap in gaps:
+        mets: list[bool] = []
+        for match, checks in gaps_by_match:
+            for check in checks:
                 sources.append(match.listing.source)
                 external_ids.append(match.listing.external_id)
-                skills.append(gap.skill)
-                requirement_levels.append(gap.requirement_level)
+                skills.append(check.skill)
+                requirement_levels.append(check.requirement_level)
+                mets.append(check.met)
 
         if not skills:
             return
 
         await conn.execute(
             """
-            INSERT INTO listing_gaps (run_listing_id, skill, requirement_level)
-            SELECT run_listings.id, data.skill, data.requirement_level
-            FROM unnest($2::text[], $3::text[], $4::text[], $5::text[])
-                AS data(source, external_id, skill, requirement_level)
+            INSERT INTO listing_gaps (run_listing_id, skill, requirement_level, met)
+            SELECT run_listings.id, data.skill, data.requirement_level, data.met
+            FROM unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::boolean[])
+                AS data(source, external_id, skill, requirement_level, met)
             JOIN listings
                 ON listings.source = data.source AND listings.external_id = data.external_id
             JOIN run_listings
@@ -260,12 +313,13 @@ async def record_listing_gaps(
             external_ids,
             skills,
             requirement_levels,
+            mets,
         )
 
 
 async def get_listing_gaps(conn: asyncpg.Connection, run_listing_id: int) -> list[SkillGap]:
     rows = await conn.fetch(
-        "SELECT skill, requirement_level FROM listing_gaps WHERE run_listing_id = $1",
+        "SELECT skill, requirement_level, met FROM listing_gaps WHERE run_listing_id = $1",
         run_listing_id,
     )
     return [SkillGap(**dict(row)) for row in rows]
@@ -282,6 +336,7 @@ async def get_run_details(conn: asyncpg.Connection, run_id: int) -> list[RunList
     rows = await conn.fetch(
         """
         SELECT run_listings.id AS run_listing_id, run_listings.score, run_listings.reasoning, run_listings.band,
+               run_listings.seniority, run_listings.work_type, run_listings.team,
                listings.source, listings.external_id, listings.title, listings.company, listings.location,
                listings.is_remote, listings.url, listings.description, listings.salary_min, listings.salary_max,
                listings.date_posted, listings.scraped_at
@@ -296,16 +351,20 @@ async def get_run_details(conn: asyncpg.Connection, run_id: int) -> list[RunList
     run_listing_ids = [row["run_listing_id"] for row in rows]
     gap_rows = await conn.fetch(
         """
-        SELECT run_listing_id, skill, requirement_level
+        SELECT run_listing_id, skill, requirement_level, met
         FROM listing_gaps
         WHERE run_listing_id = ANY($1::bigint[])
         """,
         run_listing_ids,
     )
-    gaps_by_id: dict[int, list[SkillGap]] = {}
+    requirements_by_id: dict[int, list[SkillGap]] = {}
     for gap_row in gap_rows:
-        gaps_by_id.setdefault(gap_row["run_listing_id"], []).append(
-            SkillGap(skill=gap_row["skill"], requirement_level=gap_row["requirement_level"])
+        requirements_by_id.setdefault(gap_row["run_listing_id"], []).append(
+            SkillGap(
+                skill=gap_row["skill"],
+                requirement_level=gap_row["requirement_level"],
+                met=gap_row["met"],
+            )
         )
 
     details: list[RunListingDetail] = []
@@ -315,6 +374,10 @@ async def get_run_details(conn: asyncpg.Connection, run_id: int) -> list[RunList
         score = data.pop("score")
         reasoning = data.pop("reasoning")
         band = data.pop("band")
+        seniority = data.pop("seniority")
+        work_type = data.pop("work_type")
+        team = data.pop("team")
+        requirements = requirements_by_id.get(run_listing_id, [])
         details.append(
             RunListingDetail(
                 run_listing_id=run_listing_id,
@@ -322,7 +385,11 @@ async def get_run_details(conn: asyncpg.Connection, run_id: int) -> list[RunList
                 score=score,
                 reasoning=reasoning,
                 band=band,
-                gaps=gaps_by_id.get(run_listing_id, []),
+                gaps=[check for check in requirements if not check.met],
+                requirements=requirements,
+                seniority=seniority,
+                work_type=work_type,
+                team=team,
             )
         )
     return details

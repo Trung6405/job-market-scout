@@ -105,11 +105,23 @@ lists of skills and qualifications:
 - "nice_to_have": skills and qualifications explicitly marked as
   preferred, nice-to-have, bonus, a plus, or similar.
 
+Also extract three short facts, only if the listing states them:
+- "seniority": the stated experience level (e.g. "Graduate / Entry",
+  "Mid-level", "Senior"), in the listing's own words or a short
+  paraphrase.
+- "work_type": the stated work arrangement (e.g. "Remote", "Hybrid — 3
+  days in office", "On-site"), if the listing says more than the plain
+  remote/on-site flag already tracked separately.
+- "team": the specific team or group mentioned (e.g. "Platform team",
+  "Payments engineering"), if named.
+Set any of these to null if the listing does not clearly state it — do
+not guess or infer one from general context.
+
 Only extract what the listing's description actually states. Do not
 invent requirements that aren't stated in the text, and do not infer or
 assume requirements that are merely implied. Do not merge the two
-categories — a skill belongs in exactly one list, based on how the
-listing describes it. If a listing does not clearly state any
+skill categories — a skill belongs in exactly one list, based on how
+the listing describes it. If a listing does not clearly state any
 requirements in a category, return an empty list for that category. Do
 not invent listings beyond the ones provided, and do not call any tool.
 
@@ -119,9 +131,10 @@ Listings to extract requirements from:
 Return a JSON object with a single key "requirements" containing a list
 of objects, each with "source" and "external_id" (copied exactly from
 the listing — together they identify it, since external_id alone may
-repeat across sources), "must_have" (a list of short strings), and
-"nice_to_have" (a list of short strings). Return only the JSON object,
-no commentary.
+repeat across sources), "must_have" (a list of short strings),
+"nice_to_have" (a list of short strings), "seniority" (short string or
+null), "work_type" (short string or null), and "team" (short string or
+null). Return only the JSON object, no commentary.
 """
 
 

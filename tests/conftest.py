@@ -7,12 +7,36 @@ import pytest_asyncio
 from scout.config import Settings
 from scout.shared.db import apply_schema
 
+# Tests must never run against the dev/prod database (Settings().database_url) —
+# a TRUNCATE here would wipe real run history. Use a dedicated database on the
+# same Postgres server instead.
+_TEST_DB_NAME = "scout_test"
+
+
+def _test_database_url(dev_database_url: str) -> str:
+    base = dev_database_url.rsplit("/", 1)[0]
+    return f"{base}/{_TEST_DB_NAME}"
+
+
+async def _ensure_test_database(dev_database_url: str) -> None:
+    conn = await asyncpg.connect(dsn=dev_database_url, timeout=2)
+    try:
+        exists = await conn.fetchval(
+            "SELECT 1 FROM pg_database WHERE datname = $1", _TEST_DB_NAME
+        )
+        if not exists:
+            await conn.execute(f'CREATE DATABASE "{_TEST_DB_NAME}"')
+    finally:
+        await conn.close()
+
 
 @pytest_asyncio.fixture
 async def db_pool():
+    dev_database_url = Settings().database_url
     try:
+        await _ensure_test_database(dev_database_url)
         pool = await asyncpg.create_pool(
-            dsn=Settings().database_url, timeout=2
+            dsn=_test_database_url(dev_database_url), timeout=2
         )
     except (OSError, asyncpg.PostgresError) as exc:
         pytest.skip(f"Postgres unreachable: {exc}")

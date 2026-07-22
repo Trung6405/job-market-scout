@@ -6,7 +6,7 @@ import asyncpg
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from scout.config import Settings
-from scout.shared.db import get_run, get_run_details, list_runs
+from scout.shared.db import get_adjacent_runs, get_run, get_run_details, list_runs
 from scout.shared.schemas import Listing, Profile, RunListingDetail
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -70,6 +70,7 @@ async def render_run(
 ) -> dict[str, Path]:
     run = await get_run(conn, run_id)
     details = await get_run_details(conn, run_id)
+    prev_run, next_run = await get_adjacent_runs(conn, run.run_date)
 
     run_dir = Path(settings.report_output_dir) / str(run.run_date)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -78,7 +79,12 @@ async def render_run(
 
     dashboard_template = _env.get_template("dashboard.html.jinja")
     dashboard_html = dashboard_template.render(
-        run=run, details=details, stats=_detail_stats(details), has_profile=has_profile
+        run=run,
+        details=details,
+        stats=_detail_stats(details),
+        has_profile=has_profile,
+        prev_run=prev_run,
+        next_run=next_run,
     )
     dashboard_path = run_dir / "dashboard.html"
     dashboard_path.write_text(dashboard_html, encoding="utf-8")

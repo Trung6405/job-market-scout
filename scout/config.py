@@ -115,9 +115,6 @@ class Settings:
     description_char_limit: int = field(
         default_factory=partial(_env_int, "DESCRIPTION_CHAR_LIMIT", 1500)
     )
-    run_date_override: str | None = field(
-        default_factory=partial(_env_optional_str, "RUN_DATE")
-    )
     database_url: str = field(
         default_factory=partial(
             _env_str,

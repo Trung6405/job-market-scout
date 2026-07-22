@@ -8,7 +8,7 @@ from scout.shared.schemas import (
     TechCategory,
     TechSkill,
 )
-from scout.sub_agents.advisor.gaps import detect_gaps
+from scout.sub_agents.advisor.gaps import detect_gaps, evaluate_requirements
 
 
 def _make_profile(skills: list[str]) -> Profile:
@@ -91,4 +91,17 @@ def test_detect_gaps_mixed_must_have_and_nice_to_have_ordering():
     assert gaps == [
         SkillGap(skill="Go", requirement_level="must_have"),
         SkillGap(skill="Kubernetes", requirement_level="nice_to_have"),
+    ]
+
+
+def test_evaluate_requirements_includes_met_and_unmet():
+    requirements = _make_requirements(["Python", "Go"], ["Docker"])
+    profile = _make_profile(["python", "Docker"])
+
+    checks = evaluate_requirements(requirements, profile)
+
+    assert checks == [
+        SkillGap(skill="Python", requirement_level="must_have", met=True),
+        SkillGap(skill="Go", requirement_level="must_have", met=False),
+        SkillGap(skill="Docker", requirement_level="nice_to_have", met=True),
     ]

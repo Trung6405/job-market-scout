@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import dataclasses
+
 import asyncpg
 import pytest
 
+from scout.config import Settings
 from scout.shared.db import upsert_listing
 from scout.sub_agents.tracker.runner import track_listings
+from tests.conftest import _test_database_url
 from tests.test_db import _make_listing
 
 
@@ -74,8 +78,15 @@ async def test_track_listings_closes_self_managed_pool(db_pool, monkeypatch):
         "scout.sub_agents.tracker.runner.create_pool", _tracking_create_pool
     )
 
+    # Must point at the isolated scout_test database, not the real
+    # dev/prod one that create_pool(None) would otherwise resolve to.
+    test_settings = dataclasses.replace(
+        Settings(), database_url=_test_database_url(Settings().database_url)
+    )
+
     await track_listings(
-        [_make_listing(source="linkedin", external_id="job-self-managed")]
+        [_make_listing(source="linkedin", external_id="job-self-managed")],
+        settings=test_settings,
     )
 
     assert len(created_pools) == 1

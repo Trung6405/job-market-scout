@@ -48,10 +48,39 @@
 
   .snapshot{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
     padding:16px 18px;margin-top:16px}
+  .snapgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
+  .snapgrid .k{font-size:11.5px;color:var(--muted)}
+  .snapgrid .v{font-size:14px;font-weight:600;margin-top:2px}
   .about{font-size:13.5px;color:#464b59;margin:0;white-space:pre-wrap}
 
   section{margin-top:26px}
   h2{font-size:15px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+
+  .breakdown{display:flex;flex-direction:column;gap:14px;background:var(--panel);
+    border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+  .brkhead{display:flex;justify-content:space-between;align-items:baseline;font-size:13.5px}
+  .brkhead .lab{font-weight:600}
+  .brkhead .num{color:var(--muted);font-size:12.5px}
+  .brk .track{height:7px;border-radius:999px;background:#eef0f3;margin-top:7px;overflow:hidden}
+  .brk .track > i{display:block;height:100%;background:linear-gradient(90deg,#6366f1,#4f46e5)}
+  .brk .track.low > i{background:linear-gradient(90deg,#e86a6a,#d14343)}
+  .brk .note{font-size:12px;color:var(--muted);margin-top:5px}
+
+  .reqs{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .reqcat{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:11px 18px;background:#fafbfc;border-bottom:1px solid var(--line);border-top:1px solid var(--line)}
+  .reqcat:first-child{border-top:none}
+  .reqcat .name{font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .reqcat .cov{font-size:11.5px;color:var(--muted)}
+  .reqcat .cov b{color:var(--ink)}
+  .req{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);font-size:14px}
+  .req:last-child{border-bottom:none}
+  .req .mark{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font-size:13px;flex:0 0 auto}
+  .req.have .mark{background:var(--strong-bg);color:var(--strong-ink)}
+  .req.gap .mark{background:#fdecec;color:#b23434}
+  .req .name{flex:1 1 auto}
+  .req .tag{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:2px 7px}
+  .req .tag.must{color:#b23434;border-color:#f3caca;background:#fdf4f4}
 
   .coach{background:var(--accent-soft);border:1px solid #d9ddfb;border-radius:12px;padding:14px 16px;
     font-size:13.5px;color:#3b3f77;margin-bottom:16px}
@@ -64,10 +93,14 @@
   .gaphead .nice{font-size:11px;color:var(--muted);background:#f1f2f6;border:1px solid var(--line);
     border-radius:6px;padding:2px 7px}
   .no-gaps{font-size:13.5px;color:#464b59}
+  .tips{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+  .tips ol{margin:0;padding-left:20px;font-size:13.5px;color:#464b59}
+  .tips li{margin:7px 0}
   .disclaimer{margin-top:26px;font-size:12px;color:var(--muted);background:var(--panel);
     border:1px dashed var(--line);border-radius:12px;padding:12px 14px}
   @media(max-width:600px){
     .apply{width:100%;text-align:center;margin-top:12px}
+    .snapgrid{grid-template-columns:repeat(2,1fr)}
   }
 </style>
 </head>
@@ -112,15 +145,33 @@
         <div class="why">{{ detail.reasoning }}</div>
       </div>
       <div class="metric">
-        <div class="k">Skill gaps</div>
-        <div class="v">{{ detail.gaps|length }}</div>
+        <div class="k">Must-have coverage</div>
+        {% set must_reqs = detail.requirements|selectattr('requirement_level', 'equalto', 'must_have')|list %}
+        {% set must_met = must_reqs|selectattr('met')|list %}
+        <div class="v">{{ must_met|length }}<span style="font-size:14px;color:var(--muted)">/{{ must_reqs|length }}</span></div>
         <div class="why" style="margin-top:6px">
-          {{ detail.gaps|selectattr('requirement_level', 'equalto', 'must_have')|list|length }} must-have,
-          {{ detail.gaps|selectattr('requirement_level', 'equalto', 'nice_to_have')|list|length }} nice-to-have.
+          {% if must_reqs %}
+          {{ must_reqs|length - must_met|length }} must-have skill(s) missing.
+          {% else %}
+          No must-have requirements detected for this listing.
+          {% endif %}
         </div>
       </div>
     </div>
   </div>
+
+  {% if detail.seniority or detail.work_type or detail.team %}
+  <section>
+    <h2>Role snapshot</h2>
+    <div class="snapshot">
+      <div class="snapgrid">
+        {% if detail.seniority %}<div><div class="k">Seniority</div><div class="v">{{ detail.seniority }}</div></div>{% endif %}
+        {% if detail.work_type %}<div><div class="k">Work type</div><div class="v">{{ detail.work_type }}</div></div>{% endif %}
+        {% if detail.team %}<div><div class="k">Team</div><div class="v">{{ detail.team }}</div></div>{% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
 
   <section>
     <h2>About this role</h2>
@@ -128,6 +179,56 @@
       <p class="about">{{ detail.listing.description }}</p>
     </div>
   </section>
+
+  {% if detail.requirements %}
+  <section>
+    <h2>Why this band — match breakdown</h2>
+    <div class="breakdown">
+      {% if must_reqs %}
+      <div class="brk">
+        <div class="brkhead"><span class="lab">Tech stack fit (must-have)</span><span class="num">{{ must_met|length }} / {{ must_reqs|length }}</span></div>
+        <div class="track{% if must_met|length < must_reqs|length %} low{% endif %}"><i style="width:{{ (must_met|length / must_reqs|length * 100)|round|int }}%"></i></div>
+        <div class="note">{{ detail.reasoning }}</div>
+      </div>
+      {% endif %}
+      {% set nice_reqs = detail.requirements|selectattr('requirement_level', 'equalto', 'nice_to_have')|list %}
+      {% if nice_reqs %}
+      {% set nice_met = nice_reqs|selectattr('met')|list %}
+      <div class="brk">
+        <div class="brkhead"><span class="lab">Nice-to-have coverage</span><span class="num">{{ nice_met|length }} / {{ nice_reqs|length }}</span></div>
+        <div class="track"><i style="width:{{ (nice_met|length / nice_reqs|length * 100)|round|int }}%"></i></div>
+        <div class="note">Bonus skills the listing calls out as preferred, not required.</div>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section>
+    <h2>Requirements vs your profile</h2>
+    <div class="reqs">
+      {% if must_reqs %}
+      <div class="reqcat"><span class="name">Must-have skills</span><span class="cov"><b>{{ must_met|length }}</b>/{{ must_reqs|length }} met</span></div>
+      {% for req in must_reqs %}
+      <div class="req {% if req.met %}have{% else %}gap{% endif %}">
+        <span class="mark">{% if req.met %}✓{% else %}✕{% endif %}</span>
+        <span class="name">{{ req.skill }}</span>
+        <span class="tag must">must-have</span>
+      </div>
+      {% endfor %}
+      {% endif %}
+      {% if nice_reqs %}
+      <div class="reqcat"><span class="name">Nice-to-have skills</span><span class="cov"><b>{{ nice_met|length }}</b>/{{ nice_reqs|length }} met</span></div>
+      {% for req in nice_reqs %}
+      <div class="req {% if req.met %}have{% else %}gap{% endif %}">
+        <span class="mark">{% if req.met %}✓{% else %}✕{% endif %}</span>
+        <span class="name">{{ req.skill }}</span>
+        <span class="tag">nice-to-have</span>
+      </div>
+      {% endfor %}
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
 
   <section>
     <h2>Skill gaps to close</h2>
@@ -153,6 +254,29 @@
     </div>
     {% endif %}
   </section>
+
+  {% if detail.gaps %}
+  <section>
+    <h2>How to position your application</h2>
+    <div class="tips">
+      <ol>
+        {% set must_gaps = detail.gaps|selectattr('requirement_level', 'equalto', 'must_have')|list %}
+        {% if must_gaps %}
+        <li>Prioritize <b>{{ must_gaps[0].skill }}</b> — it's the highest-impact gap since it's a must-have for this role.</li>
+        {% if must_gaps|length > 1 %}
+        <li>Also work toward: {{ must_gaps[1:]|map(attribute='skill')|join(', ') }} — the other missing must-have skill(s).</li>
+        {% endif %}
+        {% else %}
+        <li>You cover every must-have skill this listing states — lead your application with those directly.</li>
+        {% endif %}
+        {% set nice_gaps = detail.gaps|selectattr('requirement_level', 'equalto', 'nice_to_have')|list %}
+        {% if nice_gaps %}
+        <li>{{ nice_gaps|map(attribute='skill')|join(', ') }} {% if nice_gaps|length == 1 %}is{% else %}are{% endif %} nice-to-have, not required — a line of familiarity is enough, don't over-invest before applying.</li>
+        {% endif %}
+      </ol>
+    </div>
+  </section>
+  {% endif %}
 
   <div class="disclaimer">
     The <em>{{ detail.band|band_label }}</em> band is a rough estimate of fit, <strong>not a guarantee of an offer</strong>.

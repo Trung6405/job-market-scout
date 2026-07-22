@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import AsyncGenerator
 
 from google.adk.agents import BaseAgent
@@ -13,12 +13,13 @@ from scout.shared.db import (
     create_pool,
     finish_run,
     record_listing_gaps,
+    record_listing_meta,
     record_run_listings,
     start_run,
 )
 from scout.shared.profile import load_profile
 from scout.sub_agents.advisor.bands import classify_band
-from scout.sub_agents.advisor.gaps import detect_gaps
+from scout.sub_agents.advisor.gaps import evaluate_requirements
 from scout.sub_agents.advisor.report import render_history, render_profile, render_run
 from scout.sub_agents.advisor.runner import run_requirements_extraction
 from scout.sub_agents.briefing.briefing import run_briefing
@@ -72,11 +73,7 @@ class ScoutPipelineAgent(BaseAgent):
         banded_matches = [
             (match, classify_band(match.score, settings)) for match in matches
         ]
-        run_date = (
-            date.fromisoformat(settings.run_date_override)
-            if settings.run_date_override
-            else datetime.now(timezone.utc).date()
-        )
+        run_date = datetime.now(timezone.utc).date()
         pool = await create_pool(settings)
         try:
             async with pool.acquire() as conn:
@@ -101,33 +98,38 @@ class ScoutPipelineAgent(BaseAgent):
                     requirements_by_key = {
                         (r.source, r.external_id): r for r in requirements
                     }
-                    gaps_by_match = [
+                    matches_with_requirements = [
                         (
                             match,
-                            detect_gaps(
-                                requirements_by_key[
-                                    (match.listing.source, match.listing.external_id)
-                                ],
-                                profile,
-                            ),
+                            requirements_by_key[
+                                (match.listing.source, match.listing.external_id)
+                            ],
                         )
                         for match in matches
                         if (match.listing.source, match.listing.external_id)
                         in requirements_by_key
                     ]
-                    await record_listing_gaps(conn, run_id, gaps_by_match)
+                    checks_by_match = [
+                        (match, evaluate_requirements(req, profile))
+                        for match, req in matches_with_requirements
+                    ]
+                    await record_listing_gaps(conn, run_id, checks_by_match)
+                    await record_listing_meta(conn, run_id, matches_with_requirements)
+                    gap_count = sum(
+                        1 for _, checks in checks_by_match for c in checks if not c.met
+                    )
                     yield _status_event(
                         ctx,
                         self.name,
-                        f"Gaps detected: {sum(len(g) for _, g in gaps_by_match)} "
-                        f"across {len(gaps_by_match)} listing(s)",
+                        f"Gaps detected: {gap_count} "
+                        f"across {len(checks_by_match)} listing(s)",
                     )
 
                 await finish_run(
                     conn,
                     run_id,
                     listings_scraped=len(listings),
-                    listings_scored=len(scores),
+                    listings_scored=len(matches),
                 )
 
                 has_profile = profile is not None

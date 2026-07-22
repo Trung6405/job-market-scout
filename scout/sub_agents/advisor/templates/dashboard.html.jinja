@@ -90,12 +90,20 @@
   </header>
 
   <div class="daybar">
-    <span class="daynav disabled" title="Previous day">‹</span>
+    {% if prev_run %}
+    <a class="daynav" href="../{{ prev_run.run_date }}/dashboard.html" title="Previous day">‹ {{ prev_run.run_date.strftime('%a %d %b') }}</a>
+    {% else %}
+    <span class="daynav disabled" title="No earlier run">‹</span>
+    {% endif %}
     <div class="today">
       <span class="cur">{{ run.run_date.strftime('%a %d %b %Y') }}</span>
       <span class="tag-today">Today</span>
     </div>
-    <span class="daynav disabled" title="Next day">›</span>
+    {% if next_run %}
+    <a class="daynav" href="../{{ next_run.run_date }}/dashboard.html" title="Next day">{{ next_run.run_date.strftime('%a %d %b') }} ›</a>
+    {% else %}
+    <span class="daynav disabled" title="No later run">›</span>
+    {% endif %}
   </div>
   <div class="run-meta">Run started {{ run.started_at.strftime('%H:%M') }} · {{ run.listings_scraped }} listings scraped · {{ run.listings_scored }} new/changed scored · <a href="../history.html" style="color:var(--accent)">all daily reports ›</a></div>
 

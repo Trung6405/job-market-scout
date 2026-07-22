@@ -271,6 +271,9 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
     async def _fake_record_listing_gaps(conn, run_id, gaps_by_match):
         pass
 
+    async def _fake_record_listing_meta(conn, run_id, meta_by_match):
+        pass
+
     async def _fake_render_run(conn, run_id, settings, has_profile=False):
         calls.append(("render_run", conn, run_id, settings, has_profile))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
@@ -296,6 +299,7 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
         "scout.agent.run_requirements_extraction", _fake_run_requirements_extraction
     )
     monkeypatch.setattr("scout.agent.record_listing_gaps", _fake_record_listing_gaps)
+    monkeypatch.setattr("scout.agent.record_listing_meta", _fake_record_listing_meta)
     monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
     monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
     monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
@@ -386,12 +390,26 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
         render_calls.append("render_history")
         return Path("reports/history.html")
 
+    class _UnclosablePool:
+        """Wraps db_pool so scout.agent's `finally: await pool.close()` doesn't
+        tear down the shared test fixture pool out from under later assertions."""
+
+        def acquire(self):
+            return db_pool.acquire()
+
+        async def close(self):
+            pass
+
+    async def _fake_create_pool(settings):
+        return _UnclosablePool()
+
     monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
     monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
     monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
     monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
     monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
     monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
+    monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
 
     texts = await _run_pipeline_agent()
 
@@ -479,6 +497,9 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
     async def _fake_record_listing_gaps(conn, run_id, gaps_by_match):
         calls.append(("record_listing_gaps", run_id, gaps_by_match))
 
+    async def _fake_record_listing_meta(conn, run_id, meta_by_match):
+        calls.append(("record_listing_meta", run_id, meta_by_match))
+
     async def _fake_render_run(conn, run_id, settings, has_profile=False):
         calls.append(("render_run", run_id))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
@@ -504,6 +525,7 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
         "scout.agent.run_requirements_extraction", _fake_run_requirements_extraction
     )
     monkeypatch.setattr("scout.agent.record_listing_gaps", _fake_record_listing_gaps)
+    monkeypatch.setattr("scout.agent.record_listing_meta", _fake_record_listing_meta)
     monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
     monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
     monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)

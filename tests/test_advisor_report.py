@@ -9,6 +9,7 @@ from scout.config import Settings
 from scout.shared.db import (
     finish_run,
     record_listing_gaps,
+    record_listing_meta,
     record_run_listings,
     start_run,
     upsert_listing,
@@ -17,6 +18,7 @@ from scout.shared.schemas import (
     Background,
     DomainKnowledge,
     Listing,
+    ListingRequirements,
     MatchResult,
     Profile,
     Project,
@@ -147,6 +149,85 @@ async def test_render_run_profile_nav_link_is_inert_when_no_profile(db_pool, tmp
     job_detail_html = job_detail_paths[0].read_text(encoding="utf-8")
     assert 'href="../profile.html"' not in job_detail_html
     assert "My Profile" in job_detail_html
+
+
+@pytest.mark.asyncio
+async def test_render_run_job_detail_shows_snapshot_breakdown_and_checklist(
+    db_pool, tmp_path
+):
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        match = MatchResult(listing=listing, score=88, reasoning="Great fit overall")
+        await record_run_listings(conn, run_id, [(match, "strong_match")])
+        await record_listing_gaps(
+            conn,
+            run_id,
+            [
+                (
+                    match,
+                    [
+                        SkillGap(skill="Python", requirement_level="must_have", met=True),
+                        SkillGap(skill="PostgreSQL", requirement_level="must_have", met=False),
+                        SkillGap(skill="Docker", requirement_level="nice_to_have", met=False),
+                    ],
+                )
+            ],
+        )
+        requirements = ListingRequirements(
+            source=listing.source,
+            external_id=listing.external_id,
+            must_have=["Python", "PostgreSQL"],
+            nice_to_have=["Docker"],
+            seniority="Graduate / Entry",
+            work_type="Hybrid — 3 days",
+            team="Platform",
+        )
+        await record_listing_meta(conn, run_id, [(match, requirements)])
+        await finish_run(conn, run_id, listings_scraped=1, listings_scored=1)
+
+        run_listing_id = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id
+        )
+
+        settings = Settings(report_output_dir=str(tmp_path))
+        paths = await render_run(conn, run_id, settings, has_profile=True)
+
+    job_detail_html = paths[f"job_detail_{run_listing_id}"].read_text(encoding="utf-8")
+
+    assert "Graduate / Entry" in job_detail_html
+    assert "Hybrid — 3 days" in job_detail_html
+    assert "Platform" in job_detail_html
+    assert "Why this band" in job_detail_html
+    assert "1 / 2" in job_detail_html  # must-have tech stack fit
+    assert "Requirements vs your profile" in job_detail_html
+    assert "How to position your application" in job_detail_html
+    assert "PostgreSQL" in job_detail_html
+
+
+@pytest.mark.asyncio
+async def test_render_run_links_to_adjacent_day_dashboards(db_pool, tmp_path):
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        match = MatchResult(listing=listing, score=88, reasoning="Great fit")
+
+        prev_run_id = await start_run(conn, date(2026, 7, 20))
+        await record_run_listings(conn, prev_run_id, [(match, "strong_match")])
+        await finish_run(conn, prev_run_id, listings_scraped=1, listings_scored=1)
+
+        run_id = await start_run(conn, date(2026, 7, 21))
+        await record_run_listings(conn, run_id, [(match, "strong_match")])
+        await finish_run(conn, run_id, listings_scraped=1, listings_scored=1)
+
+        settings = Settings(report_output_dir=str(tmp_path))
+        paths = await render_run(conn, run_id, settings)
+
+    dashboard_html = paths["dashboard"].read_text(encoding="utf-8")
+    assert 'href="../2026-07-20/dashboard.html"' in dashboard_html
+    assert "No later run" in dashboard_html
+    assert "No earlier run" not in dashboard_html
 
 
 @pytest.mark.asyncio
