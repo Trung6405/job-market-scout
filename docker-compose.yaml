@@ -15,7 +15,6 @@ services:
       - "8000:8000"
     volumes:
       - ./reports:/app/reports
-      - ./scout/resume.txt:/app/scout/resume.txt:ro
       - ./scout/profile.json:/app/scout/profile.json:ro
 
   # Kept running (not one-shot) so jobspy-mcp can `docker exec` into it per
