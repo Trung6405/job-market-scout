@@ -77,7 +77,7 @@ jobs:
         run: |
           set -euo pipefail
           SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new $VM_USER@$VM_HOST"
-          $SSH "cat > $APP_DIR/scout/.env" <<EOF
+          $SSH "cat > $APP_DIR/scout/.env" <<__SCOUT_ENV_EOF__
           JOBSPY_MCP_URL=${JOBSPY_MCP_URL}
           DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
           DEEPSEEK_MODEL=${DEEPSEEK_MODEL}
@@ -96,7 +96,15 @@ jobs:
           GMAIL_ADDRESS=${GMAIL_ADDRESS}
           GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
           GMAIL_RECIPIENT=${GMAIL_RECIPIENT}
-          EOF
+          __SCOUT_ENV_EOF__
+
+      - name: Render resume.txt on VM
+        env:
+          RESUME_TEXT: ${{ secrets.RESUME_TEXT }}
+        run: |
+          set -euo pipefail
+          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new $VM_USER@$VM_HOST"
+          printf '%s' "$RESUME_TEXT" | $SSH "cat > $APP_DIR/scout/resume.txt"
 
       - name: Bring up containers
         run: |
