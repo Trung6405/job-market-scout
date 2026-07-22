@@ -39,8 +39,7 @@ tests/
 # ADK local runtime session cache
 scout/.adk/
 
-# Personal resume / profile
-scout/resume.txt
+# Personal profile
 scout/profile.json
 
 # Docker itself

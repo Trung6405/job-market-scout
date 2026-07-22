@@ -100,11 +100,11 @@ always runs, and every trace of `resume.txt` is gone with all tests green.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All phase verification steps pass
-- [ ] Feature verified manually in a running environment
-- [ ] Docs / README updated where behaviour changed
-- [ ] No new lint or type-check warnings
+- [x] All acceptance criteria met
+- [x] All phase verification steps pass (`pytest`: 205 passed)
+- [ ] Feature verified manually in a running environment *(pending post-deploy: confirm scored listings show a spread, not all "reach")*
+- [x] Docs / README updated where behaviour changed (`infra/README.md` resume secret removed; `.gitignore`/`.dockerignore` resume entries dropped)
+- [x] No new lint or type-check warnings
 
 ## Update Rules
 
