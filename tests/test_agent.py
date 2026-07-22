@@ -170,6 +170,23 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
         calls.append("render_profile")
         return Path("reports/profile.html")
 
+    async def _fake_requirements(listings, settings=None):
+        return [
+            ListingRequirements(
+                source=item.source,
+                external_id=item.external_id,
+                must_have=[],
+                nice_to_have=[],
+            )
+            for item in listings
+        ]
+
+    async def _fake_record_listing_gaps(conn, run_id, checks_by_match):
+        pass
+
+    async def _fake_record_listing_meta(conn, run_id, matches_with_requirements):
+        pass
+
     monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
     monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
     monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
@@ -181,10 +198,12 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
     monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
     monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
-    # scout/profile.json is a tracked placeholder (kept so the Docker
-    # bind-mount always has a source), so it exists on disk in every
-    # checkout. Stub it out to exercise the documented no-profile path.
-    monkeypatch.setattr("scout.agent.load_profile", lambda path: None)
+    # Profile is always present now (settings.profile from the committed
+    # profile.json), so gap detection runs; mock its LLM + DB writes to keep
+    # this ordering test hermetic.
+    monkeypatch.setattr("scout.agent.run_requirements_extraction", _fake_requirements)
+    monkeypatch.setattr("scout.agent.record_listing_gaps", _fake_record_listing_gaps)
+    monkeypatch.setattr("scout.agent.record_listing_meta", _fake_record_listing_meta)
 
     texts = await _run_pipeline_agent()
 
@@ -203,15 +222,16 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     assert calls[6] == ("finish_run", 1, 1, 1)
     assert calls[7] == ("render_run", 1)
     assert calls[8] == "render_history"
-    # No profile file exists at the default path, so render_profile is skipped.
-    assert calls[9] == "pool_closed"
-    assert calls[10] == (
+    # Profile is present, so render_profile runs before the pool closes.
+    assert calls[9] == "render_profile"
+    assert calls[10] == "pool_closed"
+    assert calls[11] == (
         "briefing",
         [listing],
         [score],
         Path("reports/2026-07-21/dashboard.html"),
     )
-    assert "render_profile" not in calls
+    assert "render_profile" in calls
     assert any("Scraper: 1 listing" in t for t in texts)
     assert any("Tracker: 1 new/changed" in t for t in texts)
     assert any("Scorer: 1 scored" in t for t in texts)
@@ -426,11 +446,19 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
     monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
     monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
     monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
-    # scout/profile.json is a tracked placeholder present in CI, which would send
-    # this test down the advisor's real LLM call. Gap detection has its own test
-    # (test_scout_pipeline_agent_records_gaps_when_profile_exists); here we take
-    # the documented no-profile path to keep the persist assertions hermetic.
-    monkeypatch.setattr("scout.agent.load_profile", lambda path: None)
+    # Profile is always present now (loaded from the committed profile.json), so
+    # gap detection runs. Gap detection has its own test
+    # (test_scout_pipeline_agent_records_gaps_when_profile_exists); here we mock
+    # the advisor LLM call and the profile render to keep the persist assertions
+    # hermetic.
+    async def _fake_requirements(listings, settings=None):
+        return []
+
+    def _fake_render_profile(profile, settings):
+        return Path("reports/profile.html")
+
+    monkeypatch.setattr("scout.agent.run_requirements_extraction", _fake_requirements)
+    monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
 
     texts = await _run_pipeline_agent()
 
@@ -569,109 +597,5 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
     assert ("render_profile", profile) in calls
     assert calls.index(("render_profile", profile)) < calls.index("briefing")
     assert calls[-1] == "briefing"
-    assert any("Report rendered:" in t for t in texts)
-    assert any("Run persisted:" in t for t in texts)
-
-
-@pytest.mark.asyncio
-async def test_scout_pipeline_agent_skips_gap_detection_when_no_profile(monkeypatch):
-    listing = _make_listing()
-    score = ListingScore(source="linkedin", external_id="1", score=80, reasoning="Good fit.")
-
-    calls = []
-
-    async def _fake_run_scraper(settings):
-        return [listing]
-
-    async def _fake_track_listings(listings, settings=None):
-        return listings
-
-    async def _fake_run_scorer(listings, settings):
-        return [score]
-
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
-        calls.append("briefing")
-        return EmailMessage()
-
-    class _FakeConn:
-        pass
-
-    class _FakePoolAcquire:
-        async def __aenter__(self):
-            return _FakeConn()
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-    class _FakePool:
-        def acquire(self):
-            return _FakePoolAcquire()
-
-        async def close(self):
-            pass
-
-    async def _fake_create_pool(settings):
-        return _FakePool()
-
-    async def _fake_start_run(conn, run_date):
-        return 1
-
-    async def _fake_record_run_listings(conn, run_id, matches):
-        pass
-
-    async def _fake_finish_run(conn, run_id, *, listings_scraped, listings_scored):
-        calls.append("finish_run")
-
-    def _fake_load_profile(path):
-        raise FileNotFoundError(f"profile file not found: {path}")
-
-    async def _fake_run_requirements_extraction(listings, settings=None):
-        calls.append("run_requirements_extraction")
-        return []
-
-    async def _fake_record_listing_gaps(conn, run_id, gaps_by_match):
-        calls.append("record_listing_gaps")
-
-    async def _fake_render_run(conn, run_id, settings, has_profile=False):
-        calls.append(("render_run", run_id, has_profile))
-        return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
-
-    async def _fake_render_history(conn, settings, has_profile=False):
-        calls.append(("render_history", has_profile))
-        return Path("reports/history.html")
-
-    def _fake_render_profile(profile_arg, settings):
-        calls.append(("render_profile", profile_arg))
-        return Path("reports/profile.html")
-
-    monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
-    monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
-    monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
-    monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
-    monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
-    monkeypatch.setattr("scout.agent.start_run", _fake_start_run)
-    monkeypatch.setattr("scout.agent.record_run_listings", _fake_record_run_listings)
-    monkeypatch.setattr("scout.agent.finish_run", _fake_finish_run)
-    monkeypatch.setattr("scout.agent.load_profile", _fake_load_profile)
-    monkeypatch.setattr(
-        "scout.agent.run_requirements_extraction", _fake_run_requirements_extraction
-    )
-    monkeypatch.setattr("scout.agent.record_listing_gaps", _fake_record_listing_gaps)
-    monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
-    monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
-    monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
-
-    texts = await _run_pipeline_agent()
-
-    assert "run_requirements_extraction" not in calls
-    assert "record_listing_gaps" not in calls
-    assert "finish_run" in calls
-    assert "briefing" in calls
-    assert ("render_run", 1, False) in calls  # has_profile is False — no profile.json
-    assert ("render_history", False) in calls
-    assert not any(
-        isinstance(c, tuple) and c[0] == "render_profile" for c in calls
-    )
-    assert any("Gap detection: skipped" in t for t in texts)
     assert any("Report rendered:" in t for t in texts)
     assert any("Run persisted:" in t for t in texts)
