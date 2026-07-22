@@ -27,6 +27,22 @@ _USER_ID = "scout"
 _SESSION_ID = "scout"
 
 
+@pytest.fixture(autouse=True)
+def _gmail_configured_for_briefing():
+    """The pipeline only runs briefing when Gmail creds are set
+    (scout/agent.py). Configure them on the shared settings singleton so these
+    tests exercise the briefing path deterministically, independent of whether
+    a local scout/.env supplies GMAIL_ADDRESS / GMAIL_APP_PASSWORD."""
+    saved = (default_settings.gmail_address, default_settings.gmail_app_password)
+    object.__setattr__(default_settings, "gmail_address", "scout@example.com")
+    object.__setattr__(default_settings, "gmail_app_password", "app-password")
+    try:
+        yield
+    finally:
+        object.__setattr__(default_settings, "gmail_address", saved[0])
+        object.__setattr__(default_settings, "gmail_app_password", saved[1])
+
+
 def _make_profile(**overrides):
     defaults = dict(
         name="Test Student",
