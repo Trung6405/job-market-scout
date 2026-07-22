@@ -162,8 +162,8 @@ one-line takeaway per listing explaining why it's worth a look, based
 only on the title, company, and score given. Do not invent facts about
 any listing beyond what is given, and do not call any tool.
 
-Resume:
-{settings.resume_text}
+Candidate profile:
+{render_profile_text(settings.profile)}
 
 Today's top matches:
 {matches_json}
