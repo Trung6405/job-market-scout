@@ -80,7 +80,7 @@ jobs:
           set -euo pipefail
           rsync -az --delete \
             -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new" \
-            --exclude '.git' --exclude 'scout/.env' \
+            --exclude '.git' --exclude 'scout/.env' --exclude 'reports' \
             ./ "$VM_USER@$VM_HOST:$APP_DIR/"
 
       - name: Render .env on VM

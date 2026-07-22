@@ -1,13 +1,16 @@
 # Production overlay — layered on top of docker-compose.yaml:
 #   docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --build
-# Leaves the base (local/dev) compose untouched. Adds the hello smoke-test page
+# Leaves the base (local/dev) compose untouched. Adds the web (dashboard) page
 # and restart policies for the long-lived services.
 services:
-  # Open http://<VM_PUBLIC_IP>/ in a browser to confirm the VM is up and reachable.
+  # Serves the rendered dashboard at http://<VM_PUBLIC_IP>/ (lands on history.html);
+  # the hello smoke-test page moves to http://<VM_PUBLIC_IP>/hello.
   hello:
     image: nginx:alpine
     volumes:
-      - ./hello:/usr/share/nginx/html:ro
+      - ./reports:/usr/share/nginx/html:ro
+      - ./hello:/usr/share/nginx/html/hello:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "80:80"
     restart: unless-stopped
