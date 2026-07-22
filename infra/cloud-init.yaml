@@ -4,8 +4,12 @@ package_upgrade: false
 packages:
   - rsync
 
+# Each entry is single-quoted so YAML treats it as a literal string. Without the
+# quotes, the ':' in `cut -d:` reads as a mapping indicator, which makes
+# cloud-init fail to shellify the whole block — silently skipping every command
+# (Docker never installs, /opt is never created).
 runcmd:
-  - curl -fsSL https://get.docker.com | sh
-  - systemctl enable --now docker
-  - usermod -aG docker "$(getent passwd 1000 | cut -d: -f1)"
-  - install -d -o 1000 -g 1000 /opt/job-market-scout
+  - 'curl -fsSL https://get.docker.com | sh'
+  - 'systemctl enable --now docker'
+  - 'usermod -aG docker "$(getent passwd 1000 | cut -d: -f1)"'
+  - 'install -d -o 1000 -g 1000 /opt/job-market-scout'

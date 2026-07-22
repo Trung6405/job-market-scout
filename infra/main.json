@@ -1,0 +1,199 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.45.15.27210",
+      "templateHash": "7939015438066853746"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure region for all resources, e.g. australiaeast."
+      }
+    },
+    "vmName": {
+      "type": "string",
+      "defaultValue": "scout-vm",
+      "metadata": {
+        "description": "Name of the virtual machine and prefix for its network resources."
+      }
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_B2s",
+      "metadata": {
+        "description": "VM size. Standard_B2s (2 vCPU, 4 GiB) is enough to build and run the compose stack."
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "azureuser",
+      "metadata": {
+        "description": "Admin (login) username for the VM."
+      }
+    },
+    "adminSshPublicKey": {
+      "type": "string",
+      "metadata": {
+        "description": "SSH public key granted login access. Public key only, never the private key."
+      }
+    },
+    "sshSourceAddressPrefix": {
+      "type": "string",
+      "defaultValue": "*",
+      "metadata": {
+        "description": "Source CIDR/IP allowed to reach SSH (port 22). Default * relies on key-only auth; narrow this to harden."
+      }
+    },
+    "httpSourceAddressPrefix": {
+      "type": "string",
+      "defaultValue": "*",
+      "metadata": {
+        "description": "Source CIDR/IP allowed to reach HTTP (port 80) — the hello smoke-test page. Set to a narrow range or \"\" to disable public web access."
+      }
+    }
+  },
+  "variables": {
+    "$fxv#0": "I2Nsb3VkLWNvbmZpZw0KcGFja2FnZV91cGRhdGU6IHRydWUNCnBhY2thZ2VfdXBncmFkZTogZmFsc2UNCnBhY2thZ2VzOg0KICAtIHJzeW5jDQoNCiMgRWFjaCBlbnRyeSBpcyBzaW5nbGUtcXVvdGVkIHNvIFlBTUwgdHJlYXRzIGl0IGFzIGEgbGl0ZXJhbCBzdHJpbmcuIFdpdGhvdXQgdGhlDQojIHF1b3RlcywgdGhlICc6JyBpbiBgY3V0IC1kOmAgcmVhZHMgYXMgYSBtYXBwaW5nIGluZGljYXRvciwgd2hpY2ggbWFrZXMNCiMgY2xvdWQtaW5pdCBmYWlsIHRvIHNoZWxsaWZ5IHRoZSB3aG9sZSBibG9jayDigJQgc2lsZW50bHkgc2tpcHBpbmcgZXZlcnkgY29tbWFuZA0KIyAoRG9ja2VyIG5ldmVyIGluc3RhbGxzLCAvb3B0IGlzIG5ldmVyIGNyZWF0ZWQpLg0KcnVuY21kOg0KICAtICdjdXJsIC1mc1NMIGh0dHBzOi8vZ2V0LmRvY2tlci5jb20gfCBzaCcNCiAgLSAnc3lzdGVtY3RsIGVuYWJsZSAtLW5vdyBkb2NrZXInDQogIC0gJ3VzZXJtb2QgLWFHIGRvY2tlciAiJChnZXRlbnQgcGFzc3dkIDEwMDAgfCBjdXQgLWQ6IC1mMSkiJw0KICAtICdpbnN0YWxsIC1kIC1vIDEwMDAgLWcgMTAwMCAvb3B0L2pvYi1tYXJrZXQtc2NvdXQnDQo=",
+    "subnetName": "default"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-11-01",
+      "name": "[format('{0}-nsg', parameters('vmName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": "[concat(createArray(createObject('name', 'allow-ssh', 'properties', createObject('priority', 1000, 'direction', 'Inbound', 'access', 'Allow', 'protocol', 'Tcp', 'sourcePortRange', '*', 'destinationPortRange', '22', 'sourceAddressPrefix', parameters('sshSourceAddressPrefix'), 'destinationAddressPrefix', '*'))), if(empty(parameters('httpSourceAddressPrefix')), createArray(), createArray(createObject('name', 'allow-http', 'properties', createObject('priority', 1010, 'direction', 'Inbound', 'access', 'Allow', 'protocol', 'Tcp', 'sourcePortRange', '*', 'destinationPortRange', '80', 'sourceAddressPrefix', parameters('httpSourceAddressPrefix'), 'destinationAddressPrefix', '*')))))]"
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-11-01",
+      "name": "[format('{0}-vnet', parameters('vmName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.0.0.0/16"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('subnetName')]",
+            "properties": {
+              "addressPrefix": "10.0.0.0/24"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2023-11-01",
+      "name": "[format('{0}-pip', parameters('vmName'))]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Static"
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2023-11-01",
+      "name": "[format('{0}-nic', parameters('vmName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "networkSecurityGroup": {
+          "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('vmName')))]"
+        },
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "subnet": {
+                "id": "[format('{0}/subnets/{1}', resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('vmName'))), variables('subnetName'))]"
+              },
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-pip', parameters('vmName')))]"
+              }
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('vmName')))]",
+        "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-pip', parameters('vmName')))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('vmName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('vmName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('vmName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "customData": "[variables('$fxv#0')]",
+          "linuxConfiguration": {
+            "disablePasswordAuthentication": true,
+            "ssh": {
+              "publicKeys": [
+                {
+                  "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
+                  "keyData": "[parameters('adminSshPublicKey')]"
+                }
+              ]
+            }
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "Canonical",
+            "offer": "0001-com-ubuntu-server-jammy",
+            "sku": "22_04-lts-gen2",
+            "version": "latest"
+          },
+          "osDisk": {
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "StandardSSD_LRS"
+            }
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', parameters('vmName')))]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', parameters('vmName')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "publicIpAddress": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', format('{0}-pip', parameters('vmName'))), '2023-11-01').ipAddress]"
+    },
+    "sshCommand": {
+      "type": "string",
+      "value": "[format('ssh {0}@{1}', parameters('adminUsername'), reference(resourceId('Microsoft.Network/publicIPAddresses', format('{0}-pip', parameters('vmName'))), '2023-11-01').ipAddress)]"
+    }
+  }
+}
