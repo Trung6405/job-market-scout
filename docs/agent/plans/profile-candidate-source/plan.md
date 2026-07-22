@@ -54,7 +54,7 @@ always runs, and every trace of `resume.txt` is gone with all tests green.
 
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
-| 1 | Profile rendering + Settings ownership | [phase-1-render-and-config.md](phase-1-render-and-config.md) | Not started |
+| 1 | Profile rendering + Settings ownership | [phase-1-render-and-config.md](phase-1-render-and-config.md) | Complete |
 | 2 | Wire prompts + pipeline to the profile | [phase-2-wire-consumers.md](phase-2-wire-consumers.md) | Not started |
 | 3 | Retire resume.txt across infra | [phase-3-retire-resume.md](phase-3-retire-resume.md) | Not started |
 

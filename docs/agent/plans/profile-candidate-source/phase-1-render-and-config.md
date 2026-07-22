@@ -1,7 +1,7 @@
 # Phase 1: Profile rendering + Settings ownership
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** nothing
 
 ---
