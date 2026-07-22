@@ -146,8 +146,15 @@ class ScoutPipelineAgent(BaseAgent):
             await pool.close()
         yield _status_event(ctx, self.name, f"Run persisted: {run_date}")
 
-        await run_briefing(relevant, scores, settings, report_path=report_paths["dashboard"])
-        yield _status_event(ctx, self.name, "Briefing: email sent")
+        if settings.gmail_address and settings.gmail_app_password:
+            await run_briefing(
+                relevant, scores, settings, report_path=report_paths["dashboard"]
+            )
+            yield _status_event(ctx, self.name, "Briefing: email sent")
+        else:
+            yield _status_event(
+                ctx, self.name, "Briefing: skipped (GMAIL_ADDRESS/GMAIL_APP_PASSWORD not set)"
+            )
 
 
 root_agent = ScoutPipelineAgent()
