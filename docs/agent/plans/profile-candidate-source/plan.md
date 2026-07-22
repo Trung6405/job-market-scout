@@ -1,6 +1,6 @@
 # Plan: Profile as the single candidate source
 
-> **Status:** Not started
+> **Status:** Complete
 > **Created:** 2026-07-22 · **Last updated:** 2026-07-22
 > **Spec:** [spec.md](../../specs/profile-candidate-source/spec.md)
 
@@ -17,15 +17,16 @@ always runs, and every trace of `resume.txt` is gone with all tests green.
 
 ## Acceptance Criteria
 
-- [ ] `Settings()` exposes `settings.profile: Profile`, loaded from
+- [x] `Settings()` exposes `settings.profile: Profile`, loaded from
       `profile_path`, and raises a clear error when the file is missing/invalid.
-- [ ] The scorer and briefing prompts contain the rendered profile text and
+- [x] The scorer and briefing prompts contain the rendered profile text and
       no longer reference `resume_text`.
-- [ ] The pipeline no longer calls `load_profile` or branches on a missing
-      profile; gap detection always runs.
-- [ ] `resume.txt`, `resume.txt.example`, the compose mount, `RESUME_PATH`,
+- [x] The pipeline no longer branches on a missing profile; gap detection
+      always runs. *(Amended: it keeps a required `load_profile` call rather than
+      reading `settings.profile` — see spec Amendments.)*
+- [x] `resume.txt`, `resume.txt.example`, the compose mount, `RESUME_PATH`,
       and the deploy/CI resume steps are removed.
-- [ ] `pytest` passes with no reference to `resume_text`/`resume_path` in code.
+- [x] `pytest` passes with no reference to `resume_text`/`resume_path` in code.
 
 ---
 
@@ -56,7 +57,7 @@ always runs, and every trace of `resume.txt` is gone with all tests green.
 |---|-------|----------|--------|
 | 1 | Profile rendering + Settings ownership | [phase-1-render-and-config.md](phase-1-render-and-config.md) | Complete |
 | 2 | Wire prompts + pipeline to the profile | [phase-2-wire-consumers.md](phase-2-wire-consumers.md) | Complete |
-| 3 | Retire resume.txt across infra | [phase-3-retire-resume.md](phase-3-retire-resume.md) | Not started |
+| 3 | Retire resume.txt across infra | [phase-3-retire-resume.md](phase-3-retire-resume.md) | Complete |
 
 > All phases are planned in advance — every row above has a written,
 > human-approved phase doc before phase 1 execution starts.

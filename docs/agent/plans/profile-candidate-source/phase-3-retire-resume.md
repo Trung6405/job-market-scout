@@ -1,7 +1,7 @@
 # Phase 3: Retire resume.txt across infra
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** Phase 2 complete (nothing reads `resume_text` anymore)
 
 ---
@@ -113,4 +113,8 @@ workflow steps. Config's `resume_text` removal is reverted with them.
 
 ## Notes / Learnings
 
-<Filled in during execution.>
+- `scout/resume.txt` was gitignored (untracked): removed from disk with `rm`;
+  `scout/resume.txt.example` was tracked and removed with `git rm`.
+- Remaining "resume" mentions are prose in the scorer rubric (`scout/prompts.py`)
+  and one briefing fallback line (`email_builder.py`). Left as-is — a copy-only
+  follow-up, not part of retiring the artifact.
