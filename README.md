@@ -81,3 +81,10 @@ REPORT_HOST_DIR=/home/you/job-market-scout/reports
 pip install -r requirements.txt
 pytest
 ```
+The suite needs a live Postgres — start it first with `docker compose up -d postgres`.
+
+### Command reference
+
+See [docs/commands.md](docs/commands.md) for a single cheatsheet of every
+command to **run** (full pipeline, re-render reports, manage the stack),
+**test**, **show** the rendered reports, and **deploy**.

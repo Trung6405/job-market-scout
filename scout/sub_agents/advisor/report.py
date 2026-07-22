@@ -4,12 +4,21 @@ from pathlib import Path
 
 import asyncpg
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markdown_it import MarkdownIt
+from markupsafe import Markup
 
 from scout.config import Settings
 from scout.shared.db import get_adjacent_runs, get_run, get_run_details, list_runs
 from scout.shared.schemas import Listing, Profile, RunListingDetail
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+
+# Job descriptions arrive as Markdown (JobSpy's default --description_format),
+# complete with backslash escapes like ``C\+\+`` and ``\|``. Render them to HTML
+# so the advisor page shows formatted text rather than raw Markdown syntax.
+# ``html=False`` escapes any raw HTML in the scraped source, so untrusted markup
+# can't inject tags (the commonmark preset would otherwise pass it through).
+_MARKDOWN = MarkdownIt("commonmark", {"breaks": True, "html": False})
 
 _BAND_INFO = {
     "strong_match": ("Strong-match", "strong"),
@@ -24,6 +33,12 @@ def _band_label(band: str) -> str:
 
 def _band_css(band: str) -> str:
     return _BAND_INFO.get(band, (band, ""))[1]
+
+
+def _render_markdown(text: str | None) -> Markup:
+    if not text:
+        return Markup("")
+    return Markup(_MARKDOWN.render(text))
 
 
 def _format_salary(listing: Listing) -> str:
@@ -44,6 +59,7 @@ def _get_env() -> Environment:
     env.filters["band_label"] = _band_label
     env.filters["band_css"] = _band_css
     env.filters["format_salary"] = _format_salary
+    env.filters["markdown"] = _render_markdown
     return env
 
 

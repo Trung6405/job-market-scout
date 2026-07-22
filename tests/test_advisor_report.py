@@ -27,6 +27,7 @@ from scout.shared.schemas import (
     TechSkill,
 )
 from scout.sub_agents.advisor.report import render_history, render_profile, render_run
+from scout import rerender
 
 
 def _make_listing(**overrides) -> Listing:
@@ -207,6 +208,41 @@ async def test_render_run_job_detail_shows_snapshot_breakdown_and_checklist(
 
 
 @pytest.mark.asyncio
+async def test_render_run_job_detail_renders_markdown_description(db_pool, tmp_path):
+    # JobSpy returns descriptions as Markdown with backslash escapes such as
+    # ``C\+\+`` and ``\-`` — the advisor page must render, not display, them.
+    description = (
+        "**Backend Engineer** \\| Java / Go / Rust / C\\+\\+\n\n"
+        "Responsibilities:\n\n"
+        "\\-Design and build backend services.\n\n"
+        "<script>alert('xss')</script>"
+    )
+    listing = _make_listing(description=description)
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        match = MatchResult(listing=listing, score=88, reasoning="Great fit")
+        await record_run_listings(conn, run_id, [(match, "strong_match")])
+        await finish_run(conn, run_id, listings_scraped=1, listings_scored=1)
+
+        run_listing_id = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id
+        )
+
+        settings = Settings(report_output_dir=str(tmp_path))
+        paths = await render_run(conn, run_id, settings)
+
+    html = paths[f"job_detail_{run_listing_id}"].read_text(encoding="utf-8")
+
+    # Markdown is rendered to HTML, backslash escapes are resolved.
+    assert "<strong>Backend Engineer</strong>" in html
+    assert "C++" in html
+    assert "C\\+\\+" not in html
+    # Raw HTML in the source is neutralised, not injected.
+    assert "<script>alert" not in html
+
+
+@pytest.mark.asyncio
 async def test_render_run_links_to_adjacent_day_dashboards(db_pool, tmp_path):
     listing = _make_listing()
     async with db_pool.acquire() as conn:
@@ -274,6 +310,49 @@ async def test_render_history_profile_nav_link_is_clickable_when_profile_exists(
 
     html = history_path.read_text(encoding="utf-8")
     assert 'href="profile.html"' in html
+
+
+@pytest.mark.asyncio
+async def test_rerender_all_regenerates_pages_from_db(db_pool, tmp_path, monkeypatch):
+    # A run whose stored description is raw Markdown, plus a stale HTML page on
+    # disk from a hypothetical older renderer. rerender must overwrite it.
+    listing = _make_listing(description="**Backend** \\| Go / C\\+\\+")
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        match = MatchResult(listing=listing, score=88, reasoning="Great fit")
+        await record_run_listings(conn, run_id, [(match, "strong_match")])
+        await finish_run(conn, run_id, listings_scraped=1, listings_scored=1)
+        run_listing_id = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id
+        )
+
+    stale = tmp_path / "2026-07-21" / f"job-detail-{run_listing_id}.html"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("STALE", encoding="utf-8")
+
+    settings = Settings(report_output_dir=str(tmp_path))
+    monkeypatch.setattr(rerender, "default_settings", settings)
+
+    class _NonClosingPool:
+        def acquire(self):
+            return db_pool.acquire()
+
+        async def close(self):  # rerender_all closes its own pool; keep fixture alive
+            pass
+
+    async def _fake_create_pool(_settings):
+        return _NonClosingPool()
+
+    monkeypatch.setattr(rerender, "create_pool", _fake_create_pool)
+
+    await rerender.rerender_all()
+
+    html = stale.read_text(encoding="utf-8")
+    assert "STALE" not in html
+    assert "<strong>Backend</strong>" in html
+    assert "C++" in html
+    assert (tmp_path / "history.html").exists()
 
 
 def test_render_profile_writes_profile_html(tmp_path):

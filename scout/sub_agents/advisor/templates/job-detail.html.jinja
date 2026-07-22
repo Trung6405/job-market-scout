@@ -51,7 +51,16 @@
   .snapgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
   .snapgrid .k{font-size:11.5px;color:var(--muted)}
   .snapgrid .v{font-size:14px;font-weight:600;margin-top:2px}
-  .about{font-size:13.5px;color:#464b59;margin:0;white-space:pre-wrap}
+  .about{font-size:13.5px;color:#464b59}
+  .about > :first-child{margin-top:0}
+  .about > :last-child{margin-bottom:0}
+  .about p{margin:0 0 10px}
+  .about ul,.about ol{margin:0 0 10px;padding-left:22px}
+  .about li{margin:3px 0}
+  .about strong{color:var(--ink)}
+  .about a{word-break:break-word}
+  .about h1,.about h2,.about h3,.about h4{font-size:14px;font-weight:650;margin:14px 0 6px;
+    color:var(--ink);text-transform:none;letter-spacing:0}
 
   section{margin-top:26px}
   h2{font-size:15px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
@@ -176,7 +185,7 @@
   <section>
     <h2>About this role</h2>
     <div class="snapshot">
-      <p class="about">{{ detail.listing.description }}</p>
+      <div class="about">{{ detail.listing.description | markdown }}</div>
     </div>
   </section>
 
