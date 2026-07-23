@@ -11,6 +11,11 @@ concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: true
 
+# Needed for azure/login's OIDC federated-credential flow (no stored cloud secret).
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -59,10 +64,28 @@ jobs:
       APP_DIR: /opt/job-market-scout
       VM_USER: ${{ vars.VM_USER }}
       VM_HOST: ${{ vars.VM_HOST }}
+      RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
+      # Fixed by infra/main.bicepparam (param vmName = 'scout-vm').
+      VM_NAME: scout-vm
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Start VM
+        run: |
+          set -euo pipefail
+          # The scheduled-run workflow deallocates the VM after each cycle, so it
+          # is normally powered off. Start it before rsync. az vm start is
+          # idempotent: no-op if already running.
+          az vm start --resource-group "$RESOURCE_GROUP" --name "$VM_NAME"
 
       - name: Set up SSH
         env:
@@ -72,6 +95,23 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VM_SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+
+      - name: Wait for SSH
+        run: |
+          set -euo pipefail
+          # az vm start returns once the VM is allocated, but sshd may need a
+          # few more seconds after boot. Retry for up to ~2 minutes.
+          for i in $(seq 1 24); do
+            if ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+                -o ConnectTimeout=5 "$VM_USER@$VM_HOST" 'true' 2>/dev/null; then
+              echo "SSH is up."
+              exit 0
+            fi
+            echo "SSH not ready yet (attempt $i)..."
+            sleep 5
+          done
+          echo "VM did not become reachable over SSH in time." >&2
+          exit 1
 
       - name: Rsync repo to VM
         run: |
@@ -129,3 +169,13 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
             "$VM_USER@$VM_HOST" \
             "cd $APP_DIR && docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --build"
+
+      - name: Deallocate VM
+        # always(): stop billing even if the deploy failed or SSH never came up.
+        # Deallocate (not stop) releases the compute so it isn't charged. The
+        # long-lived services come back on their own via restart: unless-stopped
+        # when the next scheduled run boots the VM.
+        if: always()
+        run: |
+          set -euo pipefail
+          az vm deallocate --resource-group "$RESOURCE_GROUP" --name "$VM_NAME"

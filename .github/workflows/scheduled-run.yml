@@ -5,7 +5,8 @@ name: Scheduled run
 
 on:
   schedule:
-    - cron: "0 5 * * *"
+    # 00:30 UTC = 10:30 Melbourne time (AEST, UTC+10; no DST in winter).
+    - cron: "30 0 * * *"
   workflow_dispatch:
 
 # Needed for azure/login's OIDC federated-credential flow (no stored cloud secret).
