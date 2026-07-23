@@ -1,7 +1,7 @@
 # Phase 3: Contracts & Typing
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** In progress
 > **Depends on:** nothing (independent; touches band typing + docs)
 
 ---
@@ -28,20 +28,20 @@ naming are documented where readers will find them.
 - **Files:** `scout/sub_agents/advisor/bands.py`, `scout/shared/schemas.py`, `tests/test_advisor_bands.py` (create if absent)
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: `classify_band(95, settings)` / `classify_band(threshold-1, settings)` return the three expected band values, and the return type is the closed `Band` (assert membership in the allowed set).
-  - [ ] Verify it fails (`pytest tests/test_advisor_bands.py -q`)
-  - [ ] Implement: define `Band = Literal["strong_match", "competitive", "reach"]` (or a `StrEnum`) in `schemas.py`; annotate `classify_band` return and the `band` fields on `RunListing`/`RunListingDetail` with it. Keep the wire/DB value as the existing strings.
-  - [ ] Verify it passes (`pytest tests/test_advisor_bands.py -q`)
-  - [ ] Commit: `refactor(advisor): make band a closed typed vocabulary`
+  - [x] Write failing test: `classify_band(...)` returns members of the band vocabulary; `RunListing` rejects an unknown band via pydantic `ValidationError`; `get_args(Band)` is the closed set.
+  - [x] Verify it fails (`pytest tests/test_advisor_bands.py -q`)
+  - [x] Implement: define `Band = Literal["strong_match", "competitive", "reach"]` in `schemas.py`; annotate `classify_band` return and the `band` fields on `RunListing`/`RunListingDetail`. Values stay plain strings, so DB column and templates are unaffected.
+  - [x] Verify it passes (`pytest tests/test_advisor_bands.py -q` — 9 passed)
+  - [x] Commit: `refactor(advisor): make band a closed typed vocabulary`
 
 ### Task 2: Verify templates still compare band strings correctly
 
 - **Files:** `scout/sub_agents/advisor/templates/*`, no code change expected
 - **Gate:** none
 - **Steps:**
-  - [ ] Grep templates for band literals (`strong_match`, `competitive`, `reach`) and confirm they compare against the enum's string value (unchanged).
-  - [ ] Verify: render a run and confirm band styling is intact (`pytest tests/ -k report -q` if a render test exists, else manual render).
-  - [ ] Commit only if a fix was needed: `fix(advisor): align template band comparison with typed band`
+  - [x] Grep templates + `report.py` for band literals: `report.py` maps band strings via `_BAND_INFO`/`_band_css`/`_band_label` and counts `d.band == "strong_match"`; templates key off derived CSS classes. Because `Band` is a `Literal` (plain strings), all of this is unchanged.
+  - [x] Verify: `test_advisor_report.py` render tests pass (non-DB green). No fix needed.
+  - [x] No commit needed — no code change (folded into Task 1's verification).
 
 ### Task 3: Document run-identity & idempotency contract
 
