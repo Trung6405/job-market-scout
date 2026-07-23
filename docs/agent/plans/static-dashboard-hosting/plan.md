@@ -1,6 +1,6 @@
 # Plan: Static Web App hosting for the reports dashboard
 
-> **Status:** Not started
+> **Status:** In progress — code changes done (tasks 1–3); provisioning and manual rollout verification (task 4) still pending
 > **Created:** 2026-07-23 · **Last updated:** 2026-07-23
 > **Spec:** none — small work, per plan-standards size threshold (single phase, ~4 files, low risk)
 
@@ -26,7 +26,7 @@ with up-to-date content.
 - [ ] `scheduled-run.yml` copies `reports/` and `hello/` off the VM and
       deploys them to the Static Web App after each scout cycle, before the
       VM is deallocated.
-- [ ] The on-VM `hello` nginx service is removed from
+- [x] The on-VM `hello` nginx service is removed from
       `docker-compose.prod.yaml`.
 - [ ] After a scheduled run, the dashboard (`/` → `history.html`, `/hello`)
       is reachable at the Static Web App URL while `scout-vm` is deallocated.
