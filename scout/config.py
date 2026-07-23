@@ -116,12 +116,11 @@ class Settings:
     briefing_max_matches: int = field(
         default_factory=partial(_env_int, "BRIEFING_MAX_MATCHES", 5)
     )
-    gmail_address: str = field(default_factory=partial(_env_str, "GMAIL_ADDRESS", ""))
-    gmail_app_password: str = field(
-        default_factory=partial(_env_str, "GMAIL_APP_PASSWORD", "")
+    discord_bot_token: str = field(
+        default_factory=partial(_env_str, "DISCORD_BOT_TOKEN", "")
     )
-    gmail_recipient: str = field(
-        default_factory=partial(_env_str, "GMAIL_RECIPIENT", "")
+    discord_channel_id: str = field(
+        default_factory=partial(_env_str, "DISCORD_CHANNEL_ID", "")
     )
     profile: Profile = field(init=False)
 

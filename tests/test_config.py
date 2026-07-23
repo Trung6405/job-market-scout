@@ -123,29 +123,33 @@ def test_settings_reads_database_url_env_override(monkeypatch):
 def test_settings_uses_briefing_defaults_when_env_unset(monkeypatch):
     for var in (
         "BRIEFING_MAX_MATCHES",
-        "GMAIL_ADDRESS",
-        "GMAIL_APP_PASSWORD",
-        "GMAIL_RECIPIENT",
+        "DISCORD_BOT_TOKEN",
+        "DISCORD_CHANNEL_ID",
     ):
         monkeypatch.delenv(var, raising=False)
 
     settings = Settings()
 
     assert settings.briefing_max_matches == 5
-    assert settings.gmail_address == ""
-    assert settings.gmail_app_password == ""
-    assert settings.gmail_recipient == ""
+    assert settings.discord_bot_token == ""
+    assert settings.discord_channel_id == ""
 
 
 def test_settings_reads_briefing_env_overrides(monkeypatch):
     monkeypatch.setenv("BRIEFING_MAX_MATCHES", "3")
-    monkeypatch.setenv("GMAIL_ADDRESS", "scout@example.com")
-    monkeypatch.setenv("GMAIL_APP_PASSWORD", "app-password")
-    monkeypatch.setenv("GMAIL_RECIPIENT", "me@example.com")
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "bot-token")
+    monkeypatch.setenv("DISCORD_CHANNEL_ID", "123456789")
 
     settings = Settings()
 
     assert settings.briefing_max_matches == 3
-    assert settings.gmail_address == "scout@example.com"
-    assert settings.gmail_app_password == "app-password"
-    assert settings.gmail_recipient == "me@example.com"
+    assert settings.discord_bot_token == "bot-token"
+    assert settings.discord_channel_id == "123456789"
+
+
+def test_settings_has_no_gmail_fields():
+    settings = Settings()
+
+    assert not hasattr(settings, "gmail_address")
+    assert not hasattr(settings, "gmail_app_password")
+    assert not hasattr(settings, "gmail_recipient")
