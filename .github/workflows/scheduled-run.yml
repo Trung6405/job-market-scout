@@ -76,9 +76,29 @@ jobs:
             "$VM_USER@$VM_HOST" \
             "cd $APP_DIR && docker compose -f docker-compose.yaml -f docker-compose.prod.yaml run --rm app"
 
+      - name: Pull dashboard content from VM
+        run: |
+          set -euo pipefail
+          mkdir -p dashboard-staging/hello
+          rsync -az -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new" \
+            "$VM_USER@$VM_HOST:$APP_DIR/reports/" dashboard-staging/
+          rsync -az -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new" \
+            "$VM_USER@$VM_HOST:$APP_DIR/hello/" dashboard-staging/hello/
+
+      - name: Deploy dashboard to Static Web App
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: dashboard-staging
+          skip_app_build: true
+          output_location: ""
+
       - name: Deallocate VM
-        # always(): stop billing even if the run failed or SSH never came up.
-        # Deallocate (not stop) releases the compute so it isn't charged.
+        # always(): stop billing even if the run, dashboard pull/deploy, or
+        # SSH never came up. Deallocate (not stop) releases the compute so
+        # it isn't charged.
         if: always()
         run: |
           set -euo pipefail

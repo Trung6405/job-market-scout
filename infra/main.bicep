@@ -21,6 +21,9 @@ param sshSourceAddressPrefix string = '*'
 @description('Source CIDR/IP allowed to reach HTTP (port 80) — the hello smoke-test page. Set to a narrow range or "" to disable public web access.')
 param httpSourceAddressPrefix string = '*'
 
+@description('Azure region for the dashboard Static Web App. Static Web Apps is only offered in a small subset of regions, so this is independent from `location` (the VM region).')
+param staticWebAppLocation string = 'eastasia'
+
 var subnetName = 'default'
 
 resource nsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
@@ -159,5 +162,28 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-03-01' = {
   }
 }
 
+// Serves the reports dashboard (reports/ + hello/) independent of the VM's
+// start/deallocate cycle, so it's reachable even while scout-vm is off.
+// Content is pushed by scheduled-run.yml via the deploy token — no
+// repositoryUrl/branch here, since this isn't using Static Web Apps' own
+// GitHub-integration build (that would require a repo-owned deployment
+// token pattern this workflow doesn't use).
+resource dashboard 'Microsoft.Web/staticSites@2023-12-01' = {
+  name: '${vmName}-dashboard'
+  location: staticWebAppLocation
+  sku: {
+    name: 'Free'
+    tier: 'Free'
+  }
+  properties: {}
+}
+
 output publicIpAddress string = publicIp.properties.ipAddress
 output sshCommand string = 'ssh ${adminUsername}@${publicIp.properties.ipAddress}'
+output dashboardHostname string = dashboard.properties.defaultHostname
+// Deployment token is deliberately not output here (would land in
+// deployment-history/workflow logs in plaintext). After provisioning, fetch
+// it with:
+//   az staticwebapp secrets list -n <vmName>-dashboard -g <resource-group> \
+//     --query "properties.apiKey" -o tsv
+// and store it as the AZURE_STATIC_WEB_APPS_API_TOKEN GitHub secret.
