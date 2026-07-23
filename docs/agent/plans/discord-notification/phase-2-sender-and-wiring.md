@@ -34,21 +34,28 @@ phase a pipeline run posts the briefing to Discord.
   `tests/test_briefing_notification.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test (rewrite the file): `ensure_discord_configured`
+  - [x] Write failing test (rewrite the file): `ensure_discord_configured`
         raises `ValueError` when token or channel id is missing;
         `send_message(payload, settings)` POSTs to
         `https://discord.com/api/v10/channels/{channel_id}/messages` with
         header `Authorization: Bot {token}` and JSON body == payload, and
         raises on a non-2xx response. Mock `httpx.AsyncClient` via a fake
         transport / monkeypatched client so no real network call is made.
-  - [ ] Verify it fails (`python -m pytest tests/test_briefing_notification.py`)
-  - [ ] Replace `notification.py`: drop `smtplib`/`EmailMessage`; add
+  - [x] Verify it fails (`python -m pytest tests/test_briefing_notification.py`)
+  - [x] Replace `notification.py`: drop `smtplib`/`EmailMessage`; add
         `ensure_discord_configured(settings)` and
         `async def send_message(payload: dict, settings) -> None` using
         `httpx.AsyncClient` in an `async with`, calling
         `response.raise_for_status()`.
-  - [ ] Verify it passes (`python -m pytest tests/test_briefing_notification.py`)
-  - [ ] Commit: `feat(briefing): send briefing via Discord bot REST API`
+  - [x] Verify it passes (`python -m pytest tests/test_briefing_notification.py`)
+  - [x] Commit: combined with Task 2 (see note below).
+
+> **Combined commit:** Tasks 1 and 2 landed in one commit
+> (`feat(briefing): send briefing via Discord bot REST API`). Rewriting
+> `notification.py` renames `send_email`→`send_message`, which breaks
+> `briefing.py`'s import until Task 2 rewires it — the two are mutually
+> coupled, so no commit ordering keeps the intermediate importable.
+> Committing them together keeps every commit's import graph intact.
 
 ### Task 2: Wire the briefing orchestrator
 
@@ -58,7 +65,7 @@ phase a pipeline run posts the briefing to Discord.
   Phase 1 Task 3), `tests/test_briefing_email_builder.py` (delete)
 - **Gate:** none
 - **Steps:**
-  - [ ] Update the entrypoint tests: monkeypatch `build_embed` and
+  - [x] Update the entrypoint tests: monkeypatch `build_embed` and
         `send_message` (instead of `build_email`/`send_email`), configure
         Discord settings (`discord_bot_token`, `discord_channel_id`), and
         assert the built payload is what gets sent. Change the
@@ -66,15 +73,15 @@ phase a pipeline run posts the briefing to Discord.
         before summarizing. Remove the `report_path`-threaded-to-builder
         test (report link dropped); keep a test that `run_briefing` still
         accepts `report_path` without error.
-  - [ ] Verify it fails (`python -m pytest tests/test_briefing_entrypoint.py`)
-  - [ ] Update `run_briefing`: import `build_embed` + `ensure_discord_configured`
+  - [x] Verify it fails (`python -m pytest tests/test_briefing_entrypoint.py`)
+  - [x] Update `run_briefing`: import `build_embed` + `ensure_discord_configured`
         + `send_message`; call `ensure_discord_configured`, build the
         payload, `await send_message(payload, settings)`; return the
         payload `dict`. Keep the `report_path` parameter (agent passes it)
         but do not forward it to `build_embed`. Delete the now-unreferenced
         `email_builder.py` and `tests/test_briefing_email_builder.py`.
-  - [ ] Verify it passes (`python -m pytest tests/test_briefing_entrypoint.py`)
-  - [ ] Commit: `refactor(briefing): orchestrate Discord embed send`
+  - [x] Verify it passes (`python -m pytest tests/test_briefing_entrypoint.py`)
+  - [x] Commit: combined with Task 1 (see note above).
 
 ### Task 3: Wire the pipeline agent gate
 
