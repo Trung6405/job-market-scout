@@ -1,6 +1,6 @@
 # Plan: Static website hosting for the reports dashboard
 
-> **Status:** In progress — code changes done (tasks 1–3); provisioning and manual rollout verification (task 4) still pending
+> **Status:** Complete — verified reachable at https://trung6405scoutdash.z44.web.core.windows.net/ while `scout-vm` is deallocated
 > **Created:** 2026-07-23 · **Last updated:** 2026-07-23
 > **Spec:** none — small work, per plan-standards size threshold (single phase, ~4 files, low risk)
 >
@@ -12,6 +12,16 @@
 > entirely by reusing the existing OIDC login (via a `Storage Blob Data Contributor` role
 > assignment) instead of `Azure/static-web-apps-deploy@v1`. All references to "Static Web App"
 > below are updated to reflect this.
+>
+> **Amendment (2026-07-23):** `main.bicep` couldn't be redeployed against the existing VM (ARM
+> rejects any `osProfile.customData` value on update — pre-existing issue, unrelated to this
+> feature). Split the storage account into its own `infra/dashboard.bicep`, deployed as a separate
+> step in `infra-provision.yml`. The RBAC role assignment also had to be granted out-of-band (the
+> CI service principal only has `Contributor`, which can't grant roles) — see the note in
+> `dashboard.bicep`. Also fixed: the static website's single global index-document setting meant
+> `/hello/` 404'd looking for `hello/history.html` instead of the uploaded `hello/index.html`;
+> standardized on `index.html` everywhere (`history.html` is also copied to `index.html` at the
+> site root, and kept under its own name for direct links).
 
 ---
 
@@ -31,17 +41,21 @@ content.
 
 ## Acceptance Criteria
 
-- [ ] A `Microsoft.Storage/storageAccounts` resource with static website
-      hosting enabled exists, provisioned via `infra/main.bicep`/`infra-provision.yml`.
-- [ ] `scheduled-run.yml` copies `reports/` and `hello/` off the VM and
+- [x] A `Microsoft.Storage/storageAccounts` resource with static website
+      hosting enabled exists, provisioned via `infra/dashboard.bicep`/`infra-provision.yml`.
+- [x] `scheduled-run.yml` copies `reports/` and `hello/` off the VM and
       uploads them to the storage account's `$web` container after each
       scout cycle, before the VM is deallocated.
 - [x] The on-VM `hello` nginx service is removed from
       `docker-compose.prod.yaml`.
-- [ ] After a scheduled run, the dashboard (`/` → `history.html`, `/hello`)
+- [x] After a scheduled run, the dashboard (`/` → `history.html`/`index.html`, `/hello`)
       is reachable at the static website endpoint while `scout-vm` is deallocated.
-- [ ] A failed publish/upload step does not prevent the `Deallocate VM` step
-      from running.
+      Verified 2026-07-23: `/`, `/hello/`, and `/history.html` all return 200
+      with `scout-vm` in `VM deallocated` state.
+- [x] A failed publish/upload step does not prevent the `Deallocate VM` step
+      from running (unchanged `if: always()` on that step; also incidentally
+      exercised when "Run scout cycle" itself failed mid-verification and
+      `Deallocate VM` still ran).
 
 ---
 
