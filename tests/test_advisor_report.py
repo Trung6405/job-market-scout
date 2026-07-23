@@ -21,6 +21,7 @@ from scout.shared.schemas import (
     ListingRequirements,
     MatchResult,
     Profile,
+    RequirementItem,
     Project,
     SkillGap,
     TechCategory,
@@ -179,8 +180,11 @@ async def test_render_run_job_detail_shows_snapshot_breakdown_and_checklist(
         requirements = ListingRequirements(
             source=listing.source,
             external_id=listing.external_id,
-            must_have=["Python", "PostgreSQL"],
-            nice_to_have=["Docker"],
+            must_have=[
+                RequirementItem(name="Python", kind="skill"),
+                RequirementItem(name="PostgreSQL", kind="skill"),
+            ],
+            nice_to_have=[RequirementItem(name="Docker", kind="skill")],
             seniority="Graduate / Entry",
             work_type="Hybrid — 3 days",
             team="Platform",

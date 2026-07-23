@@ -1,6 +1,6 @@
 # Plan: Requirement Kind Classification for Skill Gaps
 
-> **Status:** Not started
+> **Status:** In progress
 > **Created:** 2026-07-23 · **Last updated:** 2026-07-23
 > **Spec:** [spec.md](../../specs/gap-kind-classification/spec.md)
 
@@ -60,7 +60,7 @@ non-skill requirements are still visible as context.
 
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
-| 1 | Typed kind + gap matching + extractor prompt | [phase-1-typed-kind-and-matching.md](phase-1-typed-kind-and-matching.md) | Not started |
+| 1 | Typed kind + gap matching + extractor prompt | [phase-1-typed-kind-and-matching.md](phase-1-typed-kind-and-matching.md) | Complete |
 | 2 | Persist kind + kind-based gap filter | [phase-2-persistence.md](phase-2-persistence.md) | Not started |
 | 3 | Report rendering | [phase-3-report-rendering.md](phase-3-report-rendering.md) | Not started |
 

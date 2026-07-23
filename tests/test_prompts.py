@@ -49,3 +49,28 @@ def test_build_requirements_instruction_asks_for_canonical_skill_names():
     instruction = build_requirements_instruction(settings, listings)
 
     assert "canonical name" in instruction.lower()
+
+
+def test_build_requirements_instruction_names_all_requirement_kinds():
+    settings = Settings()
+    listings = [_make_match("1", "Platform Engineer", 88).listing]
+
+    instruction = build_requirements_instruction(settings, listings).lower()
+
+    for kind in ("skill", "qualification", "experience", "soft_skill"):
+        assert kind in instruction
+    assert "kind" in instruction
+
+
+def test_build_requirements_instruction_scopes_canonical_names_to_skills():
+    settings = Settings()
+    listings = [_make_match("1", "Platform Engineer", 88).listing]
+
+    instruction = build_requirements_instruction(settings, listings).lower()
+
+    # The canonical-short-name guidance applies to skill items; the sentence
+    # that states it must mention skills so it isn't read as applying to
+    # degrees/experience phrases.
+    canonical_idx = instruction.find("canonical name")
+    window = instruction[max(0, canonical_idx - 200) : canonical_idx + 200]
+    assert "skill" in window
