@@ -1,7 +1,7 @@
 # Phase 1: Config + Embed Builder
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** nothing
 
 ---
@@ -31,18 +31,18 @@ unit-testable.
 - **Files:** `scout/config.py`, `scout/.env.example`, `tests/test_config.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: `Settings` exposes `discord_bot_token` and
+  - [x] Write failing test: `Settings` exposes `discord_bot_token` and
         `discord_channel_id` from `DISCORD_BOT_TOKEN` / `DISCORD_CHANNEL_ID`
         (default `""`), and no longer defines `gmail_address`,
         `gmail_app_password`, or `gmail_recipient`.
-  - [ ] Verify it fails (`python -m pytest tests/test_config.py`)
-  - [ ] Remove the three `gmail_*` fields; add `discord_bot_token` and
+  - [x] Verify it fails (`python -m pytest tests/test_config.py`)
+  - [x] Remove the three `gmail_*` fields; add `discord_bot_token` and
         `discord_channel_id` via the existing `_env_str` pattern. Update
         `scout/.env.example`: drop `GMAIL_*` and the `REPORT_HOST_DIR`
         email-link comment wording, add `DISCORD_BOT_TOKEN=` and
         `DISCORD_CHANNEL_ID=`.
-  - [ ] Verify it passes (`python -m pytest tests/test_config.py`)
-  - [ ] Commit: `feat(config): replace Gmail settings with Discord bot config`
+  - [x] Verify it passes (`python -m pytest tests/test_config.py`)
+  - [x] Commit: `feat(config): replace Gmail settings with Discord bot config`
 
 ### Task 2: Embed builder — matches present
 
@@ -58,43 +58,44 @@ unit-testable.
         `value` contains a `[View listing]({url})` link and the takeaway.
         Include a case exercising the fallback takeaway (a match not in
         the prose index).
-  - [ ] Verify it fails (`python -m pytest tests/test_briefing_embed_builder.py`)
-  - [ ] Implement `build_embed`, porting `_index_takeaways`, `_takeaway_for`,
+  - [x] Verify it fails (`python -m pytest tests/test_briefing_embed_builder.py`)
+  - [x] Implement `build_embed`, porting `_index_takeaways`, `_takeaway_for`,
         and `_FALLBACK_TAKEAWAY_TEMPLATE` from `email_builder.py`. No HTML
         escaping. `report_path` is intentionally NOT a parameter (report
         link dropped).
-  - [ ] Verify it passes (`python -m pytest tests/test_briefing_embed_builder.py`)
-  - [ ] Commit: `feat(briefing): build Discord embed for matched listings`
+  - [x] Verify it passes (`python -m pytest tests/test_briefing_embed_builder.py`)
+  - [x] Commit: `feat(briefing): build Discord embed for matched listings`
 
-### Task 3: Embed builder — no-match case, field clamping, retire email builder
+### Task 3: Embed builder — no-match case, field clamping
 
 - **Files:** `scout/sub_agents/briefing/embed_builder.py`,
-  `tests/test_briefing_embed_builder.py`,
-  `scout/sub_agents/briefing/email_builder.py` (delete),
-  `tests/test_briefing_email_builder.py` (delete)
+  `tests/test_briefing_embed_builder.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: with `top_matches == []`, the embed title is
+  - [x] Write failing test: with `top_matches == []`, the embed title is
         `"Job Market Scout: no strong matches today"` with a short
-        description and no fields. Add a test that an over-long title /
-        field name / field value is clamped to Discord's limits (title
-        ≤256, field name ≤256, field value ≤1024).
-  - [ ] Verify it fails (`python -m pytest tests/test_briefing_embed_builder.py`)
-  - [ ] Implement the empty-day embed and a small `_clamp` helper applied
-        to title, field names, and field values. Delete `email_builder.py`
-        and `tests/test_briefing_email_builder.py`.
-  - [ ] Verify it passes (`python -m pytest tests/test_briefing_embed_builder.py`)
-  - [ ] Commit: `feat(briefing): handle no-match embed and clamp field limits`
+        description and no fields. Add tests that an over-long field name /
+        field value is clamped to Discord's limits (field name ≤256,
+        field value ≤1024). (Title clamp is defensive-only — a
+        count-based title is always short — so it is not unit-tested with a
+        trivially-passing assertion.)
+  - [x] Verify it fails (`python -m pytest tests/test_briefing_embed_builder.py`)
+  - [x] Implement the empty-day embed and a small `_clamp` helper applied
+        to title, field names, and field values.
+  - [x] Verify it passes (`python -m pytest tests/test_briefing_embed_builder.py`)
+  - [x] Commit: `feat(briefing): handle no-match embed and clamp field limits`
+
+> **Deferral (see Notes):** deleting `email_builder.py` and
+> `tests/test_briefing_email_builder.py` moved to Phase 2 Task 2, so no
+> commit leaves `briefing.py` with a dangling `build_email` import.
 
 ---
 
 ## Verification
 
-- [ ] Phase tests pass: `python -m pytest tests/test_config.py tests/test_briefing_embed_builder.py`
-- [ ] `email_builder.py` and its test are gone; no import of them remains
-      (`python -m pytest -q` collects without import errors for briefing —
-      note `briefing.py` still imports `build_email` until Phase 2, so run
-      the two files above specifically here).
+- [x] Phase tests pass: `python -m pytest tests/test_config.py tests/test_briefing_embed_builder.py`
+- [ ] `email_builder.py` removed — deferred to Phase 2 Task 2 (kept here so
+      `briefing.py` stays importable until it is rewired).
 
 ## Rollback
 
@@ -105,4 +106,9 @@ restored from git history. No state to unwind.
 
 ## Notes / Learnings
 
-<Filled in during execution.>
+- Retiring `email_builder.py` was moved out of this phase into Phase 2
+  Task 2. Deleting it here would break `briefing.py`'s `build_email`
+  import (and the briefing entrypoint test collection) for the span
+  between Phase 1 and Phase 2 Task 2. Deferring keeps every commit's
+  import graph intact; the deletion now rides with the `briefing.py`
+  rewire that removes the import.

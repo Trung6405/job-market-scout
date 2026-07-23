@@ -56,7 +56,7 @@ anywhere in the codebase.
 
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
-| 1 | Config + embed builder | [phase-1-config-and-embed.md](phase-1-config-and-embed.md) | Not started |
+| 1 | Config + embed builder | [phase-1-config-and-embed.md](phase-1-config-and-embed.md) | Complete |
 | 2 | Discord sender + wiring | [phase-2-sender-and-wiring.md](phase-2-sender-and-wiring.md) | Not started |
 
 > All phases are planned in advance — every row above has a written,

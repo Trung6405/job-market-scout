@@ -53,7 +53,9 @@ phase a pipeline run posts the briefing to Discord.
 ### Task 2: Wire the briefing orchestrator
 
 - **Files:** `scout/sub_agents/briefing/briefing.py`,
-  `tests/test_briefing_entrypoint.py`
+  `tests/test_briefing_entrypoint.py`,
+  `scout/sub_agents/briefing/email_builder.py` (delete — deferred from
+  Phase 1 Task 3), `tests/test_briefing_email_builder.py` (delete)
 - **Gate:** none
 - **Steps:**
   - [ ] Update the entrypoint tests: monkeypatch `build_embed` and
@@ -69,7 +71,8 @@ phase a pipeline run posts the briefing to Discord.
         + `send_message`; call `ensure_discord_configured`, build the
         payload, `await send_message(payload, settings)`; return the
         payload `dict`. Keep the `report_path` parameter (agent passes it)
-        but do not forward it to `build_embed`.
+        but do not forward it to `build_embed`. Delete the now-unreferenced
+        `email_builder.py` and `tests/test_briefing_email_builder.py`.
   - [ ] Verify it passes (`python -m pytest tests/test_briefing_entrypoint.py`)
   - [ ] Commit: `refactor(briefing): orchestrate Discord embed send`
 
