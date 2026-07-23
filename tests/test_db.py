@@ -599,3 +599,66 @@ async def test_record_listing_gaps_rolls_back_delete_when_insert_fails(db_pool):
     assert [(g.skill, g.requirement_level) for g in stored_gaps] == [
         ("Go", "must_have")
     ]
+
+
+@pytest.mark.asyncio
+async def test_record_listing_gaps_round_trips_kind(db_pool):
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        match = MatchResult(listing=listing, score=70, reasoning="Decent fit")
+        await record_run_listings(conn, run_id, [(match, "competitive")])
+
+        checks = [
+            SkillGap(skill="Go", requirement_level="must_have", met=False, kind="skill"),
+            SkillGap(
+                skill="A STEM degree in CS",
+                requirement_level="must_have",
+                met=True,
+                kind="qualification",
+            ),
+            SkillGap(
+                skill="3+ years experience",
+                requirement_level="nice_to_have",
+                met=True,
+                kind="experience",
+            ),
+        ]
+        await record_listing_gaps(conn, run_id, [(match, checks)])
+
+        run_listing_id = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id
+        )
+        stored = await get_listing_gaps(conn, run_listing_id)
+
+    assert {(g.skill, g.kind) for g in stored} == {
+        ("Go", "skill"),
+        ("A STEM degree in CS", "qualification"),
+        ("3+ years experience", "experience"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_listing_gaps_defaults_kind_to_skill_for_legacy_rows(db_pool):
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        match = MatchResult(listing=listing, score=70, reasoning="Decent fit")
+        await record_run_listings(conn, run_id, [(match, "competitive")])
+        run_listing_id = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id
+        )
+        # A row written without kind (as legacy rows were) relies on the column
+        # DEFAULT and must read back as the skill kind.
+        await conn.execute(
+            "INSERT INTO listing_gaps (run_listing_id, skill, requirement_level, met) "
+            "VALUES ($1, 'Go', 'must_have', false)",
+            run_listing_id,
+        )
+        stored = await get_listing_gaps(conn, run_listing_id)
+
+    assert stored == [
+        SkillGap(skill="Go", requirement_level="must_have", met=False, kind="skill")
+    ]

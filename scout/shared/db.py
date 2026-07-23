@@ -289,6 +289,7 @@ async def record_listing_gaps(
         skills: list[str] = []
         requirement_levels: list[str] = []
         mets: list[bool] = []
+        kinds: list[str] = []
         for match, checks in gaps_by_match:
             for check in checks:
                 sources.append(match.listing.source)
@@ -296,16 +297,17 @@ async def record_listing_gaps(
                 skills.append(check.skill)
                 requirement_levels.append(check.requirement_level)
                 mets.append(check.met)
+                kinds.append(check.kind)
 
         if not skills:
             return
 
         await conn.execute(
             """
-            INSERT INTO listing_gaps (run_listing_id, skill, requirement_level, met)
-            SELECT run_listings.id, data.skill, data.requirement_level, data.met
-            FROM unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::boolean[])
-                AS data(source, external_id, skill, requirement_level, met)
+            INSERT INTO listing_gaps (run_listing_id, skill, requirement_level, met, kind)
+            SELECT run_listings.id, data.skill, data.requirement_level, data.met, data.kind
+            FROM unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::boolean[], $7::text[])
+                AS data(source, external_id, skill, requirement_level, met, kind)
             JOIN listings
                 ON listings.source = data.source AND listings.external_id = data.external_id
             JOIN run_listings
@@ -317,12 +319,13 @@ async def record_listing_gaps(
             skills,
             requirement_levels,
             mets,
+            kinds,
         )
 
 
 async def get_listing_gaps(conn: asyncpg.Connection, run_listing_id: int) -> list[SkillGap]:
     rows = await conn.fetch(
-        "SELECT skill, requirement_level, met FROM listing_gaps WHERE run_listing_id = $1",
+        "SELECT skill, requirement_level, met, kind FROM listing_gaps WHERE run_listing_id = $1",
         run_listing_id,
     )
     return [SkillGap(**dict(row)) for row in rows]
@@ -354,7 +357,7 @@ async def get_run_details(conn: asyncpg.Connection, run_id: int) -> list[RunList
     run_listing_ids = [row["run_listing_id"] for row in rows]
     gap_rows = await conn.fetch(
         """
-        SELECT run_listing_id, skill, requirement_level, met
+        SELECT run_listing_id, skill, requirement_level, met, kind
         FROM listing_gaps
         WHERE run_listing_id = ANY($1::bigint[])
         """,
@@ -367,6 +370,7 @@ async def get_run_details(conn: asyncpg.Connection, run_id: int) -> list[RunList
                 skill=gap_row["skill"],
                 requirement_level=gap_row["requirement_level"],
                 met=gap_row["met"],
+                kind=gap_row["kind"],
             )
         )
 
