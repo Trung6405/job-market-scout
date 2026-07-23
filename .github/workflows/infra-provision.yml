@@ -1,4 +1,10 @@
-# Manual: provision/update the Azure VM from infra/main.bicep.
+# Manual: provision/update the Azure VM (infra/main.bicep) and the dashboard
+# storage account (infra/dashboard.bicep). Kept as separate deployments:
+# redeploying main.bicep against an already-existing VM currently fails
+# ARM's authorization check on osProfile.customData (immutable once the VM
+# exists) — a pre-existing issue, not something this workflow works around.
+# continue-on-error on that step means the dashboard deployment still runs
+# even when it fails.
 # Authenticates to Azure via OIDC federated credentials (no stored cloud secret).
 name: Provision infra
 
@@ -25,14 +31,30 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Deploy Bicep
+      - name: Ensure resource group exists
+        run: az group create --name "$RESOURCE_GROUP" --location "$AZURE_LOCATION"
+
+      - name: Deploy VM Bicep (main.bicep)
+        # See top-of-file note: redeploying against an existing VM currently
+        # fails on osProfile.customData. Not fixed here — only run this
+        # deliberately (e.g. VM/network changes), and expect it to fail
+        # otherwise.
+        continue-on-error: true
         run: |
           set -euo pipefail
-          az group create --name "$RESOURCE_GROUP" --location "$AZURE_LOCATION"
           az deployment group create \
             --resource-group "$RESOURCE_GROUP" \
             --template-file infra/main.bicep \
             --parameters infra/main.bicepparam \
+            --query "properties.outputs" -o json
+
+      - name: Deploy dashboard storage Bicep (dashboard.bicep)
+        run: |
+          set -euo pipefail
+          az deployment group create \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/dashboard.bicep \
+            --parameters infra/dashboard.bicepparam \
             --query "properties.outputs" -o json
 
       - name: Enable static website hosting on the dashboard storage account
@@ -40,10 +62,10 @@ jobs:
           set -euo pipefail
           # Static website hosting ($web container, index/error docs) is a
           # data-plane setting with no ARM resource property, so it's set
-          # here instead of in main.bicep. Idempotent: re-running this is a
-          # no-op if already enabled.
+          # here instead of in dashboard.bicep. Idempotent: re-running this
+          # is a no-op if already enabled.
           ACCOUNT_NAME=$(az deployment group show \
-            --resource-group "$RESOURCE_GROUP" --name main \
+            --resource-group "$RESOURCE_GROUP" --name dashboard \
             --query "properties.outputs.dashboardStorageAccountNameOut.value" -o tsv)
           az storage blob service-properties update \
             --account-name "$ACCOUNT_NAME" --auth-mode login \
