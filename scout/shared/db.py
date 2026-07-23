@@ -392,7 +392,11 @@ async def get_run_details(conn: asyncpg.Connection, run_id: int) -> list[RunList
                 score=score,
                 reasoning=reasoning,
                 band=band,
-                gaps=[check for check in requirements if not check.met],
+                gaps=[
+                    check
+                    for check in requirements
+                    if check.kind == "skill" and not check.met
+                ],
                 requirements=requirements,
                 seniority=seniority,
                 work_type=work_type,

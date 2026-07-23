@@ -11,6 +11,7 @@ from scout.shared.db import (
     finish_run,
     get_listing_gaps,
     get_run_by_date,
+    get_run_details,
     get_run_listings,
     list_runs,
     record_listing_gaps,
@@ -637,6 +638,35 @@ async def test_record_listing_gaps_round_trips_kind(db_pool):
         ("A STEM degree in CS", "qualification"),
         ("3+ years experience", "experience"),
     }
+
+
+@pytest.mark.asyncio
+async def test_get_run_details_excludes_non_skill_kinds_from_gaps(db_pool):
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        match = MatchResult(listing=listing, score=70, reasoning="Decent fit")
+        await record_run_listings(conn, run_id, [(match, "competitive")])
+
+        # A non-skill check with met=False must still be kept out of gaps by
+        # kind, so the sentinel can't silently flip a qualification into a gap.
+        checks = [
+            SkillGap(skill="Rust", requirement_level="must_have", met=False, kind="skill"),
+            SkillGap(
+                skill="A STEM degree in CS",
+                requirement_level="must_have",
+                met=False,
+                kind="qualification",
+            ),
+        ]
+        await record_listing_gaps(conn, run_id, [(match, checks)])
+
+        [detail] = await get_run_details(conn, run_id)
+
+    assert [g.skill for g in detail.gaps] == ["Rust"]
+    # Every check, skill or not, is still available for display.
+    assert {r.skill for r in detail.requirements} == {"Rust", "A STEM degree in CS"}
 
 
 @pytest.mark.asyncio

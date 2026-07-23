@@ -61,7 +61,7 @@ non-skill requirements are still visible as context.
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
 | 1 | Typed kind + gap matching + extractor prompt | [phase-1-typed-kind-and-matching.md](phase-1-typed-kind-and-matching.md) | Complete |
-| 2 | Persist kind + kind-based gap filter | [phase-2-persistence.md](phase-2-persistence.md) | Not started |
+| 2 | Persist kind + kind-based gap filter | [phase-2-persistence.md](phase-2-persistence.md) | Complete |
 | 3 | Report rendering | [phase-3-report-rendering.md](phase-3-report-rendering.md) | Not started |
 
 > All phases are planned in advance — every row above has a written,
