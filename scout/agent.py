@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import AsyncGenerator
+from zoneinfo import ZoneInfo
 
 from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
@@ -27,6 +28,9 @@ from scout.sub_agents.scorer.results import join_match_results
 from scout.sub_agents.scorer.runner import run_scorer
 from scout.sub_agents.scraper.runner import run_scraper
 from scout.sub_agents.tracker.runner import track_listings
+
+
+_LOCAL_TZ = ZoneInfo("Australia/Melbourne")
 
 
 def _status_event(ctx: InvocationContext, author: str, text: str) -> Event:
@@ -58,26 +62,34 @@ class ScoutPipelineAgent(BaseAgent):
             ctx, self.name, f"Tracker: {len(relevant)} new/changed"
         )
 
-        if not relevant:
-            yield _status_event(
-                ctx,
-                self.name,
-                "No new or changed listings — nothing to score or brief.",
-            )
-            return
-
-        scores = await run_scorer(relevant, settings)
-        yield _status_event(ctx, self.name, f"Scorer: {len(scores)} scored")
-
-        matches = join_match_results(relevant, scores)
-        banded_matches = [
-            (match, classify_band(match.score, settings)) for match in matches
-        ]
-        run_date = datetime.now(timezone.utc).date()
+        run_date = datetime.now(_LOCAL_TZ).date()
         pool = await create_pool(settings)
         try:
             async with pool.acquire() as conn:
                 run_id = await start_run(conn, run_date)
+
+                if not relevant:
+                    await finish_run(
+                        conn,
+                        run_id,
+                        listings_scraped=len(listings),
+                        listings_scored=0,
+                    )
+                    await render_history(conn, settings, has_profile=True)
+                    yield _status_event(
+                        ctx,
+                        self.name,
+                        "No new or changed listings — nothing to score or brief.",
+                    )
+                    return
+
+                scores = await run_scorer(relevant, settings)
+                yield _status_event(ctx, self.name, f"Scorer: {len(scores)} scored")
+
+                matches = join_match_results(relevant, scores)
+                banded_matches = [
+                    (match, classify_band(match.score, settings)) for match in matches
+                ]
                 await record_run_listings(conn, run_id, banded_matches)
 
                 profile = load_profile(settings.profile_path)

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 from google.adk.runners import InMemoryRunner
@@ -209,9 +210,9 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
 
     assert calls[0] == "scraper"
     assert calls[1] == ("tracker", [listing])
-    assert calls[2] == ("scorer", [listing])
-    assert calls[3] == "create_pool"
-    assert calls[4][0] == "start_run"
+    assert calls[2] == "create_pool"
+    assert calls[3][0] == "start_run"
+    assert calls[4] == ("scorer", [listing])
     assert calls[5][0] == "record_run_listings"
     expected_matches = join_match_results([listing], [score])
     expected_banded_matches = [
@@ -381,14 +382,54 @@ async def test_scout_pipeline_agent_short_circuits_when_nothing_relevant(
         calls.append("briefing")
         return EmailMessage()
 
+    class _FakeConn:
+        pass
+
+    class _FakePoolAcquire:
+        async def __aenter__(self):
+            return _FakeConn()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakePool:
+        def acquire(self):
+            return _FakePoolAcquire()
+
+        async def close(self):
+            calls.append("pool_closed")
+
+    async def _fake_create_pool(settings):
+        return _FakePool()
+
+    async def _fake_start_run(conn, run_date):
+        calls.append(("start_run", run_date))
+        return 1
+
+    async def _fake_finish_run(conn, run_id, *, listings_scraped, listings_scored):
+        calls.append(("finish_run", run_id, listings_scraped, listings_scored))
+
+    async def _fake_render_history(conn, settings, has_profile=False):
+        calls.append("render_history")
+        return Path("reports/history.html")
+
     monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
     monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
     monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
     monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
+    monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
+    monkeypatch.setattr("scout.agent.start_run", _fake_start_run)
+    monkeypatch.setattr("scout.agent.finish_run", _fake_finish_run)
+    monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
 
     texts = await _run_pipeline_agent()
 
-    assert calls == []
+    assert calls[0][0] == "start_run"
+    assert calls[1] == ("finish_run", 1, 1, 0)
+    assert calls[2] == "render_history"
+    assert calls[3] == "pool_closed"
+    assert "scorer" not in [c if isinstance(c, str) else c[0] for c in calls]
+    assert "briefing" not in [c if isinstance(c, str) else c[0] for c in calls]
     assert any("Tracker: 0 new/changed" in t for t in texts)
     assert any("nothing to score or brief" in t.lower() for t in texts)
 
@@ -462,7 +503,7 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
 
     texts = await _run_pipeline_agent()
 
-    run_date = datetime.now(timezone.utc).date()
+    run_date = datetime.now(ZoneInfo("Australia/Melbourne")).date()
     async with db_pool.acquire() as conn:
         run = await get_run_by_date(conn, run_date)
         assert run is not None
