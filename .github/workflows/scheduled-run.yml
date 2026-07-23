@@ -5,8 +5,10 @@ name: Scheduled run
 
 on:
   schedule:
-    # 00:30 UTC = 10:30 Melbourne time (AEST, UTC+10; no DST in winter).
-    - cron: "30 0 * * *"
+    # 19:00 UTC (prior day) = 05:00 Melbourne time (AEST, UTC+10; no DST in winter).
+    - cron: "0 19 * * *"
+    # 01:00 UTC = 11:00 Melbourne time (AEST, UTC+10; no DST in winter).
+    - cron: "0 1 * * *"
   workflow_dispatch:
 
 # Needed for azure/login's OIDC federated-credential flow (no stored cloud secret).
