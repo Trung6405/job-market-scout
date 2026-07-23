@@ -98,6 +98,12 @@ class Settings:
     description_char_limit: int = field(
         default_factory=partial(_env_int, "DESCRIPTION_CHAR_LIMIT", 1500)
     )
+    # Listings per requirements-extraction LLM call. One response must hold
+    # every listing's requirements, and the model caps output tokens, so a
+    # large batch truncates the JSON mid-value and fails to parse.
+    requirements_batch_size: int = field(
+        default_factory=partial(_env_int, "REQUIREMENTS_BATCH_SIZE", 15)
+    )
     database_url: str = field(
         default_factory=partial(
             _env_str,
