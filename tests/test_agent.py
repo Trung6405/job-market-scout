@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from email.message import EmailMessage
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -40,19 +39,19 @@ class _FakeTransaction:
 
 
 @pytest.fixture(autouse=True)
-def _gmail_configured_for_briefing():
-    """The pipeline only runs briefing when Gmail creds are set
-    (scout/agent.py). Configure them on the shared settings singleton so these
+def _discord_configured_for_briefing():
+    """The pipeline only runs briefing when Discord is configured
+    (scout/agent.py). Configure it on the shared settings singleton so these
     tests exercise the briefing path deterministically, independent of whether
-    a local scout/.env supplies GMAIL_ADDRESS / GMAIL_APP_PASSWORD."""
-    saved = (default_settings.gmail_address, default_settings.gmail_app_password)
-    object.__setattr__(default_settings, "gmail_address", "scout@example.com")
-    object.__setattr__(default_settings, "gmail_app_password", "app-password")
+    a local scout/.env supplies DISCORD_BOT_TOKEN / DISCORD_CHANNEL_ID."""
+    saved = (default_settings.discord_bot_token, default_settings.discord_channel_id)
+    object.__setattr__(default_settings, "discord_bot_token", "bot-token")
+    object.__setattr__(default_settings, "discord_channel_id", "123456789")
     try:
         yield
     finally:
-        object.__setattr__(default_settings, "gmail_address", saved[0])
-        object.__setattr__(default_settings, "gmail_app_password", saved[1])
+        object.__setattr__(default_settings, "discord_bot_token", saved[0])
+        object.__setattr__(default_settings, "discord_channel_id", saved[1])
 
 
 def _make_profile(**overrides):
@@ -135,7 +134,7 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
 
     async def _fake_run_briefing(listings, scores, settings, report_path=None):
         calls.append(("briefing", listings, scores, report_path))
-        return EmailMessage()
+        return {}
 
     class _FakeConn:
         def transaction(self):
@@ -250,7 +249,7 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     assert any("Scorer: 1 scored" in t for t in texts)
     assert any("Report rendered:" in t for t in texts)
     assert any("Run persisted:" in t for t in texts)
-    assert any("Briefing: email sent" in t for t in texts)
+    assert any("Briefing: Discord message sent" in t for t in texts)
 
 
 @pytest.mark.asyncio
@@ -280,7 +279,7 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
 
     async def _fake_run_briefing(listings, scores, settings, report_path=None):
         calls.append("briefing")
-        return EmailMessage()
+        return {}
 
     class _FakeConn:
         def transaction(self):
@@ -393,7 +392,7 @@ async def test_scout_pipeline_agent_short_circuits_when_nothing_relevant(
 
     async def _fake_run_briefing(listings, scores, settings, report_path=None):
         calls.append("briefing")
-        return EmailMessage()
+        return {}
 
     class _FakeConn:
         def transaction(self):
@@ -469,7 +468,7 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
         return [score]
 
     async def _fake_run_briefing(listings, scores, settings, report_path=None):
-        return EmailMessage()
+        return {}
 
     render_calls = []
 
@@ -552,7 +551,7 @@ async def test_scout_pipeline_agent_warns_when_extraction_drops_listings(monkeyp
         return [score]
 
     async def _fake_run_briefing(listings, scores, settings, report_path=None):
-        return EmailMessage()
+        return {}
 
     class _FakeConn:
         def transaction(self):
@@ -653,7 +652,7 @@ async def test_scout_pipeline_agent_same_date_rerun_is_idempotent(
         return [score]
 
     async def _fake_run_briefing(listings, scores, settings, report_path=None):
-        return EmailMessage()
+        return {}
 
     async def _fake_requirements(listings, settings=None):
         return []
@@ -725,7 +724,7 @@ async def test_scout_pipeline_agent_rolls_back_on_mid_persist_failure(
         return [score]
 
     async def _fake_run_briefing(listings, scores, settings, report_path=None):
-        return EmailMessage()
+        return {}
 
     async def _fake_requirements(listings, settings=None):
         return []
@@ -802,7 +801,7 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
 
     async def _fake_run_briefing(listings, scores, settings, report_path=None):
         calls.append("briefing")
-        return EmailMessage()
+        return {}
 
     class _FakeConn:
         def transaction(self):

@@ -88,15 +88,19 @@ phase a pipeline run posts the briefing to Discord.
 - **Files:** `scout/agent.py`, `tests/test_agent.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Update `test_agent.py`: configure Discord settings for the
-        briefing-path test; change the skip test to unset Discord config;
-        assert the status event wording is Discord-based.
-  - [ ] Verify it fails (`python -m pytest tests/test_agent.py`)
-  - [ ] In `agent.py`, change the gate to
+  - [x] Update `test_agent.py`: rename the autouse fixture to configure
+        Discord settings for the briefing-path test; drop the `EmailMessage`
+        import and return `{}` from the fake `run_briefing`; assert the
+        status event wording is Discord-based. (No dedicated skip test
+        exists in the suite; the gate is glue and the entrypoint suite
+        already covers `ensure_discord_configured` raising when
+        unconfigured — see Notes.)
+  - [x] Verify it fails (`python -m pytest tests/test_agent.py`)
+  - [x] In `agent.py`, change the gate to
         `if settings.discord_bot_token and settings.discord_channel_id:`
         and the status message to `"Briefing: Discord message sent"`.
-  - [ ] Verify it passes (`python -m pytest tests/test_agent.py`)
-  - [ ] Commit: `feat(agent): gate briefing on Discord config`
+  - [x] Verify it passes (`python -m pytest tests/test_agent.py`)
+  - [x] Commit: `feat(agent): gate briefing on Discord config`
 
 ### Task 4: Update docs
 
