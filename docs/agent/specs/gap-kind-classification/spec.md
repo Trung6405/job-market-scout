@@ -1,7 +1,7 @@
 # Spec: Requirement Kind Classification for Skill Gaps
 
-> **Status:** Draft
-> **Created:** 2026-07-23 · **Approved:** —
+> **Status:** Approved
+> **Created:** 2026-07-23 · **Approved:** 2026-07-23
 > **Implementation plan:** [plan.md](../../plans/gap-kind-classification/plan.md) *(created after approval)*
 
 ---
