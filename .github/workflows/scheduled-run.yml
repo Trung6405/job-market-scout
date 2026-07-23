@@ -86,6 +86,11 @@ jobs:
             "$VM_USER@$VM_HOST:$APP_DIR/reports/" dashboard-staging/
           rsync -az -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new" \
             "$VM_USER@$VM_HOST:$APP_DIR/hello/" dashboard-staging/hello/
+          # Storage static websites support only one global index-document
+          # name for the whole account (unlike nginx's per-location `index`
+          # directive) — standardize on index.html per folder. history.html
+          # is kept too, since it's still linked to directly by name.
+          cp dashboard-staging/history.html dashboard-staging/index.html
 
       - name: Deploy dashboard to Storage static website
         run: |

@@ -69,4 +69,4 @@ jobs:
             --query "properties.outputs.dashboardStorageAccountNameOut.value" -o tsv)
           az storage blob service-properties update \
             --account-name "$ACCOUNT_NAME" --auth-mode login \
-            --static-website --index-document history.html
+            --static-website --index-document index.html
