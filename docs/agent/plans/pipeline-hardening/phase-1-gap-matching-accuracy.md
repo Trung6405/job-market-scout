@@ -1,7 +1,7 @@
 # Phase 1: Gap-Matching Accuracy
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** In progress
+> **Status:** Complete
 > **Depends on:** nothing
 
 ---
@@ -52,17 +52,17 @@ extraction-prompt canonicalization as an upstream improvement.
 - **Files:** `scout/prompts.py`, `tests/` (prompt-content assertion if a prompt test exists; otherwise a lightweight new test)
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: `build_requirements_instruction(...)` output contains the canonicalization guidance (assert on a stable marker phrase, e.g. "canonical name").
-  - [ ] Verify it fails (`pytest tests/ -k requirements_instruction -q`)
-  - [ ] Implement: add an instruction line telling the model to emit each skill as a single canonical name — no version suffixes (`React`, not `React.js`/`React 18`), no surrounding punctuation, preferring the common full name (`JavaScript` over `JS`).
-  - [ ] Verify it passes (`pytest tests/ -k requirements_instruction -q`)
-  - [ ] Commit: `feat(advisor): ask extraction LLM for canonical skill names`
+  - [x] Write failing test: `build_requirements_instruction(...)` output contains the canonicalization guidance (assert on a stable marker phrase, e.g. "canonical name").
+  - [x] Verify it fails (`pytest tests/ -k requirements_instruction -q`)
+  - [x] Implement: add an instruction line telling the model to emit each skill as a single canonical name — no version suffixes (`React`, not `React.js`/`React 18`), no surrounding punctuation, preferring the common full name (`JavaScript` over `JS`).
+  - [x] Verify it passes (`pytest tests/ -k requirements_instruction -q`)
+  - [x] Commit: `feat(advisor): ask extraction LLM for canonical skill names`
 
 ---
 
 ## Verification
 
-- [ ] All phase tests pass: `pytest tests/test_advisor_gaps.py -q`
+- [x] All phase tests pass: `pytest tests/test_advisor_gaps.py -q`
 - [ ] Manual: re-render a recent run (`python -m scout.rerender` or equivalent) and confirm a skill known to be in `profile.json` is no longer flagged as a gap on the job-detail page.
 
 ## Rollback

@@ -118,6 +118,11 @@ Also extract three short facts, only if the listing states them:
 Set any of these to null if the listing does not clearly state it — do
 not guess or infer one from general context.
 
+Write each skill as a single canonical name: use the common full name
+without version numbers or punctuation decoration (e.g. "React" not
+"React.js" or "React 18", "JavaScript" not "JS", "PostgreSQL" not
+"Postgres"). This keeps a skill comparable across listings.
+
 Only extract what the listing's description actually states. Do not
 invent requirements that aren't stated in the text, and do not infer or
 assume requirements that are merely implied. Do not merge the two
