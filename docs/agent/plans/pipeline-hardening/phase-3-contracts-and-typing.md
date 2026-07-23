@@ -48,9 +48,9 @@ naming are documented where readers will find them.
 - **Files:** `docs/project/architecture-pipeline-overview.md`
 - **Gate:** none
 - **Steps:**
-  - [ ] Add a short "Run identity & idempotency" subsection under Persistence: `runs` is keyed by local `run_date`, so both daily cron fires share one row — the later fire is a same-day refresh, not a new historical run; and a run that fails mid-Advisor is healed by the next same-date run because `start_run` upserts, `record_run_listings` upserts, and `record_listing_gaps` delete-then-inserts.
-  - [ ] Verify: doc renders / links resolve.
-  - [ ] Commit: `docs(architecture): document run identity and idempotency`
+  - [x] Add a short "Run identity & idempotency" subsection under Persistence: `runs` is keyed by local `run_date`, so both daily cron fires share one row — the later fire is a same-day refresh, not a new historical run; and a run that fails mid-Advisor is healed by the next same-date run because `start_run` upserts, `record_run_listings` upserts, and `record_listing_gaps` delete-then-inserts.
+  - [x] Verify: doc renders / links resolve.
+  - [x] Commit: `docs(architecture): document run identity and idempotency`
 
 ### Task 4: Reconcile gap-matcher naming
 
