@@ -629,6 +629,77 @@ async def test_scout_pipeline_agent_warns_when_extraction_drops_listings(monkeyp
 
 
 @pytest.mark.asyncio
+async def test_scout_pipeline_agent_same_date_rerun_is_idempotent(
+    monkeypatch, db_pool
+):
+    """Two runs for the same run_date collapse into one run row with upserted
+    listings — the documented same-day refresh / re-run-heals contract."""
+    listing = _make_listing()
+    score = ListingScore(
+        source="linkedin", external_id="1", score=80, reasoning="Good fit."
+    )
+
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+
+    async def _fake_run_scraper(settings):
+        return [listing]
+
+    async def _fake_track_listings(listings, settings=None):
+        return listings
+
+    async def _fake_run_scorer(listings, settings):
+        return [score]
+
+    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+        return EmailMessage()
+
+    async def _fake_requirements(listings, settings=None):
+        return []
+
+    def _fake_render_profile(profile, settings):
+        return Path("reports/profile.html")
+
+    async def _fake_render_run(conn, run_id, settings, has_profile=False):
+        return {"dashboard": Path("reports/x/dashboard.html")}
+
+    async def _fake_render_history(conn, settings, has_profile=False):
+        return Path("reports/history.html")
+
+    class _UnclosablePool:
+        def acquire(self):
+            return db_pool.acquire()
+
+        async def close(self):
+            pass
+
+    async def _fake_create_pool(settings):
+        return _UnclosablePool()
+
+    monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
+    monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
+    monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
+    monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
+    monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
+    monkeypatch.setattr("scout.agent.run_requirements_extraction", _fake_requirements)
+    monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
+    monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
+    monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
+
+    await _run_pipeline_agent()
+    await _run_pipeline_agent()
+
+    run_date = datetime.now(ZoneInfo("Australia/Melbourne")).date()
+    async with db_pool.acquire() as conn:
+        runs = await conn.fetch("SELECT id FROM runs WHERE run_date = $1", run_date)
+        assert len(runs) == 1  # same date collapses into one row
+        run = await get_run_by_date(conn, run_date)
+        run_listings = await get_run_listings(conn, run.id)
+        assert len(run_listings) == 1  # upserted, not duplicated
+        assert run_listings[0].score == 80
+
+
+@pytest.mark.asyncio
 async def test_scout_pipeline_agent_rolls_back_on_mid_persist_failure(
     monkeypatch, db_pool
 ):

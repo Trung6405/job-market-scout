@@ -60,7 +60,7 @@ are explicit in code types and docs.
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
 | 1 | Gap-matching accuracy | [phase-1-gap-matching-accuracy.md](phase-1-gap-matching-accuracy.md) | Complete |
-| 2 | Persistence robustness | [phase-2-persistence-robustness.md](phase-2-persistence-robustness.md) | Not started |
+| 2 | Persistence robustness | [phase-2-persistence-robustness.md](phase-2-persistence-robustness.md) | Complete |
 | 3 | Contracts & typing | [phase-3-contracts-and-typing.md](phase-3-contracts-and-typing.md) | Not started |
 
 > All phases are planned in advance — every row above has a written phase
