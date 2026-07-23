@@ -11,6 +11,15 @@ from pydantic import BaseModel, Field, HttpUrl
 # so the DB column, report filters, and templates are unaffected.
 Band = Literal["strong_match", "competitive", "reach"]
 
+# A stated listing requirement is one of these kinds. Only ``skill`` items are
+# string-matched against the profile's tech stack and can become gaps; the rest
+# are non-technical qualifications shown as context, never gap-matched (fuzzy
+# matching free-text degrees/experience is exactly the false-positive source we
+# avoid). Closed Literal like ``Band`` so the vocabulary is validated end to end;
+# defaults to ``skill`` for backward/forward compatibility (legacy rows and an
+# extractor that omits the field both read as skill).
+RequirementKind = Literal["skill", "qualification", "experience", "soft_skill"]
+
 
 class Listing(BaseModel):
     source: str
@@ -61,6 +70,11 @@ class ListingScoreBatch(BaseModel):
     scores: list[ListingScore]
 
 
+class RequirementItem(BaseModel):
+    name: str
+    kind: RequirementKind = "skill"
+
+
 class ListingRequirements(BaseModel):
     source: str
     external_id: str
@@ -79,6 +93,7 @@ class SkillGap(BaseModel):
     skill: str
     requirement_level: str
     met: bool = False
+    kind: RequirementKind = "skill"
 
 
 class BriefingTakeaway(BaseModel):
