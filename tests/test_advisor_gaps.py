@@ -93,6 +93,36 @@ def test_evaluate_requirements_flags_missing_nice_to_have():
     ]
 
 
+def test_evaluate_requirements_matches_skill_name_variants():
+    requirements = _make_requirements(["React.js", "Postgres"], ["JS"])
+    profile = _make_profile(["React", "PostgreSQL", "JavaScript"])
+
+    checks = evaluate_requirements(requirements, profile)
+
+    assert [check for check in checks if not check.met] == []
+
+
+def test_evaluate_requirements_still_flags_genuinely_absent_skill():
+    requirements = _make_requirements(["React.js", "Rust"], [])
+    profile = _make_profile(["React"])
+
+    checks = evaluate_requirements(requirements, profile)
+
+    assert [check for check in checks if not check.met] == [
+        SkillGap(skill="Rust", requirement_level="must_have", met=False)
+    ]
+
+
+def test_evaluate_requirements_preserves_original_skill_string():
+    requirements = _make_requirements(["React.js"], [])
+    profile = _make_profile(["React"])
+
+    checks = evaluate_requirements(requirements, profile)
+
+    assert checks[0].skill == "React.js"
+    assert checks[0].met is True
+
+
 def test_evaluate_requirements_case_insensitive_match():
     requirements = _make_requirements(["Python"], [])
     profile = _make_profile(["python"])

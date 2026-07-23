@@ -46,7 +46,7 @@ def evaluate_requirements(
     a full checklist (persistence) or filter to just the gaps (reporting).
     """
     profile_skills = {
-        skill.name.lower()
+        normalize_skill(skill.name)
         for category in profile.tech_stack
         for skill in category.skills
     }
@@ -57,7 +57,7 @@ def evaluate_requirements(
             SkillGap(
                 skill=skill,
                 requirement_level="must_have",
-                met=skill.lower() in profile_skills,
+                met=normalize_skill(skill) in profile_skills,
             )
         )
     for skill in requirements.nice_to_have:
@@ -65,7 +65,7 @@ def evaluate_requirements(
             SkillGap(
                 skill=skill,
                 requirement_level="nice_to_have",
-                met=skill.lower() in profile_skills,
+                met=normalize_skill(skill) in profile_skills,
             )
         )
     return checks

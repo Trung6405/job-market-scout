@@ -41,11 +41,11 @@ extraction-prompt canonicalization as an upstream improvement.
 - **Files:** `scout/sub_agents/advisor/gaps.py`, `tests/test_advisor_gaps.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: a profile with `React` + `PostgreSQL` against a `ListingRequirements` whose `must_have` is `["React.js", "Postgres"]` yields **zero** unmet gaps; a genuinely absent skill (`Rust`) still yields one unmet gap.
-  - [ ] Verify it fails (`pytest tests/test_advisor_gaps.py -q`)
-  - [ ] Implement: build `profile_skills` as a set of `normalize_skill(...)`; compute `met = normalize_skill(skill) in profile_skills`. Preserve the original `skill` string in the returned `SkillGap` (only the comparison is normalized).
-  - [ ] Verify it passes (`pytest tests/test_advisor_gaps.py -q`)
-  - [ ] Commit: `fix(advisor): match gaps on normalized skill names`
+  - [x] Write failing test: a profile with `React` + `PostgreSQL` against a `ListingRequirements` whose `must_have` is `["React.js", "Postgres"]` yields **zero** unmet gaps; a genuinely absent skill (`Rust`) still yields one unmet gap.
+  - [x] Verify it fails (`pytest tests/test_advisor_gaps.py -q`)
+  - [x] Implement: build `profile_skills` as a set of `normalize_skill(...)`; compute `met = normalize_skill(skill) in profile_skills`. Preserve the original `skill` string in the returned `SkillGap` (only the comparison is normalized).
+  - [x] Verify it passes (`pytest tests/test_advisor_gaps.py -q`)
+  - [x] Commit: `fix(advisor): match gaps on normalized skill names`
 
 ### Task 3: Canonical skill names in the extraction prompt
 
