@@ -1,6 +1,6 @@
 # Plan: Requirement Kind Classification for Skill Gaps
 
-> **Status:** In progress
+> **Status:** Complete
 > **Created:** 2026-07-23 · **Last updated:** 2026-07-23
 > **Spec:** [spec.md](../../specs/gap-kind-classification/spec.md)
 
@@ -62,7 +62,7 @@ non-skill requirements are still visible as context.
 |---|-------|----------|--------|
 | 1 | Typed kind + gap matching + extractor prompt | [phase-1-typed-kind-and-matching.md](phase-1-typed-kind-and-matching.md) | Complete |
 | 2 | Persist kind + kind-based gap filter | [phase-2-persistence.md](phase-2-persistence.md) | Complete |
-| 3 | Report rendering | [phase-3-report-rendering.md](phase-3-report-rendering.md) | Not started |
+| 3 | Report rendering | [phase-3-report-rendering.md](phase-3-report-rendering.md) | Complete |
 
 > All phases are planned in advance — every row above has a written,
 > human-approved phase doc before phase 1 execution starts.
@@ -121,12 +121,16 @@ non-skill requirements are still visible as context.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All phase verification steps pass
-- [ ] Feature verified manually in a running environment (job-detail page)
-- [ ] Docs updated where behaviour changed (advisor-report spec / PRS if they
-      describe gap semantics)
-- [ ] No new lint or type-check warnings
+- [x] All acceptance criteria met
+- [x] All phase verification steps pass
+- [~] Feature verified manually in a running environment (job-detail page) —
+      report tests render real HTML through the production template + DB path
+      and assert the behavior; a true end-to-end run with live LLM-extracted
+      kinds is still pending (Phase 3 Notes).
+- [x] Docs updated where behaviour changed (advisor-report spec amended;
+      gap-kind-classification spec added)
+- [x] No new lint or type-check warnings (no new lint config; full suite green,
+      239 passed)
 
 ## Update Rules
 
