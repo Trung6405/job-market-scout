@@ -253,10 +253,101 @@ async def test_render_run_job_detail_coverage_counts_skills_only(db_pool, tmp_pa
     assert "/ 3" not in html
     assert "/3" not in html
     # The qualification is not a pass/fail row: no ✕ gap mark is emitted for it.
+    # The pass/fail checklist ends where the non-skill context section begins.
     checklist = html.split("Requirements vs your profile", 1)[1].split(
-        "Skill gaps to close", 1
+        "Role also asks for", 1
     )[0]
     assert "A STEM degree in CS" not in checklist
+
+
+@pytest.mark.asyncio
+async def test_render_run_job_detail_shows_non_skill_requirements_as_context(
+    db_pool, tmp_path
+):
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        match = MatchResult(listing=listing, score=88, reasoning="Great fit")
+        await record_run_listings(conn, run_id, [(match, "strong_match")])
+        await record_listing_gaps(
+            conn,
+            run_id,
+            [
+                (
+                    match,
+                    [
+                        SkillGap(skill="Python", requirement_level="must_have", met=True, kind="skill"),
+                        SkillGap(
+                            skill="A STEM degree in CS",
+                            requirement_level="must_have",
+                            met=True,
+                            kind="qualification",
+                        ),
+                        SkillGap(
+                            skill="3+ years experience",
+                            requirement_level="must_have",
+                            met=True,
+                            kind="experience",
+                        ),
+                        SkillGap(
+                            skill="Strong communication",
+                            requirement_level="nice_to_have",
+                            met=True,
+                            kind="soft_skill",
+                        ),
+                    ],
+                )
+            ],
+        )
+        await finish_run(conn, run_id, listings_scraped=1, listings_scored=1)
+        run_listing_id = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id
+        )
+        settings = Settings(report_output_dir=str(tmp_path))
+        paths = await render_run(conn, run_id, settings, has_profile=True)
+
+    html = paths[f"job_detail_{run_listing_id}"].read_text(encoding="utf-8")
+
+    assert "Role also asks for" in html
+    context = html.split("Role also asks for", 1)[1]
+    assert "A STEM degree in CS" in context
+    assert "3+ years experience" in context
+    assert "Strong communication" in context
+    # Context items carry no pass/fail mark.
+    context_section = context.split("</section>", 1)[0]
+    assert "✓" not in context_section
+    assert "✕" not in context_section
+
+
+@pytest.mark.asyncio
+async def test_render_run_job_detail_omits_context_when_all_skills(db_pool, tmp_path):
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        match = MatchResult(listing=listing, score=88, reasoning="Great fit")
+        await record_run_listings(conn, run_id, [(match, "strong_match")])
+        await record_listing_gaps(
+            conn,
+            run_id,
+            [
+                (
+                    match,
+                    [SkillGap(skill="Python", requirement_level="must_have", met=True, kind="skill")],
+                )
+            ],
+        )
+        await finish_run(conn, run_id, listings_scraped=1, listings_scored=1)
+        run_listing_id = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id
+        )
+        settings = Settings(report_output_dir=str(tmp_path))
+        paths = await render_run(conn, run_id, settings, has_profile=True)
+
+    html = paths[f"job_detail_{run_listing_id}"].read_text(encoding="utf-8")
+
+    assert "Role also asks for" not in html
 
 
 @pytest.mark.asyncio

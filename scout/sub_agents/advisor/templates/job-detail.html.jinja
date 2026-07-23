@@ -239,6 +239,23 @@
   </section>
   {% endif %}
 
+  {% set context_reqs = detail.requirements|rejectattr('kind', 'equalto', 'skill')|list %}
+  {% if context_reqs %}
+  {% set kind_labels = {'qualification': 'Qualification', 'experience': 'Experience', 'soft_skill': 'Soft skill'} %}
+  <section>
+    <h2>Role also asks for</h2>
+    <div class="reqs">
+      <div class="reqcat"><span class="name">Beyond technical skills</span><span class="cov">informational — not scored</span></div>
+      {% for req in context_reqs %}
+      <div class="req">
+        <span class="name">{{ req.skill }}</span>
+        <span class="tag">{{ kind_labels.get(req.kind, req.kind) }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
   <section>
     <h2>Skill gaps to close</h2>
     {% if detail.gaps %}
