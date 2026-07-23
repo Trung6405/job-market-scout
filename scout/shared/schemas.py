@@ -78,8 +78,8 @@ class RequirementItem(BaseModel):
 class ListingRequirements(BaseModel):
     source: str
     external_id: str
-    must_have: list[str]
-    nice_to_have: list[str]
+    must_have: list[RequirementItem]
+    nice_to_have: list[RequirementItem]
     seniority: str | None = None
     work_type: str | None = None
     team: str | None = None

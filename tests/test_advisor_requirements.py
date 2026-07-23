@@ -19,8 +19,11 @@ def _requirements_dict(**overrides):
     defaults = dict(
         source="linkedin",
         external_id="1",
-        must_have=["Python", "SQL"],
-        nice_to_have=["Docker"],
+        must_have=[
+            {"name": "Python", "kind": "skill"},
+            {"name": "SQL", "kind": "skill"},
+        ],
+        nice_to_have=[{"name": "Docker", "kind": "skill"}],
     )
     defaults.update(overrides)
     return defaults
@@ -67,6 +70,46 @@ def test_parse_requirements_strips_markdown_code_fence():
 
 def test_parse_requirements_empty_list():
     assert parse_requirements(json.dumps({"requirements": []})) == []
+
+
+def test_parse_requirements_carries_kind_incl_non_skill():
+    raw = json.dumps(
+        {
+            "requirements": [
+                _requirements_dict(
+                    must_have=[
+                        {"name": "PostgreSQL", "kind": "skill"},
+                        {"name": "A STEM degree in CS", "kind": "qualification"},
+                        {"name": "3+ years experience", "kind": "experience"},
+                    ],
+                    nice_to_have=[{"name": "Strong communication", "kind": "soft_skill"}],
+                )
+            ]
+        }
+    )
+
+    [requirements] = parse_requirements(raw)
+
+    assert [(i.name, i.kind) for i in requirements.must_have] == [
+        ("PostgreSQL", "skill"),
+        ("A STEM degree in CS", "qualification"),
+        ("3+ years experience", "experience"),
+    ]
+    assert requirements.nice_to_have[0].kind == "soft_skill"
+
+
+def test_parse_requirements_defaults_kind_when_omitted():
+    raw = json.dumps(
+        {
+            "requirements": [
+                _requirements_dict(must_have=[{"name": "Go"}], nice_to_have=[])
+            ]
+        }
+    )
+
+    [requirements] = parse_requirements(raw)
+
+    assert requirements.must_have[0].kind == "skill"
 
 
 @pytest.mark.asyncio
