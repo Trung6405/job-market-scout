@@ -1,10 +1,6 @@
 # Manual: provision/update the Azure VM (infra/main.bicep) and the dashboard
-# storage account (infra/dashboard.bicep). Kept as separate deployments:
-# redeploying main.bicep against an already-existing VM currently fails
-# ARM's authorization check on osProfile.customData (immutable once the VM
-# exists) — a pre-existing issue, not something this workflow works around.
-# continue-on-error on that step means the dashboard deployment still runs
-# even when it fails.
+# storage account (infra/dashboard.bicep). Kept as separate deployments so a
+# dashboard-only change never depends on the VM template.
 # Authenticates to Azure via OIDC federated credentials (no stored cloud secret).
 name: Provision infra
 
@@ -35,11 +31,6 @@ jobs:
         run: az group create --name "$RESOURCE_GROUP" --location "$AZURE_LOCATION"
 
       - name: Deploy VM Bicep (main.bicep)
-        # See top-of-file note: redeploying against an existing VM currently
-        # fails on osProfile.customData. Not fixed here — only run this
-        # deliberately (e.g. VM/network changes), and expect it to fail
-        # otherwise.
-        continue-on-error: true
         run: |
           set -euo pipefail
           az deployment group create \

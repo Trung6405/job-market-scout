@@ -21,6 +21,9 @@ param sshSourceAddressPrefix string = '*'
 @description('Source CIDR/IP allowed to reach HTTP (port 80) — the hello smoke-test page. Set to a narrow range or "" to disable public web access.')
 param httpSourceAddressPrefix string = '*'
 
+@description('Set true only when first-creating the VM, or deliberately recreating it from scratch. Azure rejects any osProfile.customData value on an update to an already-existing VM (write-once, unconditionally — resending even an unchanged value fails), so this must stay false for routine redeploys of unrelated resources (NSG rules, VM size, etc.) once the VM exists.')
+param recreateVm bool = false
+
 var subnetName = 'default'
 
 resource nsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
@@ -119,10 +122,12 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-03-01' = {
     hardwareProfile: {
       vmSize: vmSize
     }
-    osProfile: {
+    // customData is omitted (not set to an empty/placeholder value) unless
+    // recreateVm is true — see its @description. Omitting the property
+    // entirely, rather than resending it, is what avoids the update error.
+    osProfile: union({
       computerName: vmName
       adminUsername: adminUsername
-      customData: loadFileAsBase64('cloud-init.yaml')
       linuxConfiguration: {
         disablePasswordAuthentication: true
         ssh: {
@@ -134,7 +139,9 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-03-01' = {
           ]
         }
       }
-    }
+    }, recreateVm ? {
+      customData: loadFileAsBase64('cloud-init.yaml')
+    } : {})
     storageProfile: {
       imageReference: {
         publisher: 'Canonical'
