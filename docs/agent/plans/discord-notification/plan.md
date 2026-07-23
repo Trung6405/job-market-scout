@@ -1,6 +1,6 @@
 # Plan: Discord Bot Briefing Notification
 
-> **Status:** Not started
+> **Status:** Complete (code + tests; live manual post pending human)
 > **Created:** 2026-07-23 · **Last updated:** 2026-07-23
 > **Spec:** [spec.md](../../specs/discord-notification/spec.md)
 
@@ -57,7 +57,7 @@ anywhere in the codebase.
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
 | 1 | Config + embed builder | [phase-1-config-and-embed.md](phase-1-config-and-embed.md) | Complete |
-| 2 | Discord sender + wiring | [phase-2-sender-and-wiring.md](phase-2-sender-and-wiring.md) | Not started |
+| 2 | Discord sender + wiring | [phase-2-sender-and-wiring.md](phase-2-sender-and-wiring.md) | Complete |
 
 > All phases are planned in advance — every row above has a written,
 > human-approved phase doc before phase 1 execution starts. If executing
@@ -110,11 +110,13 @@ anywhere in the codebase.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All phase verification steps pass
-- [ ] Feature verified manually in a running environment (live Discord post)
-- [ ] Docs / README + `.env.example` updated where behaviour changed
-- [ ] No new lint or type-check warnings
+- [x] All acceptance criteria met (code + automated tests)
+- [x] All phase verification steps pass (bar the pre-existing
+      Postgres-dependent `test_main_entrypoint` failure)
+- [ ] Feature verified manually in a running environment (live Discord
+      post) — pending human with a real bot token + channel
+- [x] Docs / README + `.env.example` updated where behaviour changed
+- [x] No new lint or type-check warnings
 
 ## Update Rules
 

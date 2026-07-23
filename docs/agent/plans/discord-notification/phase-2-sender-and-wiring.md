@@ -1,7 +1,7 @@
 # Phase 2: Discord Sender + Wiring
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete (code + tests; live manual post pending human)
 > **Depends on:** Phase 1 complete (embed builder + Discord config exist)
 
 ---
@@ -102,28 +102,37 @@ phase a pipeline run posts the briefing to Discord.
   - [x] Verify it passes (`python -m pytest tests/test_agent.py`)
   - [x] Commit: `feat(agent): gate briefing on Discord config`
 
-### Task 4: Update docs
+### Task 4: Update docs (+ retire orphaned report_host_dir)
 
-- **Files:** `README.md`, `docs/commands.md`
+- **Files:** `README.md`, `docs/commands.md`, `scout/config.py`,
+  `scout/.env.example`, `tests/test_config.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Rewrite the README prerequisites/config/flow lines that reference
-        Gmail/email (lines around the Gmail account prereq, the "At minimum
-        set … GMAIL_*" step, "scores and emails matches", "emailed to
-        GMAIL_RECIPIENT", and the `REPORT_HOST_DIR` email-link paragraph)
-        to describe the Discord bot token + channel and a Discord message.
-        Update `docs/commands.md` "emails matches" wording to "posts
-        matches to Discord".
-  - [ ] Verify: `python -m pytest -q` (full suite green)
-  - [ ] Commit: `docs: describe Discord briefing instead of email`
+  - [x] Rewrite the README prerequisites/config/flow lines that reference
+        Gmail/email (the Gmail account prereq, the "At minimum set … GMAIL_*"
+        step, "scores and emails matches", "emailed to GMAIL_RECIPIENT", and
+        the `REPORT_HOST_DIR` email-link paragraph) to describe the Discord
+        bot token + channel and a Discord message. Update `docs/commands.md`
+        "emails matches" wording to "posts matches to Discord".
+  - [x] Retire `report_host_dir`: the deleted email builder was its only
+        consumer, so remove the field from `config.py` (and the now-unused
+        `_env_optional_str` helper), the `REPORT_HOST_DIR` line from
+        `.env.example`, and its two tests from `test_config.py`.
+  - [x] Verify: `python -m pytest -q` (full suite green apart from the
+        pre-existing Postgres-dependent `test_main_entrypoint` failure)
+  - [x] Commit: `docs: describe Discord briefing instead of email`
 
 ---
 
 ## Verification
 
-- [ ] Full suite passes: `python -m pytest -q`
-- [ ] No remaining reference to `smtplib`, `build_email`, `send_email`,
-      `gmail_`, or `email_builder` in `scout/` (`grep`).
+- [x] Full suite passes: `python -m pytest -q` (188 passed; the single
+      failure, `test_main_entrypoint::test_run_once_completes_without_raising`,
+      is the pre-existing `ConnectionRefusedError` — no local Postgres —
+      documented in the 2026-07-23 worklog, unrelated to this change).
+- [x] No remaining reference to `smtplib`, `build_email`, `send_email`,
+      `gmail_`, or `email_builder` in `scout/` (only the intentional
+      `test_settings_has_no_gmail_fields` assertions remain in tests).
 - [ ] Manual (human): run the pipeline with a real `DISCORD_BOT_TOKEN` and
       a test-channel `DISCORD_CHANNEL_ID`; confirm the embed posts and the
       listing links work. Also confirm a no-match run posts the empty-day
@@ -145,4 +154,16 @@ Gmail gate from git history.
 
 ## Notes / Learnings
 
-<Filled in during execution.>
+- **Tasks 1+2 combined into one commit** — the `send_email`→`send_message`
+  rename couples `notification.py` and `briefing.py`, so no ordering keeps
+  the intermediate importable.
+- **`report_host_dir` retired** — dropping the report link deleted
+  `email_builder.py`, which was the setting's only consumer. Left in place
+  it would be dead config with a misleading `.env.example` comment, so it
+  was removed here (with the now-unused `_env_optional_str` helper and its
+  two config tests). This is cleanup within the planned blast radius, not
+  new scope.
+- **No dedicated agent skip test** — the suite never had one; the gate is
+  glue and `ensure_discord_configured` raising is already covered by the
+  briefing entrypoint tests, so a heavyweight new pipeline test was not
+  added (right-sizing TDD to risk).

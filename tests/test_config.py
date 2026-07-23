@@ -55,21 +55,6 @@ def test_settings_can_be_constructed_with_explicit_overrides():
     assert settings.jobspy_mcp_url == "http://test-jobspy:9423"
 
 
-def test_settings_report_host_dir_defaults_to_none_when_env_unset(monkeypatch):
-    monkeypatch.delenv("REPORT_HOST_DIR", raising=False)
-
-    settings = Settings()
-
-    assert settings.report_host_dir is None
-
-
-def test_settings_report_host_dir_reads_env_override(monkeypatch):
-    monkeypatch.setenv("REPORT_HOST_DIR", "/home/user/job-market-scout/reports")
-
-    settings = Settings()
-
-    assert settings.report_host_dir == "/home/user/job-market-scout/reports"
-
 def test_settings_uses_scorer_defaults_when_env_unset(monkeypatch):
     for var in (
         "PREFERRED_LOCATIONS",

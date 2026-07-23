@@ -17,7 +17,8 @@ docker compose up --build
 ```
 - Builds the app, the vendored `jobspy` scraper, `jobspy-mcp`, and `postgres`.
 - Applies the Postgres schema automatically on first run.
-- Writes HTML into `./reports/` and emails matches above `MIN_MATCH_SCORE`.
+- Writes HTML into `./reports/` and posts matches above `MIN_MATCH_SCORE`
+  to Discord.
 
 Run the pipeline once without rebuilding images:
 ```bash
