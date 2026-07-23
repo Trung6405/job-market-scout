@@ -4,6 +4,7 @@ from scout.shared.schemas import (
     Background,
     ListingRequirements,
     Profile,
+    RequirementItem,
     SkillGap,
     TechCategory,
     TechSkill,
@@ -33,14 +34,20 @@ def _make_profile(skills: list[str]) -> Profile:
     )
 
 
-def _make_requirements(
-    must_have: list[str], nice_to_have: list[str]
-) -> ListingRequirements:
+def _item(spec) -> RequirementItem:
+    """Bare strings are skill-kind; ``(name, kind)`` tuples set the kind."""
+    if isinstance(spec, tuple):
+        name, kind = spec
+        return RequirementItem(name=name, kind=kind)
+    return RequirementItem(name=spec, kind="skill")
+
+
+def _make_requirements(must_have, nice_to_have) -> ListingRequirements:
     return ListingRequirements(
         source="linkedin",
         external_id="job-1",
-        must_have=must_have,
-        nice_to_have=nice_to_have,
+        must_have=[_item(s) for s in must_have],
+        nice_to_have=[_item(s) for s in nice_to_have],
     )
 
 
@@ -144,6 +151,29 @@ def test_evaluate_requirements_mixed_must_have_and_nice_to_have_ordering():
         SkillGap(skill="Go", requirement_level="must_have", met=False),
         SkillGap(skill="Kubernetes", requirement_level="nice_to_have", met=False),
     ]
+
+
+def test_evaluate_requirements_does_not_gap_non_skill_requirements():
+    # A STEM degree the profile's tech_stack can never contain must not be a
+    # gap; non-skill items pass through with their kind and a met=True sentinel.
+    requirements = _make_requirements(
+        [("A STEM degree in CS", "qualification"), "Rust"],
+        [("3+ years experience", "experience")],
+    )
+    profile = _make_profile(["Python"])
+
+    checks = evaluate_requirements(requirements, profile)
+
+    # Only the genuinely-absent technical skill is a gap.
+    assert [check for check in checks if not check.met] == [
+        SkillGap(skill="Rust", requirement_level="must_have", met=False)
+    ]
+    by_name = {c.skill: c for c in checks}
+    assert by_name["A STEM degree in CS"].kind == "qualification"
+    assert by_name["A STEM degree in CS"].met is True
+    assert by_name["3+ years experience"].kind == "experience"
+    assert by_name["3+ years experience"].met is True
+    assert by_name["Rust"].kind == "skill"
 
 
 def test_evaluate_requirements_includes_met_and_unmet():
