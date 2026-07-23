@@ -100,11 +100,22 @@ def build_requirements_instruction(settings: Settings, listings: list[Listing]) 
 You are the requirements extractor for Job Market Scout.
 
 For each listing below, read its description and identify two separate
-lists of skills and qualifications:
-- "must_have": skills and qualifications explicitly stated as required,
-  must-have, mandatory, or similar.
-- "nice_to_have": skills and qualifications explicitly marked as
-  preferred, nice-to-have, bonus, a plus, or similar.
+lists of requirements:
+- "must_have": requirements explicitly stated as required, must-have,
+  mandatory, or similar.
+- "nice_to_have": requirements explicitly marked as preferred,
+  nice-to-have, bonus, a plus, or similar.
+
+Each requirement is an object with a "name" and a "kind". Classify the
+kind as exactly one of:
+- "skill": a concrete technical skill, tool, framework, or language
+  (e.g. PostgreSQL, React, Docker).
+- "qualification": a degree, certification, or credential
+  (e.g. "A STEM degree in computer science").
+- "experience": a years-of-experience or seniority threshold
+  (e.g. "3+ years of backend experience").
+- "soft_skill": a non-technical trait
+  (e.g. "strong communication", "teamwork").
 
 Also extract three short facts, only if the listing states them:
 - "seniority": the stated experience level (e.g. "Graduate / Entry",
@@ -118,10 +129,12 @@ Also extract three short facts, only if the listing states them:
 Set any of these to null if the listing does not clearly state it — do
 not guess or infer one from general context.
 
-Write each skill as a single canonical name: use the common full name
-without version numbers or punctuation decoration (e.g. "React" not
-"React.js" or "React 18", "JavaScript" not "JS", "PostgreSQL" not
-"Postgres"). This keeps a skill comparable across listings.
+For "skill"-kind requirements only, write each skill as a single
+canonical name: use the common full name without version numbers or
+punctuation decoration (e.g. "React" not "React.js" or "React 18",
+"JavaScript" not "JS", "PostgreSQL" not "Postgres"). This keeps a skill
+comparable across listings. Qualification, experience, and soft_skill
+names may stay as short natural phrases.
 
 Only extract what the listing's description actually states. Do not
 invent requirements that aren't stated in the text, and do not infer or
@@ -137,8 +150,9 @@ Listings to extract requirements from:
 Return a JSON object with a single key "requirements" containing a list
 of objects, each with "source" and "external_id" (copied exactly from
 the listing — together they identify it, since external_id alone may
-repeat across sources), "must_have" (a list of short strings),
-"nice_to_have" (a list of short strings), "seniority" (short string or
+repeat across sources), "must_have" (a list of {"name", "kind"}
+objects), "nice_to_have" (a list of {"name", "kind"} objects),
+"seniority" (short string or
 null), "work_type" (short string or null), and "team" (short string or
 null). Return only the JSON object, no commentary.
 """

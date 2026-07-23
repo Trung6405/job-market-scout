@@ -17,6 +17,7 @@ from scout.shared.schemas import (
     ListingRequirements,
     ListingScore,
     Profile,
+    RequirementItem,
     TechCategory,
     TechSkill,
 )
@@ -784,7 +785,7 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
     requirements = ListingRequirements(
         source="linkedin",
         external_id="1",
-        must_have=["Kubernetes"],
+        must_have=[RequirementItem(name="Kubernetes", kind="skill")],
         nice_to_have=[],
     )
 

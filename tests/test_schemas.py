@@ -9,6 +9,8 @@ from scout.shared.schemas import (
     Listing,
     ListingScore,
     MatchResult,
+    RequirementItem,
+    SkillGap,
 )
 
 
@@ -131,3 +133,32 @@ def test_briefing_prose_accepts_valid_data():
 def test_briefing_prose_allows_empty_takeaways():
     prose = BriefingProse(intro="No matches today.", takeaways=[])
     assert prose.takeaways == []
+
+
+@pytest.mark.parametrize(
+    "kind", ["skill", "qualification", "experience", "soft_skill"]
+)
+def test_requirement_item_accepts_each_kind(kind):
+    item = RequirementItem(name="PostgreSQL", kind=kind)
+    assert item.name == "PostgreSQL"
+    assert item.kind == kind
+
+
+def test_requirement_item_defaults_kind_to_skill():
+    item = RequirementItem(name="React")
+    assert item.kind == "skill"
+
+
+def test_requirement_item_rejects_unknown_kind():
+    with pytest.raises(ValidationError):
+        RequirementItem(name="React", kind="framework")
+
+
+def test_skill_gap_defaults_kind_to_skill():
+    gap = SkillGap(skill="Go", requirement_level="must_have")
+    assert gap.kind == "skill"
+
+
+def test_skill_gap_rejects_unknown_kind():
+    with pytest.raises(ValidationError):
+        SkillGap(skill="Go", requirement_level="must_have", kind="framework")
