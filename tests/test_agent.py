@@ -521,6 +521,101 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
 
 
 @pytest.mark.asyncio
+async def test_scout_pipeline_agent_warns_when_extraction_drops_listings(monkeypatch):
+    listing = _make_listing()
+    score = ListingScore(
+        source="linkedin", external_id="1", score=80, reasoning="Good fit."
+    )
+    profile = _make_profile()
+
+    async def _fake_run_scraper(settings):
+        return [listing]
+
+    async def _fake_track_listings(listings, settings=None):
+        return listings
+
+    async def _fake_run_scorer(listings, settings):
+        return [score]
+
+    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+        return EmailMessage()
+
+    class _FakeConn:
+        def transaction(self):
+            return _FakeTransaction()
+
+    class _FakeTransaction:
+        async def __aenter__(self):
+            return None
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakePoolAcquire:
+        async def __aenter__(self):
+            return _FakeConn()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakePool:
+        def acquire(self):
+            return _FakePoolAcquire()
+
+        async def close(self):
+            pass
+
+    async def _fake_create_pool(settings):
+        return _FakePool()
+
+    async def _fake_start_run(conn, run_date):
+        return 1
+
+    async def _noop(*args, **kwargs):
+        return None
+
+    def _fake_load_profile(path):
+        return profile
+
+    # Extraction returns nothing, so the one scored listing is "dropped".
+    async def _fake_run_requirements_extraction(listings, settings=None):
+        return []
+
+    async def _fake_render_run(conn, run_id, settings, has_profile=False):
+        return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
+
+    async def _fake_render_history(conn, settings, has_profile=False):
+        return Path("reports/history.html")
+
+    def _fake_render_profile(profile_arg, settings):
+        return Path("reports/profile.html")
+
+    monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
+    monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
+    monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
+    monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
+    monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
+    monkeypatch.setattr("scout.agent.start_run", _fake_start_run)
+    monkeypatch.setattr("scout.agent.record_run_listings", _noop)
+    monkeypatch.setattr("scout.agent.finish_run", _noop)
+    monkeypatch.setattr("scout.agent.load_profile", _fake_load_profile)
+    monkeypatch.setattr(
+        "scout.agent.run_requirements_extraction", _fake_run_requirements_extraction
+    )
+    monkeypatch.setattr("scout.agent.record_listing_gaps", _noop)
+    monkeypatch.setattr("scout.agent.record_listing_meta", _noop)
+    monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
+    monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
+    monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
+
+    texts = await _run_pipeline_agent()
+
+    assert any(
+        "1" in t and "no extracted requirements" in t.lower() for t in texts
+    )
+
+
+@pytest.mark.asyncio
 async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch):
     listing = _make_listing()
     score = ListingScore(source="linkedin", external_id="1", score=80, reasoning="Good fit.")

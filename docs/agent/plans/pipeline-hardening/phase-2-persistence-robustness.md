@@ -1,7 +1,7 @@
 # Phase 2: Persistence Robustness
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** In progress
 > **Depends on:** nothing (independent of Phase 1)
 
 ---
@@ -29,11 +29,11 @@ in one transaction and logging extraction drops.
 - **Files:** `scout/agent.py`, `tests/test_agent.py` (or the existing agent-level test module)
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: given `matches` of length 3 and a `requirements` list covering only 2 of them, the pipeline emits a status/log warning naming the dropped count.
-  - [ ] Verify it fails (`pytest tests/ -k drop -q`)
-  - [ ] Implement: after building `matches_with_requirements`, if `len(matches_with_requirements) < len(matches)`, yield a `_status_event` (and/or log) noting `len(matches) - len(matches_with_requirements)` listings had no extracted requirements.
-  - [ ] Verify it passes (`pytest tests/ -k drop -q`)
-  - [ ] Commit: `fix(pipeline): warn when extraction drops scored listings`
+  - [x] Write failing test: given `matches` of length 3 and a `requirements` list covering only 2 of them, the pipeline emits a status/log warning naming the dropped count.
+  - [x] Verify it fails (`pytest tests/ -k drop -q`)
+  - [x] Implement: after building `matches_with_requirements`, if `len(matches_with_requirements) < len(matches)`, yield a `_status_event` (and/or log) noting `len(matches) - len(matches_with_requirements)` listings had no extracted requirements.
+  - [x] Verify it passes (`pytest tests/ -k drop -q`)
+  - [x] Commit: `fix(pipeline): warn when extraction drops scored listings`
 
 ### Task 2: Wrap the final persistence block in one transaction
 
