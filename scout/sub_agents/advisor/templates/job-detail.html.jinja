@@ -155,7 +155,7 @@
       </div>
       <div class="metric">
         <div class="k">Must-have coverage</div>
-        {% set must_reqs = detail.requirements|selectattr('requirement_level', 'equalto', 'must_have')|list %}
+        {% set must_reqs = detail.requirements|selectattr('requirement_level', 'equalto', 'must_have')|selectattr('kind', 'equalto', 'skill')|list %}
         {% set must_met = must_reqs|selectattr('met')|list %}
         <div class="v">{{ must_met|length }}<span style="font-size:14px;color:var(--muted)">/{{ must_reqs|length }}</span></div>
         <div class="why" style="margin-top:6px">
@@ -200,7 +200,7 @@
         <div class="note">{{ detail.reasoning }}</div>
       </div>
       {% endif %}
-      {% set nice_reqs = detail.requirements|selectattr('requirement_level', 'equalto', 'nice_to_have')|list %}
+      {% set nice_reqs = detail.requirements|selectattr('requirement_level', 'equalto', 'nice_to_have')|selectattr('kind', 'equalto', 'skill')|list %}
       {% if nice_reqs %}
       {% set nice_met = nice_reqs|selectattr('met')|list %}
       <div class="brk">

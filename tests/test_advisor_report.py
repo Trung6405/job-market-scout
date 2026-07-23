@@ -212,6 +212,54 @@ async def test_render_run_job_detail_shows_snapshot_breakdown_and_checklist(
 
 
 @pytest.mark.asyncio
+async def test_render_run_job_detail_coverage_counts_skills_only(db_pool, tmp_path):
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        match = MatchResult(listing=listing, score=88, reasoning="Great fit")
+        await record_run_listings(conn, run_id, [(match, "strong_match")])
+        # Two skill must-haves (one met) + one qualification must-have. The
+        # qualification must not dilute the must-have coverage denominator.
+        await record_listing_gaps(
+            conn,
+            run_id,
+            [
+                (
+                    match,
+                    [
+                        SkillGap(skill="Python", requirement_level="must_have", met=True, kind="skill"),
+                        SkillGap(skill="PostgreSQL", requirement_level="must_have", met=False, kind="skill"),
+                        SkillGap(
+                            skill="A STEM degree in CS",
+                            requirement_level="must_have",
+                            met=True,
+                            kind="qualification",
+                        ),
+                    ],
+                )
+            ],
+        )
+        await finish_run(conn, run_id, listings_scraped=1, listings_scored=1)
+        run_listing_id = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id
+        )
+        settings = Settings(report_output_dir=str(tmp_path))
+        paths = await render_run(conn, run_id, settings, has_profile=True)
+
+    html = paths[f"job_detail_{run_listing_id}"].read_text(encoding="utf-8")
+
+    assert "1 / 2" in html  # skill must-have coverage, qualification excluded
+    assert "/ 3" not in html
+    assert "/3" not in html
+    # The qualification is not a pass/fail row: no ✕ gap mark is emitted for it.
+    checklist = html.split("Requirements vs your profile", 1)[1].split(
+        "Skill gaps to close", 1
+    )[0]
+    assert "A STEM degree in CS" not in checklist
+
+
+@pytest.mark.asyncio
 async def test_render_run_job_detail_renders_markdown_description(db_pool, tmp_path):
     # JobSpy returns descriptions as Markdown with backslash escapes such as
     # ``C\+\+`` and ``\-`` — the advisor page must render, not display, them.
