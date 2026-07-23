@@ -1,8 +1,17 @@
-# Plan: Static Web App hosting for the reports dashboard
+# Plan: Static website hosting for the reports dashboard
 
 > **Status:** In progress — code changes done (tasks 1–3); provisioning and manual rollout verification (task 4) still pending
 > **Created:** 2026-07-23 · **Last updated:** 2026-07-23
 > **Spec:** none — small work, per plan-standards size threshold (single phase, ~4 files, low risk)
+>
+> **Amendment (2026-07-23):** Originally targeted Azure Static Web Apps. Provisioning failed with a
+> policy violation — this subscription (Azure for Students) restricts deployments to
+> `indonesiacentral`, `japanwest`, `japaneast`, `malaysiawest`, `newzealandnorth`, and Static Web
+> Apps isn't offered in any of them. Switched to a Storage Account with static website hosting
+> (available in `newzealandnorth`) instead — same ~$0 cost, and avoids the deploy-token secret
+> entirely by reusing the existing OIDC login (via a `Storage Blob Data Contributor` role
+> assignment) instead of `Azure/static-web-apps-deploy@v1`. All references to "Static Web App"
+> below are updated to reflect this.
 
 ---
 
@@ -11,26 +20,27 @@
 Today the reports dashboard (`reports/history.html`, `reports/profile.html`,
 and the `hello/` smoke-test page) is only served by nginx on `scout-vm`, so
 it's unreachable whenever the VM is deallocated (i.e. ~23h/day). This plan
-provisions an Azure Static Web App and adds a publish step to
-`scheduled-run.yml` so the dashboard is reachable 24/7, independent of the
-VM's start/deallocate cycle. The VM, its docker-exec-dependent stack
-(`app` + `jobspy-mcp` + `jobspy-scraper` + `postgres`), and GitHub Actions
-orchestration are unchanged. Done = after a scheduled run completes and the
-VM deallocates, the dashboard is still reachable at the Static Web App's URL
-with up-to-date content.
+provisions an Azure Storage Account with static website hosting and adds a
+publish step to `scheduled-run.yml` so the dashboard is reachable 24/7,
+independent of the VM's start/deallocate cycle. The VM, its
+docker-exec-dependent stack (`app` + `jobspy-mcp` + `jobspy-scraper` +
+`postgres`), and GitHub Actions orchestration are unchanged. Done = after a
+scheduled run completes and the VM deallocates, the dashboard is still
+reachable at the storage account's static website endpoint with up-to-date
+content.
 
 ## Acceptance Criteria
 
-- [ ] A `Microsoft.Web/staticSites` resource exists, provisioned via
-      `infra/main.bicep`/`infra-provision.yml`.
+- [ ] A `Microsoft.Storage/storageAccounts` resource with static website
+      hosting enabled exists, provisioned via `infra/main.bicep`/`infra-provision.yml`.
 - [ ] `scheduled-run.yml` copies `reports/` and `hello/` off the VM and
-      deploys them to the Static Web App after each scout cycle, before the
-      VM is deallocated.
+      uploads them to the storage account's `$web` container after each
+      scout cycle, before the VM is deallocated.
 - [x] The on-VM `hello` nginx service is removed from
       `docker-compose.prod.yaml`.
 - [ ] After a scheduled run, the dashboard (`/` → `history.html`, `/hello`)
-      is reachable at the Static Web App URL while `scout-vm` is deallocated.
-- [ ] A failed publish/deploy step does not prevent the `Deallocate VM` step
+      is reachable at the static website endpoint while `scout-vm` is deallocated.
+- [ ] A failed publish/upload step does not prevent the `Deallocate VM` step
       from running.
 
 ---
@@ -88,8 +98,8 @@ with up-to-date content.
 
 - Keep the VM, Postgres, and the docker-exec (jobspy-mcp → jobspy-scraper) pattern unchanged — decided during brainstorming as the lowest-risk option given the "cost + learning" goal and modest budget.
 - Keep GitHub Actions as the sole orchestrator — no Azure-native scheduling service introduced.
-- Static Web Apps (Free tier) chosen over a plain Storage static website for the dashboard: same ~$0 cost at this traffic level, but teaches a more distinct Azure service and needs less custom scripting (first-party GitHub Action vs. hand-rolled `az storage blob upload-batch`).
-- No one-way doors — the Static Web App is additive and free; nothing here is hard to reverse.
+- Static Web Apps (Free tier) was chosen first over a plain Storage static website: same ~$0 cost, but teaches a more distinct Azure service and needs less custom scripting. Reversed after provisioning failed — see amendment above — in favor of Storage static website, the only option this subscription's region policy actually allows.
+- No one-way doors — the storage account is additive and free; nothing here is hard to reverse.
 
 ## Out of Scope
 

@@ -21,8 +21,11 @@ param sshSourceAddressPrefix string = '*'
 @description('Source CIDR/IP allowed to reach HTTP (port 80) — the hello smoke-test page. Set to a narrow range or "" to disable public web access.')
 param httpSourceAddressPrefix string = '*'
 
-@description('Azure region for the dashboard Static Web App. Static Web Apps is only offered in a small subset of regions, so this is independent from `location` (the VM region).')
-param staticWebAppLocation string = 'eastasia'
+@description('Globally-unique name for the Storage Account that hosts the dashboard via static website hosting.')
+param dashboardStorageAccountName string = 'trung6405scoutdash'
+
+@description('Object ID of the GitHub Actions service principal (job-market-scout-gha). Granted Storage Blob Data Contributor on the dashboard storage account so scheduled-run.yml can upload via its existing OIDC login instead of a stored account key.')
+param ciServicePrincipalObjectId string = '93ac8a65-a658-4f39-90b3-538ebedba216'
 
 var subnetName = 'default'
 
@@ -164,26 +167,43 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-03-01' = {
 
 // Serves the reports dashboard (reports/ + hello/) independent of the VM's
 // start/deallocate cycle, so it's reachable even while scout-vm is off.
-// Content is pushed by scheduled-run.yml via the deploy token — no
-// repositoryUrl/branch here, since this isn't using Static Web Apps' own
-// GitHub-integration build (that would require a repo-owned deployment
-// token pattern this workflow doesn't use).
-resource dashboard 'Microsoft.Web/staticSites@2023-12-01' = {
-  name: '${vmName}-dashboard'
-  location: staticWebAppLocation
+// Static website hosting itself (the $web container, index/error docs) is a
+// data-plane setting with no ARM property, so it's enabled by an `az
+// storage blob service-properties update --static-website` call in
+// infra-provision.yml after this deploys. Content is pushed by
+// scheduled-run.yml via `az storage blob upload-batch` using the same OIDC
+// login already set up there — no separate deploy-token secret needed.
+//
+// Azure Static Web Apps was tried first but isn't available in any region
+// this subscription's policy allows (indonesiacentral, japanwest, japaneast,
+// malaysiawest, newzealandnorth) — Storage Accounts are, so this uses plain
+// blob static-website hosting instead.
+resource dashboardStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
+  name: dashboardStorageAccountName
+  location: location
   sku: {
-    name: 'Free'
-    tier: 'Free'
+    name: 'Standard_LRS'
   }
-  properties: {}
+  kind: 'StorageV2'
+  properties: {
+    accessTier: 'Hot'
+    allowBlobPublicAccess: true
+    minimumTlsVersion: 'TLS1_2'
+  }
+}
+
+resource dashboardStorageBlobDataContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(dashboardStorage.id, ciServicePrincipalObjectId, 'StorageBlobDataContributor')
+  scope: dashboardStorage
+  properties: {
+    // Built-in "Storage Blob Data Contributor" role.
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+    principalId: ciServicePrincipalObjectId
+    principalType: 'ServicePrincipal'
+  }
 }
 
 output publicIpAddress string = publicIp.properties.ipAddress
 output sshCommand string = 'ssh ${adminUsername}@${publicIp.properties.ipAddress}'
-output dashboardHostname string = dashboard.properties.defaultHostname
-// Deployment token is deliberately not output here (would land in
-// deployment-history/workflow logs in plaintext). After provisioning, fetch
-// it with:
-//   az staticwebapp secrets list -n <vmName>-dashboard -g <resource-group> \
-//     --query "properties.apiKey" -o tsv
-// and store it as the AZURE_STATIC_WEB_APPS_API_TOKEN GitHub secret.
+output dashboardStorageAccountNameOut string = dashboardStorage.name
+output dashboardWebEndpoint string = dashboardStorage.properties.primaryEndpoints.web

@@ -26,6 +26,8 @@ jobs:
       RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
       # Fixed by infra/main.bicepparam (param vmName = 'scout-vm').
       VM_NAME: scout-vm
+      # Fixed by infra/main.bicepparam (param dashboardStorageAccountName).
+      DASHBOARD_STORAGE_ACCOUNT: trung6405scoutdash
     steps:
       - name: Azure login (OIDC)
         uses: azure/login@v2
@@ -85,15 +87,16 @@ jobs:
           rsync -az -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new" \
             "$VM_USER@$VM_HOST:$APP_DIR/hello/" dashboard-staging/hello/
 
-      - name: Deploy dashboard to Static Web App
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          action: upload
-          app_location: dashboard-staging
-          skip_app_build: true
-          output_location: ""
+      - name: Deploy dashboard to Storage static website
+        run: |
+          set -euo pipefail
+          # --auth-mode login reuses the OIDC session from "Azure login"
+          # above — no separate deploy-token secret needed. --overwrite so
+          # stale files from a previous run's report folders don't linger
+          # once superseded (history.html/profile.html always regenerate).
+          az storage blob upload-batch \
+            --account-name "$DASHBOARD_STORAGE_ACCOUNT" --auth-mode login \
+            --destination '$web' --source dashboard-staging --overwrite
 
       - name: Deallocate VM
         # always(): stop billing even if the run, dashboard pull/deploy, or
