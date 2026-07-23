@@ -24,9 +24,6 @@ param httpSourceAddressPrefix string = '*'
 @description('Globally-unique name for the Storage Account that hosts the dashboard via static website hosting.')
 param dashboardStorageAccountName string = 'trung6405scoutdash'
 
-@description('Object ID of the GitHub Actions service principal (job-market-scout-gha). Granted Storage Blob Data Contributor on the dashboard storage account so scheduled-run.yml can upload via its existing OIDC login instead of a stored account key.')
-param ciServicePrincipalObjectId string = '93ac8a65-a658-4f39-90b3-538ebedba216'
-
 var subnetName = 'default'
 
 resource nsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
@@ -192,16 +189,15 @@ resource dashboardStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   }
 }
 
-resource dashboardStorageBlobDataContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(dashboardStorage.id, ciServicePrincipalObjectId, 'StorageBlobDataContributor')
-  scope: dashboardStorage
-  properties: {
-    // Built-in "Storage Blob Data Contributor" role.
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
-    principalId: ciServicePrincipalObjectId
-    principalType: 'ServicePrincipal'
-  }
-}
+// NOT provisioned here: the CI service principal only holds Contributor on
+// this resource group, which can't grant RBAC roles (needs User Access
+// Administrator/Owner) — and ARM authorization-checks every resource in a
+// template upfront, so including a roleAssignment resource the deployer
+// can't authorize aborts the *entire* deployment, not just that resource.
+// Granted once, out of band, by an account with elevated rights:
+//   az role assignment create --assignee-object-id 93ac8a65-a658-4f39-90b3-538ebedba216 \
+//     --assignee-principal-type ServicePrincipal \
+//     --role "Storage Blob Data Contributor" --scope <dashboardStorage resource ID>
 
 output publicIpAddress string = publicIp.properties.ipAddress
 output sshCommand string = 'ssh ${adminUsername}@${publicIp.properties.ipAddress}'

@@ -8,4 +8,3 @@ param adminSshPublicKey = 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDKHogfnStt36eMg
 param sshSourceAddressPrefix = '*'
 param httpSourceAddressPrefix = '*'
 param dashboardStorageAccountName = 'trung6405scoutdash'
-param ciServicePrincipalObjectId = '93ac8a65-a658-4f39-90b3-538ebedba216'
