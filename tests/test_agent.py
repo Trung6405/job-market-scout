@@ -28,6 +28,16 @@ _USER_ID = "scout"
 _SESSION_ID = "scout"
 
 
+class _FakeTransaction:
+    """Stand-in for asyncpg's conn.transaction() async context manager."""
+
+    async def __aenter__(self):
+        return None
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
 @pytest.fixture(autouse=True)
 def _gmail_configured_for_briefing():
     """The pipeline only runs briefing when Gmail creds are set
@@ -127,7 +137,8 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
         return EmailMessage()
 
     class _FakeConn:
-        pass
+        def transaction(self):
+            return _FakeTransaction()
 
     class _FakePoolAcquire:
         async def __aenter__(self):
@@ -271,7 +282,8 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
         return EmailMessage()
 
     class _FakeConn:
-        pass
+        def transaction(self):
+            return _FakeTransaction()
 
     class _FakePoolAcquire:
         async def __aenter__(self):
@@ -383,7 +395,8 @@ async def test_scout_pipeline_agent_short_circuits_when_nothing_relevant(
         return EmailMessage()
 
     class _FakeConn:
-        pass
+        def transaction(self):
+            return _FakeTransaction()
 
     class _FakePoolAcquire:
         async def __aenter__(self):
@@ -521,6 +534,249 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
 
 
 @pytest.mark.asyncio
+async def test_scout_pipeline_agent_warns_when_extraction_drops_listings(monkeypatch):
+    listing = _make_listing()
+    score = ListingScore(
+        source="linkedin", external_id="1", score=80, reasoning="Good fit."
+    )
+    profile = _make_profile()
+
+    async def _fake_run_scraper(settings):
+        return [listing]
+
+    async def _fake_track_listings(listings, settings=None):
+        return listings
+
+    async def _fake_run_scorer(listings, settings):
+        return [score]
+
+    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+        return EmailMessage()
+
+    class _FakeConn:
+        def transaction(self):
+            return _FakeTransaction()
+
+    class _FakeTransaction:
+        async def __aenter__(self):
+            return None
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakePoolAcquire:
+        async def __aenter__(self):
+            return _FakeConn()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakePool:
+        def acquire(self):
+            return _FakePoolAcquire()
+
+        async def close(self):
+            pass
+
+    async def _fake_create_pool(settings):
+        return _FakePool()
+
+    async def _fake_start_run(conn, run_date):
+        return 1
+
+    async def _noop(*args, **kwargs):
+        return None
+
+    def _fake_load_profile(path):
+        return profile
+
+    # Extraction returns nothing, so the one scored listing is "dropped".
+    async def _fake_run_requirements_extraction(listings, settings=None):
+        return []
+
+    async def _fake_render_run(conn, run_id, settings, has_profile=False):
+        return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
+
+    async def _fake_render_history(conn, settings, has_profile=False):
+        return Path("reports/history.html")
+
+    def _fake_render_profile(profile_arg, settings):
+        return Path("reports/profile.html")
+
+    monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
+    monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
+    monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
+    monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
+    monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
+    monkeypatch.setattr("scout.agent.start_run", _fake_start_run)
+    monkeypatch.setattr("scout.agent.record_run_listings", _noop)
+    monkeypatch.setattr("scout.agent.finish_run", _noop)
+    monkeypatch.setattr("scout.agent.load_profile", _fake_load_profile)
+    monkeypatch.setattr(
+        "scout.agent.run_requirements_extraction", _fake_run_requirements_extraction
+    )
+    monkeypatch.setattr("scout.agent.record_listing_gaps", _noop)
+    monkeypatch.setattr("scout.agent.record_listing_meta", _noop)
+    monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
+    monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
+    monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
+
+    texts = await _run_pipeline_agent()
+
+    assert any(
+        "1" in t and "no extracted requirements" in t.lower() for t in texts
+    )
+
+
+@pytest.mark.asyncio
+async def test_scout_pipeline_agent_same_date_rerun_is_idempotent(
+    monkeypatch, db_pool
+):
+    """Two runs for the same run_date collapse into one run row with upserted
+    listings — the documented same-day refresh / re-run-heals contract."""
+    listing = _make_listing()
+    score = ListingScore(
+        source="linkedin", external_id="1", score=80, reasoning="Good fit."
+    )
+
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+
+    async def _fake_run_scraper(settings):
+        return [listing]
+
+    async def _fake_track_listings(listings, settings=None):
+        return listings
+
+    async def _fake_run_scorer(listings, settings):
+        return [score]
+
+    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+        return EmailMessage()
+
+    async def _fake_requirements(listings, settings=None):
+        return []
+
+    def _fake_render_profile(profile, settings):
+        return Path("reports/profile.html")
+
+    async def _fake_render_run(conn, run_id, settings, has_profile=False):
+        return {"dashboard": Path("reports/x/dashboard.html")}
+
+    async def _fake_render_history(conn, settings, has_profile=False):
+        return Path("reports/history.html")
+
+    class _UnclosablePool:
+        def acquire(self):
+            return db_pool.acquire()
+
+        async def close(self):
+            pass
+
+    async def _fake_create_pool(settings):
+        return _UnclosablePool()
+
+    monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
+    monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
+    monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
+    monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
+    monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
+    monkeypatch.setattr("scout.agent.run_requirements_extraction", _fake_requirements)
+    monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
+    monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
+    monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
+
+    await _run_pipeline_agent()
+    await _run_pipeline_agent()
+
+    run_date = datetime.now(ZoneInfo("Australia/Melbourne")).date()
+    async with db_pool.acquire() as conn:
+        runs = await conn.fetch("SELECT id FROM runs WHERE run_date = $1", run_date)
+        assert len(runs) == 1  # same date collapses into one row
+        run = await get_run_by_date(conn, run_date)
+        run_listings = await get_run_listings(conn, run.id)
+        assert len(run_listings) == 1  # upserted, not duplicated
+        assert run_listings[0].score == 80
+
+
+@pytest.mark.asyncio
+async def test_scout_pipeline_agent_rolls_back_on_mid_persist_failure(
+    monkeypatch, db_pool
+):
+    """If persistence fails partway through the final block, nothing from that
+    block is left behind: no run_listings and finished_at stays NULL. The
+    start_run row itself persists (it is the marker the next run heals)."""
+    listing = _make_listing()
+    score = ListingScore(
+        source="linkedin", external_id="1", score=80, reasoning="Good fit."
+    )
+
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+
+    async def _fake_run_scraper(settings):
+        return [listing]
+
+    async def _fake_track_listings(listings, settings=None):
+        return listings
+
+    async def _fake_run_scorer(listings, settings):
+        return [score]
+
+    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+        return EmailMessage()
+
+    async def _fake_requirements(listings, settings=None):
+        return []
+
+    def _fake_render_profile(profile, settings):
+        return Path("reports/profile.html")
+
+    async def _fake_render_run(conn, run_id, settings, has_profile=False):
+        return {"dashboard": Path("reports/x/dashboard.html")}
+
+    async def _fake_render_history(conn, settings, has_profile=False):
+        return Path("reports/history.html")
+
+    async def _boom(conn, run_id, *, listings_scraped, listings_scored):
+        raise RuntimeError("simulated mid-persist failure")
+
+    class _UnclosablePool:
+        def acquire(self):
+            return db_pool.acquire()
+
+        async def close(self):
+            pass
+
+    async def _fake_create_pool(settings):
+        return _UnclosablePool()
+
+    monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
+    monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
+    monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
+    monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
+    monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
+    monkeypatch.setattr("scout.agent.run_requirements_extraction", _fake_requirements)
+    monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
+    monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
+    monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
+    monkeypatch.setattr("scout.agent.finish_run", _boom)
+
+    try:
+        await _run_pipeline_agent()
+    except Exception:
+        pass
+
+    run_date = datetime.now(ZoneInfo("Australia/Melbourne")).date()
+    async with db_pool.acquire() as conn:
+        run = await get_run_by_date(conn, run_date)
+        assert run is not None  # start_run committed the marker row
+        assert run.finished_at is None  # finish_run rolled back
+        run_listings = await get_run_listings(conn, run.id)
+        assert run_listings == []  # record_run_listings rolled back
+
+
+@pytest.mark.asyncio
 async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch):
     listing = _make_listing()
     score = ListingScore(source="linkedin", external_id="1", score=80, reasoning="Good fit.")
@@ -548,7 +804,8 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
         return EmailMessage()
 
     class _FakeConn:
-        pass
+        def transaction(self):
+            return _FakeTransaction()
 
     class _FakePoolAcquire:
         async def __aenter__(self):

@@ -267,6 +267,9 @@ async def record_listing_gaps(
     run_id: int,
     gaps_by_match: list[tuple[MatchResult, list[SkillGap]]],
 ) -> None:
+    # Inner transaction keeps the delete-then-insert self-atomic even when
+    # called on its own; when the caller (ScoutPipelineAgent) already holds a
+    # run-scoped transaction, asyncpg nests this as a harmless savepoint.
     async with conn.transaction():
         await conn.execute(
             """

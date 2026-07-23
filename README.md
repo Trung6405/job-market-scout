@@ -76,6 +76,37 @@ your host machine, e.g.:
 REPORT_HOST_DIR=/home/you/job-market-scout/reports
 ```
 
+### Live dashboard
+
+The deployed instance publishes the same dashboard to an Azure Storage
+static website, so it's reachable 24/7 — independent of the VM, which is
+deallocated ~23h/day to control cost. `scheduled-run.yml` refreshes it
+after each scheduled pipeline run (see
+[docs/commands.md](docs/commands.md#deploy) and
+[infra/README.md](infra/README.md)).
+
+| Page | Link |
+|------|------|
+| Daily reports (home / history) | <https://trung6405scoutdash.z44.web.core.windows.net/> |
+| History | <https://trung6405scoutdash.z44.web.core.windows.net/history.html> |
+| My profile | <https://trung6405scoutdash.z44.web.core.windows.net/profile.html> |
+| A given day | `https://trung6405scoutdash.z44.web.core.windows.net/<YYYY-MM-DD>/dashboard.html` |
+| Hello smoke-test page | <https://trung6405scoutdash.z44.web.core.windows.net/hello/> |
+
+The root serves the history index (the static-website host allows only
+one global index document, so `index.html` is a copy of `history.html`).
+The `z44` zone in the hostname is region-derived and would change if the
+storage account is recreated in a different region — the current
+endpoint is emitted as the `dashboardWebEndpoint` output of
+`infra/dashboard.bicep`.
+
+To browse the reports locally instead (no Azure), serve the `reports/`
+folder and open it in a browser:
+```
+python -m http.server 8080 --directory reports
+# then open http://127.0.0.1:8080/history.html
+```
+
 ### Running tests
 ```
 pip install -r requirements.txt

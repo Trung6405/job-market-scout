@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, HttpUrl
+
+# The Scorer's 0-100 score buckets into one of these qualitative bands via
+# advisor.bands.classify_band. Keeping it a closed Literal makes the vocabulary
+# type-checked and pydantic-validated end to end; the values stay plain strings
+# so the DB column, report filters, and templates are unaffected.
+Band = Literal["strong_match", "competitive", "reach"]
 
 
 class Listing(BaseModel):
@@ -40,7 +47,7 @@ class RunListing(BaseModel):
     listing_id: int
     score: int
     reasoning: str
-    band: str
+    band: Band
 
 
 class ListingScore(BaseModel):
@@ -130,7 +137,7 @@ class RunListingDetail(BaseModel):
     listing: Listing
     score: int
     reasoning: str
-    band: str
+    band: Band
     gaps: list[SkillGap]
     requirements: list[SkillGap] = []
     seniority: str | None = None

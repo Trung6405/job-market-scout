@@ -8,7 +8,7 @@ from scout.shared.schemas import (
     TechCategory,
     TechSkill,
 )
-from scout.sub_agents.advisor.gaps import detect_gaps, evaluate_requirements
+from scout.sub_agents.advisor.gaps import evaluate_requirements, normalize_skill
 
 
 def _make_profile(skills: list[str]) -> Profile:
@@ -44,53 +44,105 @@ def _make_requirements(
     )
 
 
-def test_detect_gaps_returns_empty_when_fully_covered():
+def test_normalize_skill_collapses_common_variants():
+    assert normalize_skill("React.js") == normalize_skill("React")
+    assert normalize_skill("Node.js") == normalize_skill("node")
+    assert normalize_skill("  Python 3 ") == normalize_skill("python3")
+
+
+def test_normalize_skill_collapses_known_aliases():
+    assert normalize_skill("Postgres") == normalize_skill("PostgreSQL")
+    assert normalize_skill("JS") == normalize_skill("JavaScript")
+    assert normalize_skill("TS") == normalize_skill("TypeScript")
+    assert normalize_skill("k8s") == normalize_skill("Kubernetes")
+
+
+def test_normalize_skill_does_not_collapse_unrelated_skills():
+    assert normalize_skill("React") != normalize_skill("Angular")
+    assert normalize_skill("Java") != normalize_skill("JavaScript")
+
+
+def test_evaluate_requirements_returns_no_gaps_when_fully_covered():
     requirements = _make_requirements(["Python", "SQL"], ["Docker"])
     profile = _make_profile(["Python", "SQL", "Docker"])
 
-    gaps = detect_gaps(requirements, profile)
+    checks = evaluate_requirements(requirements, profile)
 
-    assert gaps == []
+    assert [check for check in checks if not check.met] == []
 
 
-def test_detect_gaps_flags_missing_must_have():
+def test_evaluate_requirements_flags_missing_must_have():
     requirements = _make_requirements(["Python", "Go"], [])
     profile = _make_profile(["Python"])
 
-    gaps = detect_gaps(requirements, profile)
+    checks = evaluate_requirements(requirements, profile)
 
-    assert gaps == [SkillGap(skill="Go", requirement_level="must_have")]
+    assert [check for check in checks if not check.met] == [
+        SkillGap(skill="Go", requirement_level="must_have", met=False)
+    ]
 
 
-def test_detect_gaps_flags_missing_nice_to_have():
+def test_evaluate_requirements_flags_missing_nice_to_have():
     requirements = _make_requirements([], ["Docker", "Kubernetes"])
     profile = _make_profile(["Docker"])
 
-    gaps = detect_gaps(requirements, profile)
+    checks = evaluate_requirements(requirements, profile)
 
-    assert gaps == [SkillGap(skill="Kubernetes", requirement_level="nice_to_have")]
+    assert [check for check in checks if not check.met] == [
+        SkillGap(skill="Kubernetes", requirement_level="nice_to_have", met=False)
+    ]
 
 
-def test_detect_gaps_case_insensitive_match():
+def test_evaluate_requirements_matches_skill_name_variants():
+    requirements = _make_requirements(["React.js", "Postgres"], ["JS"])
+    profile = _make_profile(["React", "PostgreSQL", "JavaScript"])
+
+    checks = evaluate_requirements(requirements, profile)
+
+    assert [check for check in checks if not check.met] == []
+
+
+def test_evaluate_requirements_still_flags_genuinely_absent_skill():
+    requirements = _make_requirements(["React.js", "Rust"], [])
+    profile = _make_profile(["React"])
+
+    checks = evaluate_requirements(requirements, profile)
+
+    assert [check for check in checks if not check.met] == [
+        SkillGap(skill="Rust", requirement_level="must_have", met=False)
+    ]
+
+
+def test_evaluate_requirements_preserves_original_skill_string():
+    requirements = _make_requirements(["React.js"], [])
+    profile = _make_profile(["React"])
+
+    checks = evaluate_requirements(requirements, profile)
+
+    assert checks[0].skill == "React.js"
+    assert checks[0].met is True
+
+
+def test_evaluate_requirements_case_insensitive_match():
     requirements = _make_requirements(["Python"], [])
     profile = _make_profile(["python"])
 
-    gaps = detect_gaps(requirements, profile)
+    checks = evaluate_requirements(requirements, profile)
 
-    assert gaps == []
+    assert [check for check in checks if not check.met] == []
 
 
-def test_detect_gaps_mixed_must_have_and_nice_to_have_ordering():
+def test_evaluate_requirements_mixed_must_have_and_nice_to_have_ordering():
     requirements = _make_requirements(
         ["Python", "Go"], ["Docker", "Kubernetes"]
     )
     profile = _make_profile(["python", "Docker"])
 
-    gaps = detect_gaps(requirements, profile)
+    checks = evaluate_requirements(requirements, profile)
 
-    assert gaps == [
-        SkillGap(skill="Go", requirement_level="must_have"),
-        SkillGap(skill="Kubernetes", requirement_level="nice_to_have"),
+    assert [check for check in checks if not check.met] == [
+        SkillGap(skill="Go", requirement_level="must_have", met=False),
+        SkillGap(skill="Kubernetes", requirement_level="nice_to_have", met=False),
     ]
 
 

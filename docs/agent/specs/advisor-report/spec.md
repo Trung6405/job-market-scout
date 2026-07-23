@@ -57,7 +57,9 @@ which is useful standalone and is already built.
   requirements per listing, and a pure `detect_gaps(requirements,
   profile)` function flagging requirement skills absent from the
   student's `profile.json` `tech_stack`, persisted in a `listing_gaps`
-  table.
+  table. *(Implemented as `evaluate_requirements()` in
+  `scout/sub_agents/advisor/gaps.py` — it returns every requirement met
+  or not, and callers filter to the unmet ones; see Amendments.)*
 - Jinja2 templates for all four mockup screens, adapted from the
   existing static HTML (same visual design — this is a data-wiring
   exercise, not a redesign), and a rendering module that, given a

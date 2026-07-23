@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from scout.config import Settings
-from scout.prompts import build_briefing_instruction
+from scout.prompts import build_briefing_instruction, build_requirements_instruction
 from scout.shared.profile import render_profile_text
 from scout.shared.schemas import Listing, MatchResult
 
@@ -40,3 +40,12 @@ def test_build_briefing_instruction_excludes_listing_url_and_description():
 
     assert "linkedin.com/jobs/view" not in instruction
     assert "Build backend systems." not in instruction
+
+
+def test_build_requirements_instruction_asks_for_canonical_skill_names():
+    settings = Settings()
+    listings = [_make_match("1", "Platform Engineer", 88).listing]
+
+    instruction = build_requirements_instruction(settings, listings)
+
+    assert "canonical name" in instruction.lower()
