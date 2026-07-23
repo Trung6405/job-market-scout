@@ -2,31 +2,35 @@
 
 | | |
 |---|---|
-| **Version** | 2.0 |
+| **Version** | 2.1 |
 | **Status** | Draft |
 | **Author** | Trung |
 | **Reviewer** | Anh Phuc |
-| **Last updated** | 2026-07-21 |
+| **Last updated** | 2026-07-23 |
 
 > **Revision history:** v2.0 reflects the `advisor-report` initiative
 > (a persisted Advisor stage, score bands, gap analysis, rendered HTML
-> reports) that was out of scope in v1.0. For the full deviation-by-
+> reports) that was out of scope in v1.0. v2.1 reflects `profile.json`
+> becoming the single, required candidate source (retiring `resume.txt`)
+> and the deployment work landing: automated daily scheduling, the Azure
+> VM host, CI/CD, and 24/7 static hosting for the reports dashboard all
+> moved from §7 "Planned" to "Built". For the full deviation-by-
 > deviation record of what changed and why, see
 > `product-requirements-spec-amendments.md`.
 
-> **Note for AI coding assistants (Claude Code):** This document is the source of truth for scope, pipeline order, naming, and design decisions. Where code or older documents conflict with this file, this file wins. For current module-level architecture detail, see `docs/project/architecture-pipeline-overview.md` (living document, updates with the code). Key conventions: the matching stage is named **Scorer** (formerly "Matcher" in earlier drafts); the **Tracker is deterministic code, not an LLM agent**; match scores, bands, and gaps **are persisted** (this reverses v1.0 Decision D4 — see amendments doc).
+> **Note for AI coding assistants (Claude Code):** This document is the source of truth for scope, pipeline order, naming, and design decisions. Where code or older documents conflict with this file, this file wins. For current module-level architecture detail, see `docs/project/architecture-pipeline-overview.md` (living document, updates with the code). Key conventions: the matching stage is named **Scorer** (formerly "Matcher" in earlier drafts); the **Tracker is deterministic code, not an LLM agent**; match scores, bands, and gaps **are persisted** (this reverses v1.0 Decision D4 — see amendments doc); **`profile.json` is the single required candidate source** for scoring, briefing, and gap detection — `resume.txt` no longer exists (D8); the pipeline **runs on an automated daily schedule**, not manually (§7).
 
 ---
 
 ## 1. Overview
 
-Job Market Scout is a personal, configurable multi-agent system that automates the repetitive part of a job search. Once a day it scrapes job listings from job boards and career pages, detects which listings are new, changed, or closed, scores the relevant ones against the user's resume and preferences using an LLM, extracts each listing's requirements to flag skill gaps against the user's profile, and emails the user a concise daily briefing linking to a rendered report of the run.
+Job Market Scout is a personal, configurable multi-agent system that automates the repetitive part of a job search. Once a day it scrapes job listings from job boards and career pages, detects which listings are new, changed, or closed, scores the relevant ones against the user's profile and preferences using an LLM, extracts each listing's requirements to flag skill gaps against that same profile, and emails the user a concise daily briefing linking to a rendered report of the run.
 
-The system is generalised: nothing about the pipeline is hard-coded to a specific role or industry. A file-based configuration layer (target roles, keywords, locations, resume, preferences) drives both scraping and scoring, so the same system can scout for any job type by changing config, not code.
+The system is generalised: nothing about the pipeline is hard-coded to a specific role or industry. A file-based configuration layer (target roles, keywords, locations, profile, preferences) drives both scraping and scoring, so the same system can scout for any job type by changing config, not code.
 
 ### 1.1 Problem statement
 
-Manually checking multiple job boards daily is slow, repetitive, and easy to neglect. Relevant listings get missed, closed listings waste attention, and comparing every listing against a resume is tedious. A raw match score alone also doesn't answer *why* a job is a good or bad fit, or what skills to develop for the ones that aren't. Job Market Scout compresses the daily check to one email, and turns each score into an explained, browsable report.
+Manually checking multiple job boards daily is slow, repetitive, and easy to neglect. Relevant listings get missed, closed listings waste attention, and comparing every listing against the candidate's profile is tedious. A raw match score alone also doesn't answer *why* a job is a good or bad fit, or what skills to develop for the ones that aren't. Job Market Scout compresses the daily check to one email, and turns each score into an explained, browsable report.
 
 ### 1.2 Target user
 
@@ -39,16 +43,17 @@ A single job seeker (initially the author). Single-user by design in this versio
 ### 2.1 In scope
 
 - Six-stage pipeline: **Scraper → Tracker → Scorer → Advisor → Persistence/Report → Briefing**, run as Google ADK agents
-- One automated run per day (currently triggered manually — see §7)
+- One automated run per day, triggered by a scheduled GitHub Actions workflow (see §7)
 - Scraping listings from job boards and the web (e.g. LinkedIn, Seek, company career pages)
 - Listing lifecycle tracking in PostgreSQL: new / changed / closed, with deduplication
-- LLM-based match scoring (DeepSeek via LiteLLM) of relevant listings against the configured resume and preferences
+- LLM-based match scoring (DeepSeek via LiteLLM) of relevant listings against the configured profile and preferences
 - Classifying each score into a qualitative band (`strong_match` / `competitive` / `reach`)
 - Extracting each listing's requirements and flagging skill gaps against the user's `profile.json`
 - Persisting each run's listings, scores, bands, and gaps to PostgreSQL
 - Rendering a per-run HTML report (dashboard, job detail, history, profile) from persisted data
 - Daily briefing generated by an LLM, delivered by email (Gmail), linking to that run's rendered report
-- File-based configuration layer: roles/keywords, locations, resume, preferences
+- File-based configuration layer: roles/keywords, locations, profile, preferences
+- Reports dashboard hosted on an Azure Storage static website, reachable 24/7 independent of whether the VM is running (see §7)
 
 ### 2.2 Out of scope (this version)
 
@@ -58,7 +63,6 @@ A single job seeker (initially the author). Single-user by design in this versio
 - Teams or other non-email delivery channels
 - Multi-user support
 - A configuration UI (config is edited as files)
-- Automated scheduling and cloud deployment — see §7
 
 ---
 
@@ -81,20 +85,22 @@ four-stage flow; treat them as historical until refreshed.
 
 | ID | Requirement |
 |---|---|
-| FR-1 | The system SHALL run the full pipeline (Scraper → Tracker → Scorer → Advisor → Persistence/Report → Briefing) once per day when triggered. |
+| FR-1 | The system SHALL run the full pipeline (Scraper → Tracker → Scorer → Advisor → Persistence/Report → Briefing) once per day, triggered automatically by a scheduled GitHub Actions workflow (manual `workflow_dispatch` also available). |
 | FR-2 | The Scraper SHALL fetch job listings from the configured sources for the configured roles, keywords, and locations. |
 | FR-3 | The Tracker SHALL persist **all** scraped listings to PostgreSQL, not only relevant ones. |
 | FR-4 | The Tracker SHALL detect and skip duplicate listings. |
 | FR-5 | The Tracker SHALL mark each stored listing's lifecycle state as new, changed, or closed by diffing against prior runs. |
 | FR-6 | The Tracker SHALL pass the relevant (new/changed) listings to the Scorer via pipeline state. |
-| FR-7 | The Scorer SHALL score each relevant listing against the configured resume and preferences using the LLM, producing a score and short reasoning keyed by job ID. |
+| FR-7 | The Scorer SHALL score each relevant listing against the configured profile and preferences using the LLM, producing a score and short reasoning keyed by job ID. |
 | FR-8 | The Scorer SHALL NOT restate or copy listing content; listing data flows downstream from Tracker's pipeline state, and later stages join scores to listings by job ID. |
 | FR-9 | The Advisor SHALL classify each score into a band (`strong_match` / `competitive` / `reach`) via a deterministic threshold function. |
-| FR-10 | The Advisor SHALL extract structured requirements per listing and flag skill gaps against the user's `profile.json`, skipping gap detection (with a status event) if no profile exists. |
+| FR-10 | The Advisor SHALL extract structured requirements per listing and flag skill gaps against the user's `profile.json`. Since the profile is required (FR-15), gap detection always runs — there is no missing-profile skip path. |
 | FR-11 | The Persistence/Report stage SHALL persist each run's listings, scores, bands, and gaps to PostgreSQL (`runs` / `run_listings` / `listing_gaps`), and render a per-run HTML report (dashboard, job detail, history, profile) from that data. |
 | FR-12 | The Briefing SHALL generate a concise daily summary of the top-matching listings, including at minimum title, company, link, and score for each, with a link to that run's rendered report. |
 | FR-13 | The Notification module SHALL send the briefing to the user's email address via Gmail. |
-| FR-14 | All scraping and scoring behaviour SHALL be driven by the file-based config (roles/keywords, locations, resume, preferences) with no role-specific logic in code. |
+| FR-14 | All scraping and scoring behaviour SHALL be driven by the file-based config (roles/keywords, locations, profile, preferences) with no role-specific logic in code. |
+| FR-15 | `profile.json` SHALL be the single, required candidate source used by scoring, the briefing, and gap detection; the system SHALL fail fast at startup with a clear error if it is missing or invalid. |
+| FR-16 | The rendered reports dashboard (`reports/` + `hello/`) SHALL be published to a static website host after each run, so it remains reachable while the VM is deallocated. |
 
 ---
 
@@ -109,6 +115,8 @@ four-stage flow; treat them as historical until refreshed.
 | **D5** | Configuration is file-based; no config UI. | Single-user tool; files in the repo are simpler and versionable. |
 | **D6** | Naming: the matching stage is called **Scorer**. Earlier drafts used "Matcher"; all documents and code should use Scorer. | Consistency across SDLC artifacts and code. |
 | **D7** | Advisor's persistence writes happen in the deterministic pipeline layer (Persistence/Report stage), not inside Advisor's LLM-calling `agent.py`/`runner.py`. | Extends D2's single-writer rule to the new tables instead of revisiting it. |
+| **D8** | *(v2.1)* `profile.json` is the single, required candidate source for scoring, the briefing, and gap detection. The separate free-text `resume.txt` is retired end to end (config, Docker mount, deploy/CI steps). | The two representations drifted in production — `resume.txt` sat at a generic placeholder while `profile.json` held the real candidate data, so the Scorer graded every listing against the placeholder. One required, structured source removes the drift; see `docs/agent/specs/profile-candidate-source/spec.md`. |
+| **D9** | *(v2.1)* The reports dashboard is published to an Azure Storage static website after each run, decoupled from the VM's start/deallocate cycle. | The VM is deallocated ~23h/day to control cost, which would otherwise make the dashboard unreachable almost all the time; see `docs/agent/plans/static-dashboard-hosting/plan.md`. |
 
 ---
 
@@ -131,11 +139,12 @@ four-stage flow; treat them as historical until refreshed.
 | Scout App code + Dockerfile (repo) | **Built** |
 | PostgreSQL | **Built** — provisioned via `docker-compose.yaml`, wired up in `scout/shared/db.py` |
 | End-to-end pipeline orchestration (all six stages wired together) | **Built** — `ScoutPipelineAgent` (`scout/agent.py`) runs Scraper → Tracker → Scorer → Advisor → Persistence/Report → Briefing in one pass; `scout/main.py` is the batch entrypoint the Dockerfile's `CMD` runs |
-| Scheduler (daily trigger) | Planned — target: cron/systemd timer on the Azure VM (see Appendix C of `docs/agent/specs/tracker-orchestration/spec.md`, status: Draft) |
-| Cloud host | Planned — Azure VM instance (same draft spec) |
-| CI/CD | Planned — GitHub Actions builds the container image and deploys it to the Azure VM on push, gated on the pipeline running successfully (same draft spec; no workflow files exist yet) |
+| Scheduler (daily trigger) | **Built** — GitHub Actions `.github/workflows/scheduled-run.yml`, cron-triggered at 19:00 and 01:00 UTC (05:00 and 11:00 Melbourne time); also runnable manually via `workflow_dispatch` |
+| Cloud host | **Built** — Azure VM `scout-vm`, provisioned via `infra/main.bicep`; started and deallocated around each scheduled run to minimize cost (~1h/day billed) |
+| CI/CD | **Built** — `infra-provision.yml` applies Bicep infra changes, `deploy.yml` rsyncs app code to the VM, `scheduled-run.yml` starts the VM, runs the pipeline over SSH, publishes the dashboard, then deallocates the VM |
+| Reports dashboard hosting | **Built** — Azure Storage static website (`infra/dashboard.bicep`), published by `scheduled-run.yml` after each run; reachable at all times, independent of the VM's start/deallocate cycle (see `docs/agent/plans/static-dashboard-hosting/plan.md`) |
 
-Source is hosted on GitHub. Until the scheduler exists, runs are triggered manually.
+Source is hosted on GitHub. Scheduled runs happen automatically via GitHub Actions (see above); a manual run remains available via `workflow_dispatch`.
 
 ### Development environment
 
@@ -148,11 +157,12 @@ Source is hosted on GitHub. Until the scheduler exists, runs are triggered manua
 
 ## 8. Deferred / future work
 
-- Scheduler, Azure VM hosting, CI/CD (see §7)
 - Embeddings-based matching
 - Trend analysis over stored listings
 - Additional delivery channels (e.g. Teams)
 - Multi-user support and a config UI
+- Moving `profile.json` out of git into a secret (open question carried from `docs/agent/specs/profile-candidate-source/spec.md`)
+- Moving orchestration off GitHub Actions to an Azure-native scheduler, and moving Postgres to a managed Azure Database for PostgreSQL (both explicitly deferred during `static-dashboard-hosting` to keep added cost at $0)
 
 ---
 
@@ -163,4 +173,6 @@ Source is hosted on GitHub. Until the scheduler exists, runs are triggered manua
 - Architecture diagrams: `job-market-scout-simplified.drawio` (pages: High-Level Architecture, User Journey, Deployment) — predate the Advisor/Persistence/Report stages, treat as historical
 - Stage-by-stage design rationale: `docs/agent/specs/<stage>/spec.md`
 - Phased implementation history: `docs/agent/plans/<stage>/plan.md`
+- Candidate-source consolidation rationale (D8): `docs/agent/specs/profile-candidate-source/spec.md` and `docs/agent/plans/profile-candidate-source/plan.md`
+- Dashboard static-hosting rationale (D9): `docs/agent/plans/static-dashboard-hosting/plan.md`
 - Project plan and MoSCoW feature list (kept in sync with this PRS; on conflict, this PRS wins)

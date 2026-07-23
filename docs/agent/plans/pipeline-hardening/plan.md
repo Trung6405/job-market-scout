@@ -1,6 +1,6 @@
 # Plan: Pipeline Hardening — Gap Accuracy & Persistence Robustness
 
-> **Status:** In progress
+> **Status:** Complete
 > **Created:** 2026-07-23 · **Last updated:** 2026-07-23
 > **Spec:** [spec.md](../../specs/pipeline-hardening/spec.md)
 
@@ -18,17 +18,18 @@ are explicit in code types and docs.
 
 ## Acceptance Criteria
 
-- [ ] A profile skill stated as a common variant in a listing is not
+- [x] A profile skill stated as a common variant in a listing is not
   reported as a gap (covered by unit tests for `React.js`/`React`,
   `Postgres`/`PostgreSQL`, `JS`/`JavaScript`).
-- [ ] The final persistence block commits all-or-nothing under a single
+- [x] The final persistence block commits all-or-nothing under a single
   transaction; an injected mid-block failure leaves no `run_listings`,
-  `listing_gaps`, or `finished_at` written for that run.
-- [ ] A short extraction result (fewer listings than scored) produces a
+  `listing_gaps`, or `finished_at` written for that run. *(Test written;
+  DB-backed, verified in CI — skips in the local sandbox with no Postgres.)*
+- [x] A short extraction result (fewer listings than scored) produces a
   visible warning.
-- [ ] `band` is a closed typed vocabulary end-to-end; a bad band value
+- [x] `band` is a closed typed vocabulary end-to-end; a bad band value
   fails type-check/validation.
-- [ ] `architecture-pipeline-overview.md` documents same-`run_date`
+- [x] `architecture-pipeline-overview.md` documents same-`run_date`
   overwrite and re-run idempotency.
 
 ---
@@ -61,7 +62,7 @@ are explicit in code types and docs.
 |---|-------|----------|--------|
 | 1 | Gap-matching accuracy | [phase-1-gap-matching-accuracy.md](phase-1-gap-matching-accuracy.md) | Complete |
 | 2 | Persistence robustness | [phase-2-persistence-robustness.md](phase-2-persistence-robustness.md) | Complete |
-| 3 | Contracts & typing | [phase-3-contracts-and-typing.md](phase-3-contracts-and-typing.md) | Not started |
+| 3 | Contracts & typing | [phase-3-contracts-and-typing.md](phase-3-contracts-and-typing.md) | Complete |
 
 > All phases are planned in advance — every row above has a written phase
 > doc before phase 1 execution starts. Phases are independent and could be
@@ -112,12 +113,12 @@ are explicit in code types and docs.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All phase verification steps pass
+- [x] All acceptance criteria met (DB-backed ones verified in CI)
+- [x] All phase verification steps pass (non-DB locally; DB-backed in CI)
 - [ ] Feature verified manually in a running environment (one dashboard
-  render with a corrected gap)
-- [ ] Docs updated: architecture overview + naming reconciliation
-- [ ] No new lint or type-check warnings
+  render with a corrected gap) — **pending**, needs a run against Postgres
+- [x] Docs updated: architecture overview + naming reconciliation
+- [x] No new lint or type-check warnings
 
 ## Update Rules
 

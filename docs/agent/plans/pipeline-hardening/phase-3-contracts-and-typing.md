@@ -1,7 +1,7 @@
 # Phase 3: Contracts & Typing
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** In progress
+> **Status:** Complete
 > **Depends on:** nothing (independent; touches band typing + docs)
 
 ---
@@ -57,17 +57,17 @@ naming are documented where readers will find them.
 - **Files:** `docs/agent/specs/advisor-report/spec.md`, `docs/project/architecture-pipeline-overview.md`, any prose referring to `detect_gaps`
 - **Gate:** none
 - **Steps:**
-  - [ ] Grep docs for `detect_gaps`; replace with `evaluate_requirements` (the actual function) or add a one-line note that the prose name maps to `evaluate_requirements` in `advisor/gaps.py`.
-  - [ ] Verify: `grep -r detect_gaps docs/` returns only intentional references.
-  - [ ] Commit: `docs: reconcile gap-matcher naming with code`
+  - [x] Grep docs for `detect_gaps`. Fixed the two *authoritative/current* docs: the PRS amendment now names `evaluate_requirements(...)`, and the advisor-report spec's live prose gained a pointer to the real function. The architecture overview already used `evaluate_requirements`.
+  - [x] Verify: remaining `detect_gaps` references live only in **historical execution logs** (`advisor-report/plan.md`, `phase-3-gaps.md`) and the advisor-report spec's own Amendments — point-in-time records of what was built then, intentionally left as-is rather than rewriting history.
+  - [x] Commit: `docs: reconcile gap-matcher naming with code`
 
 ---
 
 ## Verification
 
-- [ ] All phase tests pass: `pytest tests/test_advisor_bands.py -q`
-- [ ] `grep -rn detect_gaps docs/` shows no stale references.
-- [ ] Architecture doc contains the run-identity/idempotency subsection.
+- [x] All phase tests pass: `pytest tests/test_advisor_bands.py -q` (9 passed)
+- [x] `grep -rn detect_gaps docs/` shows only historical-log references (see Task 4).
+- [x] Architecture doc contains the run-identity/idempotency subsection.
 
 ## Rollback
 
