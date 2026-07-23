@@ -94,8 +94,6 @@ class ScoutPipelineAgent(BaseAgent):
             banded_matches = [
                 (match, classify_band(match.score, settings)) for match in matches
             ]
-            async with pool.acquire() as conn:
-                await record_run_listings(conn, run_id, banded_matches)
 
             profile = load_profile(settings.profile_path)
 
@@ -136,19 +134,26 @@ class ScoutPipelineAgent(BaseAgent):
                 f"across {len(checks_by_match)} listing(s)",
             )
 
+            # One transaction for the whole run so a mid-block failure leaves
+            # nothing half-written: scores, gaps, meta, and the finished marker
+            # commit together or not at all. The report renders read this run's
+            # rows through the same connection, so they stay inside the
+            # transaction; render_profile touches no DB and stays outside.
             async with pool.acquire() as conn:
-                await record_listing_gaps(conn, run_id, checks_by_match)
-                await record_listing_meta(conn, run_id, matches_with_requirements)
-                await finish_run(
-                    conn,
-                    run_id,
-                    listings_scraped=len(listings),
-                    listings_scored=len(matches),
-                )
-                report_paths = await render_run(
-                    conn, run_id, settings, has_profile=True
-                )
-                await render_history(conn, settings, has_profile=True)
+                async with conn.transaction():
+                    await record_run_listings(conn, run_id, banded_matches)
+                    await record_listing_gaps(conn, run_id, checks_by_match)
+                    await record_listing_meta(conn, run_id, matches_with_requirements)
+                    await finish_run(
+                        conn,
+                        run_id,
+                        listings_scraped=len(listings),
+                        listings_scored=len(matches),
+                    )
+                    report_paths = await render_run(
+                        conn, run_id, settings, has_profile=True
+                    )
+                    await render_history(conn, settings, has_profile=True)
             render_profile(profile, settings)
             yield _status_event(
                 ctx,

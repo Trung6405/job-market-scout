@@ -40,11 +40,10 @@ in one transaction and logging extraction drops.
 - **Files:** `scout/agent.py`, `tests/` (agent-level integration test)
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: inject a failure (monkeypatch `finish_run` to raise) after `record_run_listings`/`record_listing_gaps`/`record_listing_meta`; assert that after the exception the DB has **no** `run_listings` rows and no `listing_gaps` for that `run_id`, and `runs.finished_at` is NULL. (Uses the existing DB integration harness / test database.)
-  - [ ] Verify it fails (`pytest tests/ -k partial_persistence -q`) — currently rows persist because each call is its own connection.
-  - [ ] Implement: acquire one connection and open a single `async with conn.transaction():` spanning `record_run_listings`, `record_listing_gaps`, `record_listing_meta`, `finish_run`, and the run/history render calls that read this run's uncommitted rows. Keep `render_profile` (no DB) outside. Remove the now-redundant inner `conn.transaction()` in `record_listing_gaps` or confirm nested transaction (savepoint) is harmless — prefer removing to avoid a savepoint per call.
-  - [ ] Verify it passes (`pytest tests/ -k partial_persistence -q`)
-  - [ ] Commit: `fix(pipeline): persist run atomically in a single transaction`
+  - [x] Write failing test: inject a failure (monkeypatch `finish_run` to raise) after `record_run_listings`/`record_listing_gaps`/`record_listing_meta`; assert that after the exception the DB has **no** `run_listings` rows and no `listing_gaps` for that `run_id`, and `runs.finished_at` is NULL. (Uses the existing DB integration harness / test database — `test_scout_pipeline_agent_rolls_back_on_mid_persist_failure`.)
+  - [~] Verify it fails / passes — **DB-backed, skips locally** (no Postgres in the dev sandbox); runs against Postgres in CI. Non-DB agent ordering tests were verified green locally (17 passed).
+  - [x] Implement: open a single `async with conn.transaction():` spanning `record_run_listings`, `record_listing_gaps`, `record_listing_meta`, `finish_run`, and the run/history renders (which read this run's rows through the same connection). `record_run_listings` moved out of its early standalone acquire into this block so nothing persists until both LLM passes have completed. Kept the inner `conn.transaction()` in `record_listing_gaps` (asyncpg nests it as a harmless savepoint) because `test_record_listing_gaps_rolls_back_delete_when_insert_fails` encodes its self-atomic contract.
+  - [x] Commit: `fix(pipeline): persist run atomically in a single transaction`
 
 ### Task 3: Confirm re-run idempotency under the new transaction
 
