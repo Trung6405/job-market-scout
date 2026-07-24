@@ -10,7 +10,6 @@ from scout.sub_agents.briefing.summarize import (
     parse_briefing_prose,
     summarize_matches,
 )
-from tests.test_briefing_agent import _make_match
 
 
 def test_parse_briefing_prose_valid_json():
@@ -67,26 +66,22 @@ def test_parse_briefing_prose_strips_bare_code_fence_without_language_tag():
 
 
 @pytest.mark.asyncio
-async def test_summarize_matches_returns_parsed_prose(monkeypatch):
-    raw = json.dumps(
-        {
-            "intro": "Nice matches today.",
-            "takeaways": [
-                {"source": "linkedin", "external_id": "1", "takeaway": "Great fit."}
-            ],
-        }
+async def test_summarize_matches_returns_parsed_prose(monkeypatch, match_factory):
+    from scout.sub_agents.briefing import summarize
+
+    prose = BriefingProse(
+        intro="Nice matches today.",
+        takeaways=[
+            {"source": "linkedin", "external_id": "1", "takeaway": "Great fit."}
+        ],
     )
 
-    async def _fake_run(agent):
-        return raw
+    async def _fake_complete_json(prompt, schema, settings, **kwargs):
+        return prose
 
-    monkeypatch.setattr(
-        "scout.sub_agents.briefing.summarize._run_briefing_agent", _fake_run
-    )
+    monkeypatch.setattr(summarize, "complete_json", _fake_complete_json)
 
-    prose = await summarize_matches(
-        [_make_match("1", "Platform Engineer", 88)], Settings()
-    )
+    result = await summarize_matches([match_factory()], Settings())
 
-    assert isinstance(prose, BriefingProse)
-    assert prose.takeaways[0].takeaway == "Great fit."
+    assert isinstance(result, BriefingProse)
+    assert result.takeaways[0].takeaway == "Great fit."

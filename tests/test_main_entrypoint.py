@@ -91,9 +91,8 @@ async def test_run_once_completes_without_raising(monkeypatch, db_pool):
 @pytest.mark.asyncio
 async def test_run_once_propagates_stage_exception(monkeypatch):
     """A real exception raised inside a stage (run_scraper) must propagate
-    all the way out of run_once() — i.e. InMemoryRunner must not swallow it
-    into an error event. This is an integration check of ADK's real runner
-    behavior, not a mock of run_once itself."""
+    all the way out of run_once() rather than being swallowed while
+    iterating the agent's event stream."""
 
     async def _raising_run_scraper(settings):
         raise RuntimeError("scraper failed")

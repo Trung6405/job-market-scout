@@ -611,6 +611,14 @@ async def run_requirements_extraction(
   `scout/shared/adk_runner.py` (delete), `tests/test_agent.py`,
   `tests/test_main_entrypoint.py`, `tests/test_shared_parsing.py`
 - **Gate:** none
+- **Note (added during execution):** deleting `adk_runner.py` also broke
+  `scout/sub_agents/briefing/summarize.py`, an undocumented consumer — see
+  Notes / Learnings below. In practice this task also touched
+  `scout/sub_agents/briefing/summarize.py`,
+  `scout/sub_agents/briefing/agent.py` (deleted),
+  `tests/test_briefing_agent.py` (deleted),
+  `tests/test_briefing_summarize.py`, `tests/test_briefing_entrypoint.py`,
+  and `tests/test_briefing_embed_builder.py`.
 - **Steps:**
   - [ ] Remove the `xfail` marks added in Task 2 from `tests/test_agent.py`
   - [ ] Verify they fail (`pytest tests/test_agent.py -v`)
@@ -819,3 +827,18 @@ preference-neutral prompt remain valid rows.
   wrapper needed. `strip_code_fence` is kept regardless, as planned, since
   it costs nothing and is a defensive guard against the model fencing on
   a different prompt or under load.
+- **Task 6 (2026-07-24) — plan gap found and fixed inline.** Deleting
+  `scout/shared/adk_runner.py` broke `scout/sub_agents/briefing/summarize.py`,
+  which the plan's file list for Tasks 5 and 6 didn't cover: it still called
+  ADK's `run_single_turn` on an `LlmAgent` built by
+  `scout/sub_agents/briefing/agent.py`. Fixed in the same commit as the
+  rewire, on the same pattern as Task 5: `summarize_matches` now calls
+  `complete_json` directly (`temperature=0.3`, matching the original
+  agent's setting), `briefing/agent.py` is deleted, and
+  `tests/test_briefing_agent.py` is deleted with it. Two other files
+  (`tests/test_briefing_entrypoint.py`, `tests/test_briefing_embed_builder.py`)
+  imported the now-deleted file's `_make_match` helper; each got its own
+  local copy rather than a new shared fixture, since they use it as a plain
+  function inside list comprehensions, not as an injected fixture. Full
+  `grep -rn "google.adk\|google.genai" scout/` returned no hits after this
+  fix, confirming Task 8 has nothing left to find.

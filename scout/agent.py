@@ -4,11 +4,6 @@ from datetime import datetime
 from typing import AsyncGenerator
 from zoneinfo import ZoneInfo
 
-from google.adk.agents import BaseAgent
-from google.adk.agents.invocation_context import InvocationContext
-from google.adk.events import Event
-from google.genai import types as genai_types
-
 from scout.config import settings as default_settings
 from scout.shared.db import (
     create_pool,
@@ -18,6 +13,7 @@ from scout.shared.db import (
     record_run_listings,
     start_run,
 )
+from scout.shared.events import PipelineEvent
 from scout.shared.profile import load_profile
 from scout.sub_agents.advisor.bands import classify_band
 from scout.sub_agents.advisor.gaps import evaluate_requirements
@@ -33,34 +29,17 @@ from scout.sub_agents.tracker.runner import track_listings
 _LOCAL_TZ = ZoneInfo("Australia/Melbourne")
 
 
-def _status_event(ctx: InvocationContext, author: str, text: str) -> Event:
-    return Event(
-        invocation_id=ctx.invocation_id,
-        author=author,
-        branch=ctx.branch,
-        content=genai_types.Content(
-            role="model", parts=[genai_types.Part.from_text(text=text)]
-        ),
-    )
-
-
-class ScoutPipelineAgent(BaseAgent):
+class ScoutPipelineAgent:
     name: str = "scout"
 
-    async def _run_async_impl(
-        self, ctx: InvocationContext
-    ) -> AsyncGenerator[Event, None]:
+    async def run(self) -> AsyncGenerator[PipelineEvent, None]:
         settings = default_settings
 
         listings = await run_scraper(settings)
-        yield _status_event(
-            ctx, self.name, f"Scraper: {len(listings)} listing(s) found"
-        )
+        yield PipelineEvent(self.name, f"Scraper: {len(listings)} listing(s) found")
 
         relevant = await track_listings(listings, settings=settings)
-        yield _status_event(
-            ctx, self.name, f"Tracker: {len(relevant)} new/changed"
-        )
+        yield PipelineEvent(self.name, f"Tracker: {len(relevant)} new/changed")
 
         run_date = datetime.now(_LOCAL_TZ).date()
         pool = await create_pool(settings)
@@ -77,8 +56,7 @@ class ScoutPipelineAgent(BaseAgent):
                         listings_scored=0,
                     )
                     await render_history(conn, settings, has_profile=True)
-                yield _status_event(
-                    ctx,
+                yield PipelineEvent(
                     self.name,
                     "No new or changed listings — nothing to score or brief.",
                 )
@@ -88,7 +66,7 @@ class ScoutPipelineAgent(BaseAgent):
             # connection is only acquired around the actual persistence calls
             # so it isn't held idle across those calls.
             scores = await run_scorer(relevant, settings)
-            yield _status_event(ctx, self.name, f"Scorer: {len(scores)} scored")
+            yield PipelineEvent(self.name, f"Scorer: {len(scores)} scored")
 
             matches = join_match_results(relevant, scores)
             banded_matches = [
@@ -114,8 +92,7 @@ class ScoutPipelineAgent(BaseAgent):
             ]
             dropped = len(matches) - len(matches_with_requirements)
             if dropped:
-                yield _status_event(
-                    ctx,
+                yield PipelineEvent(
                     self.name,
                     f"Warning: {dropped} scored listing(s) had no extracted "
                     "requirements — skipped for gaps/meta.",
@@ -127,8 +104,7 @@ class ScoutPipelineAgent(BaseAgent):
             gap_count = sum(
                 1 for _, checks in checks_by_match for c in checks if not c.met
             )
-            yield _status_event(
-                ctx,
+            yield PipelineEvent(
                 self.name,
                 f"Gaps detected: {gap_count} "
                 f"across {len(checks_by_match)} listing(s)",
@@ -155,23 +131,20 @@ class ScoutPipelineAgent(BaseAgent):
                     )
                     await render_history(conn, settings, has_profile=True)
             render_profile(profile, settings)
-            yield _status_event(
-                ctx,
-                self.name,
-                f"Report rendered: {report_paths['dashboard']}",
+            yield PipelineEvent(
+                self.name, f"Report rendered: {report_paths['dashboard']}"
             )
         finally:
             await pool.close()
-        yield _status_event(ctx, self.name, f"Run persisted: {run_date}")
+        yield PipelineEvent(self.name, f"Run persisted: {run_date}")
 
         if settings.discord_bot_token and settings.discord_channel_id:
             await run_briefing(
                 relevant, scores, settings, report_path=report_paths["dashboard"]
             )
-            yield _status_event(ctx, self.name, "Briefing: Discord message sent")
+            yield PipelineEvent(self.name, "Briefing: Discord message sent")
         else:
-            yield _status_event(
-                ctx,
+            yield PipelineEvent(
                 self.name,
                 "Briefing: skipped (DISCORD_BOT_TOKEN/DISCORD_CHANNEL_ID not set)",
             )
