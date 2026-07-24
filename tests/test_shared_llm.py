@@ -68,3 +68,17 @@ async def test_complete_json_passes_model_and_json_mode(monkeypatch):
     assert seen["response_format"] == {"type": "json_object"}
     assert seen["temperature"] == 0.3
     assert seen["messages"] == [{"role": "user", "content": "prompt"}]
+
+
+async def test_complete_json_forwards_max_tokens_and_timeout(monkeypatch):
+    seen: dict = {}
+
+    async def _fake_acompletion(**kwargs):
+        seen.update(kwargs)
+        return _fake_response('{"value": 1}')
+
+    monkeypatch.setattr(llm.litellm, "acompletion", _fake_acompletion)
+    settings = Settings()
+    await llm.complete_json("prompt", _Toy, settings)
+    assert seen["max_tokens"] == settings.model_max_tokens
+    assert seen["timeout"] == settings.model_timeout_seconds
