@@ -129,6 +129,32 @@ async def test_render_run_writes_dashboard_and_job_detail_files(db_pool, tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_render_run_shows_today_badge_only_on_actual_today(db_pool, tmp_path):
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        match = MatchResult(listing=listing, score=88, reasoning="Great fit")
+
+        past_run_id = await start_run(conn, date(2026, 7, 21))
+        await record_run_listings(conn, past_run_id, [(match, "strong_match")])
+        await finish_run(conn, past_run_id, listings_scraped=1, listings_scored=1)
+
+        today_run_id = await start_run(conn, date.today())
+        await record_run_listings(conn, today_run_id, [(match, "strong_match")])
+        await finish_run(conn, today_run_id, listings_scraped=1, listings_scored=1)
+
+        settings = Settings(report_output_dir=str(tmp_path))
+        past_paths = await render_run(conn, past_run_id, settings)
+        today_paths = await render_run(conn, today_run_id, settings)
+
+    past_html = past_paths["dashboard"].read_text(encoding="utf-8")
+    today_html = today_paths["dashboard"].read_text(encoding="utf-8")
+
+    assert '<span class="tag-today">' not in past_html
+    assert '<span class="tag-today">' in today_html
+
+
+@pytest.mark.asyncio
 async def test_render_run_job_detail_shows_snapshot_breakdown_and_checklist(
     db_pool, tmp_path
 ):
