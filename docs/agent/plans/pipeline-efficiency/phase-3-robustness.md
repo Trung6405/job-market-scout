@@ -1,7 +1,7 @@
 # Phase 3: Robustness & Cleanup
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** Phase 1 complete (Task 4 removes `has_profile`, which
 > Phase 1 leaves in place). Phase 2 is independent of this phase.
 
@@ -366,13 +366,16 @@ async def get_run_by_date(conn: asyncpg.Connection, run_date: date) -> Run | Non
 
 ## Verification
 
-- [ ] All phase tests pass: `pytest -q`
-- [ ] No empty modules remain:
+- [x] All phase tests pass: `pytest -q` — 241 passed
+- [x] No empty modules remain:
       `find scout -name "*.py" -empty -not -name "__init__.py"` returns nothing
-- [ ] Manual: `docker compose run --rm app` completes and the scrape log
-      line reports any skipped malformed jobs
-- [ ] Manual: `docker compose run --rm app python -m scout.rerender`
-      regenerates every page without error
+- [x] Manual: `docker compose run --rm app` completes and the scrape log
+      line reports any skipped malformed jobs — 2026-07-24 run logged
+      `Finished scrape: 79 unique listing(s) after dedup (from 80 raw, 0
+      skipped)`
+- [x] Manual: `docker compose run --rm app python -m scout.rerender`
+      regenerates every page without error — regenerated all 3 stored runs
+      plus history and profile pages against the live dev DB
 
 ## Observability
 

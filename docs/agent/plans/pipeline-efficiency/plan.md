@@ -1,6 +1,6 @@
 # Plan: Pipeline Efficiency — LLM Consolidation, Listing Lifecycle & Cleanup
 
-> **Status:** In progress
+> **Status:** Complete
 > **Created:** 2026-07-24 · **Last updated:** 2026-07-24
 > **Spec:** [spec.md](../../specs/pipeline-efficiency/spec.md)
 
@@ -37,9 +37,9 @@ then withdrawn — see the spec's Amendment.
 - [x] Running the pipeline twice on one date leaves `listings_scraped` and
       `listings_scored` at or above the first run's values, and leaves the
       first run's gaps intact for listings the second did not re-analyse.
-- [ ] A malformed scraper job and an unparseable model batch each produce a
+- [x] A malformed scraper job and an unparseable model batch each produce a
       warning and a completed run.
-- [ ] `pytest` passes with no new lint or type-check warnings.
+- [x] `pytest` passes with no new lint or type-check warnings.
 
 ---
 
@@ -76,7 +76,7 @@ then withdrawn — see the spec's Amendment.
 |---|-------|----------|--------|
 | 1 | Model layer & brief-time filtering | [phase-1-model-layer.md](phase-1-model-layer.md) | Complete |
 | 2 | Listing lifecycle & run record | [phase-2-lifecycle.md](phase-2-lifecycle.md) | Complete |
-| 3 | Robustness & cleanup | [phase-3-robustness.md](phase-3-robustness.md) | Not started |
+| 3 | Robustness & cleanup | [phase-3-robustness.md](phase-3-robustness.md) | Complete |
 
 > All phases are planned in advance — every row above has a written,
 > human-approved phase doc before phase 1 execution starts. If executing
@@ -162,11 +162,11 @@ then withdrawn — see the spec's Amendment.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All phase verification steps pass
-- [ ] Feature verified manually in a running environment
-- [ ] Docs / README updated where behaviour changed
-- [ ] No new lint or type-check warnings
+- [x] All acceptance criteria met
+- [x] All phase verification steps pass
+- [x] Feature verified manually in a running environment
+- [x] Docs / README updated where behaviour changed
+- [x] No new lint or type-check warnings
 
 ## Update Rules
 
