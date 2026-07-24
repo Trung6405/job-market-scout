@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from email.message import EmailMessage
+from pathlib import Path
 
 import pytest
 
@@ -25,7 +25,7 @@ def _make_listing(**overrides):
 
 
 @pytest.mark.asyncio
-async def test_run_once_completes_without_raising(monkeypatch):
+async def test_run_once_completes_without_raising(monkeypatch, db_pool):
     listing = _make_listing()
     score = ListingScore(source="linkedin", external_id="1", score=80, reasoning="Good fit.")
 
@@ -39,12 +39,43 @@ async def test_run_once_completes_without_raising(monkeypatch):
         return [score]
 
     async def _fake_run_briefing(listings, scores, settings, report_path=None):
-        return EmailMessage()
+        return {}
+
+    class _UnclosablePool:
+        """Wraps db_pool so scout.agent's `finally: await pool.close()` doesn't
+        tear down the shared test fixture pool."""
+
+        def acquire(self):
+            return db_pool.acquire()
+
+        async def close(self):
+            pass
+
+    async def _fake_create_pool(settings):
+        return _UnclosablePool()
+
+    async def _fake_render_run(conn, run_id, settings, has_profile=False):
+        return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
+
+    async def _fake_render_history(conn, settings, has_profile=False):
+        return Path("reports/history.html")
+
+    def _fake_render_profile(profile, settings):
+        return Path("reports/profile.html")
 
     monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
     monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
     monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
     monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
+    # run_once() resolves the real Settings().database_url and renders real
+    # report files. Left unmocked, this smoke test writes a fixture run into
+    # the DEV database (and ./reports) whenever Postgres happens to be
+    # reachable — polluting real dashboard data. Point it at the isolated
+    # scout_test pool and stub the renderers instead.
+    monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
+    monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
+    monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
+    monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
     # Profile is always present now (committed profile.json), so gap detection
     # runs; mock the advisor LLM call so this smoke test stays hermetic.
     async def _fake_requirements(listings, settings=None):

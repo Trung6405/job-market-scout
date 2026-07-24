@@ -128,6 +128,57 @@ async def test_run_requirements_extraction_returns_parsed_requirements(monkeypat
     assert requirements == [ListingRequirements(**_requirements_dict())]
 
 
+@pytest.mark.asyncio
+async def test_run_requirements_extraction_splits_listings_into_batches(monkeypatch):
+    """A single LLM response is capped by the model's max output tokens, so
+    extracting for many listings in one call truncates the JSON. Listings are
+    split into batches small enough that each response parses."""
+    listings = [_make_listing(external_id=str(i)) for i in range(5)]
+    batched_ids: list[list[str]] = []
+
+    async def _fake_run(agent):
+        # Recover which listings this call was built for from its instruction.
+        ids = [
+            listing.external_id
+            for listing in listings
+            if f'"external_id": "{listing.external_id}"' in agent.instruction
+        ]
+        batched_ids.append(ids)
+        return json.dumps(
+            {"requirements": [_requirements_dict(external_id=i) for i in ids]}
+        )
+
+    monkeypatch.setattr(
+        "scout.sub_agents.advisor.runner._run_requirements_agent", _fake_run
+    )
+
+    requirements = await run_requirements_extraction(
+        listings, Settings(requirements_batch_size=2)
+    )
+
+    # 5 listings at batch size 2 -> 3 calls, and every listing is covered once.
+    assert batched_ids == [["0", "1"], ["2", "3"], ["4"]]
+    assert [r.external_id for r in requirements] == ["0", "1", "2", "3", "4"]
+
+
+@pytest.mark.asyncio
+async def test_run_requirements_extraction_makes_no_llm_call_for_no_listings(
+    monkeypatch,
+):
+    calls = []
+
+    async def _fake_run(agent):
+        calls.append(agent)
+        return json.dumps({"requirements": []})
+
+    monkeypatch.setattr(
+        "scout.sub_agents.advisor.runner._run_requirements_agent", _fake_run
+    )
+
+    assert await run_requirements_extraction([], Settings()) == []
+    assert calls == []
+
+
 # --- build_requirements_instruction ---
 
 
