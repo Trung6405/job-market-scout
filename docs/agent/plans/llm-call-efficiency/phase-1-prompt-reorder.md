@@ -1,7 +1,7 @@
 # Phase 1: Invariant-first prompt reorder
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** nothing
 
 ---
@@ -30,7 +30,7 @@ listings come last and the Extractor stays profile-blind.
 - **Files:** `scout/prompts.py`, `tests/test_prompts.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Update the shared-prefix test to assert the *new* order. Replace
+  - [x] Update the shared-prefix test to assert the *new* order. Replace
         `test_scorer_and_requirements_instructions_share_a_listings_prefix`
         with an intent-matching test, e.g.:
     ```python
@@ -54,45 +54,45 @@ listings come last and the Extractor stays profile-blind.
         assert scorer.index("Candidate profile:") < scorer.index("Listings:\n")
         assert scorer.index("90-100") < scorer.index("Listings:\n")
     ```
-  - [ ] Verify it fails (`pytest tests/test_prompts.py::test_scorer_and_requirements_put_listings_last -v`) — expect FAIL (prompts still start with `Listings:`).
-  - [ ] Reorder `build_scorer_instruction`: emit the role line, rubric,
+  - [x] Verify it fails (`pytest tests/test_prompts.py::test_scorer_and_requirements_put_listings_last -v`) — expect FAIL (prompts still start with `Listings:`).
+  - [x] Reorder `build_scorer_instruction`: emit the role line, rubric,
         `Candidate profile:\n{render_profile_text(...)}`, the
         `Return a JSON object ...` instruction, then finally
         `{_listings_block(settings, listings)}` as the last block. Change the
         rubric's "For each listing above" to "For each listing in the
         Listings block below".
-  - [ ] Reorder `build_requirements_instruction` the same way: role,
+  - [x] Reorder `build_requirements_instruction` the same way: role,
         extraction rules, `Return a JSON object ...`, then
         `{_listings_block(...)}` last; flip "For each listing above" to
         "below".
-  - [ ] Rewrite the `_listings_block` docstring: it is now the *trailing
+  - [x] Rewrite the `_listings_block` docstring: it is now the *trailing
         variable suffix*, not a shared leading prefix; the cacheable prefix
         is the invariant instruction+profile ahead of it.
-  - [ ] Verify the reorder test passes and the untouched prompt tests still
+  - [x] Verify the reorder test passes and the untouched prompt tests still
         pass (`pytest tests/test_prompts.py -v`) — expect PASS, including
         `test_scorer_instruction_keeps_profile_and_rubric`,
         `test_scorer_instruction_omits_preferences`, and
         `test_requirements_instruction_never_includes_the_profile`.
-  - [ ] Commit: `refactor(prompts): put invariant instructions first, listings last for prefix cache`
+  - [x] Commit: `refactor(prompts): put invariant instructions first, listings last for prefix cache`
 
 ### Task 2: Update the spike comment
 
 - **Files:** `scripts/spike_prefix_cache.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Update the module docstring's "today's prompt shape" note: the
+  - [x] Update the module docstring's "today's prompt shape" note: the
         pipeline now places listings *last* (invariant-first); the spike
         remains a throwaway for later live measurement.
-  - [ ] No test — comment-only. Confirm nothing imports it
+  - [x] No test — comment-only. Confirm nothing imports it
         (`pytest tests/test_prompts.py -q` still green as a sanity check).
-  - [ ] Commit: `docs(spike): note pipeline now uses invariant-first prompts`
+  - [x] Commit: `docs(spike): note pipeline now uses invariant-first prompts`
 
 ---
 
 ## Verification
 
-- [ ] Phase tests pass: `pytest tests/test_prompts.py -v`
-- [ ] Manual (optional): print `build_scorer_instruction(Settings(), [<one listing>])` and confirm the profile and rubric appear before `Listings:`.
+- [x] Phase tests pass: `pytest tests/test_prompts.py -v`
+- [x] Manual (optional): print `build_scorer_instruction(Settings(), [<one listing>])` and confirm the profile and rubric appear before `Listings:`.
 
 ## Rollback
 
@@ -103,4 +103,5 @@ state involved.
 
 ## Notes / Learnings
 
-<Filled in during execution.>
+Went exactly to plan. All 9 tests in `test_prompts.py` passed after the
+reorder with no further adjustment needed.

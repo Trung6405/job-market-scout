@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status:** Not started
+> **Status:** Complete
 > **Created:** 2026-07-24 · **Last updated:** 2026-07-24
 > **Spec:** [spec.md](../../specs/llm-call-efficiency/spec.md)
 
@@ -21,12 +21,12 @@ a timeout — all covered by unit tests.
 
 ## Acceptance Criteria
 
-- [ ] Both `build_scorer_instruction` and `build_requirements_instruction`
+- [x] Both `build_scorer_instruction` and `build_requirements_instruction`
       emit their invariant content before the listings block, which is last.
-- [ ] The Extractor prompt still contains no profile text.
-- [ ] `complete_json` forwards a `max_tokens` and a `timeout` to
+- [x] The Extractor prompt still contains no profile text.
+- [x] `complete_json` forwards a `max_tokens` and a `timeout` to
       `litellm.acompletion`, both sourced from settings.
-- [ ] A batch that fails as a whole but whose halves succeed is recovered;
+- [x] A batch that fails as a whole but whose halves succeed is recovered;
       a half that still fails is skipped; a failed single-item batch is
       skipped without a second identical attempt.
 
@@ -59,9 +59,9 @@ a timeout — all covered by unit tests.
 
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
-| 1 | Invariant-first prompt reorder | [phase-1-prompt-reorder.md](phase-1-prompt-reorder.md) | Not started |
-| 2 | Model-call token cap & timeout | [phase-2-call-limits.md](phase-2-call-limits.md) | Not started |
-| 3 | Halve-once-then-skip retry | [phase-3-retry.md](phase-3-retry.md) | Not started |
+| 1 | Invariant-first prompt reorder | [phase-1-prompt-reorder.md](phase-1-prompt-reorder.md) | Complete |
+| 2 | Model-call token cap & timeout | [phase-2-call-limits.md](phase-2-call-limits.md) | Complete |
+| 3 | Halve-once-then-skip retry | [phase-3-retry.md](phase-3-retry.md) | Complete |
 
 > All phases are planned in advance. The three phases are independent —
 > they touch disjoint files and can execute in any order — but are listed
@@ -99,12 +99,12 @@ a timeout — all covered by unit tests.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All phase verification steps pass
-- [ ] Full `pytest` run green (Postgres up)
-- [ ] `scout/.env.example` documents `MODEL_MAX_TOKENS` and
+- [x] All acceptance criteria met
+- [x] All phase verification steps pass
+- [x] Full `pytest` run green (Postgres up) — 249 passed
+- [x] `scout/.env.example` documents `MODEL_MAX_TOKENS` and
       `MODEL_TIMEOUT_SECONDS`
-- [ ] No new lint or type-check warnings
+- [x] No new lint or type-check warnings
 
 ## Update Rules
 

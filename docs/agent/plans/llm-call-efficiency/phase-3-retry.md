@@ -1,7 +1,7 @@
 # Phase 3: Halve-once-then-skip retry
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** nothing (independent of Phases 1–2)
 
 ---
@@ -33,7 +33,7 @@ skip, and single-item skip.
   - Produces: `run_batches(batch_list, call, *, concurrency, label)` —
     signature unchanged; only failure-recovery behaviour changes.
 - **Steps:**
-  - [ ] Update the existing single-item test to the new semantics (a
+  - [x] Update the existing single-item test to the new semantics (a
         size-1 failure is skipped after **one** attempt, not two) and add
         the split-behaviour tests:
     ```python
@@ -72,12 +72,12 @@ skip, and single-item skip.
         # Whole batch fails -> split [1,2] (ok) + [99,4] (fails, skipped).
         assert sorted(result) == [1, 2]
     ```
-  - [ ] Delete the old `test_run_batches_retries_once_then_skips`
+  - [x] Delete the old `test_run_batches_retries_once_then_skips`
         (replaced by the single-item test above). Keep
         `test_run_batches_concatenates_results` and
         `test_run_batches_keeps_good_batches_when_one_fails` (still valid).
-  - [ ] Verify the new tests fail (`pytest tests/test_shared_batching.py -v`) — expect FAILs against the current identical-retry code.
-  - [ ] Rewrite `run_batches` (remove `_MAX_ATTEMPTS`):
+  - [x] Verify the new tests fail (`pytest tests/test_shared_batching.py -v`) — expect FAILs against the current identical-retry code.
+  - [x] Rewrite `run_batches` (remove `_MAX_ATTEMPTS`):
     ```python
     async def run_batches(
         batch_list: list[list[T]],
@@ -135,15 +135,15 @@ skip, and single-item skip.
         results = await asyncio.gather(*(_one(batch) for batch in batch_list))
         return [item for batch_result in results for item in batch_result]
     ```
-  - [ ] Verify all batching tests pass (`pytest tests/test_shared_batching.py -v`).
-  - [ ] Commit: `feat(batching): halve-once-then-skip on batch failure`
+  - [x] Verify all batching tests pass (`pytest tests/test_shared_batching.py -v`).
+  - [x] Commit: `feat(batching): halve-once-then-skip on batch failure`
 
 ---
 
 ## Verification
 
-- [ ] Phase tests pass: `pytest tests/test_shared_batching.py -v`
-- [ ] Full suite green with Postgres up: `docker compose up -d postgres && pytest`
+- [x] Phase tests pass: `pytest tests/test_shared_batching.py -v`
+- [x] Full suite green with Postgres up: `docker compose up -d postgres && pytest`
 
 ## Observability
 
@@ -160,4 +160,5 @@ state involved.
 
 ## Notes / Learnings
 
-<Filled in during execution.>
+Went exactly to plan. Full suite (249 tests, Postgres up) passed after all
+three phases landed.
