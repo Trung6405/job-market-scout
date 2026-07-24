@@ -9,8 +9,6 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 R = TypeVar("R")
 
-_MAX_ATTEMPTS = 2
-
 
 def batches(items: list[T], size: int) -> list[list[T]]:
     """Split items into consecutive chunks of at most ``size``."""
@@ -25,34 +23,53 @@ async def run_batches(
     concurrency: int,
     label: str,
 ) -> list[R]:
-    """Run ``call`` over each batch concurrently, tolerating batch failure.
+    """Run ``call`` over each batch concurrently, tolerating failure.
 
-    A batch is retried once, then skipped with a warning. One truncated or
-    malformed response should cost that batch's listings, not the whole
-    day's run — and because the Scorer and Extractor are separate stages, a
-    skipped extraction batch costs gaps while the listing keeps its score.
+    On a batch's first failure the batch is split in half and each half is
+    retried once; a half that still fails is skipped with a warning. A
+    single-item batch that fails is skipped directly — retrying it
+    unchanged at temperature 0 would just reproduce the same truncation.
+    A skipped batch costs its listings, not the whole day's run — and
+    because the Scorer and Extractor are separate stages, a skipped
+    extraction batch costs gaps while the listing keeps its score.
     """
     semaphore = asyncio.Semaphore(max(1, concurrency))
 
-    async def _one(batch: list[T]) -> list[R]:
+    async def _guarded(batch: list[T]) -> list[R]:
         async with semaphore:
-            for attempt in range(1, _MAX_ATTEMPTS + 1):
+            return await call(batch)
+
+    async def _one(batch: list[T]) -> list[R]:
+        try:
+            return await _guarded(batch)
+        except Exception as first_exc:
+            if len(batch) <= 1:
+                logger.warning(
+                    "%s batch of %d item(s) failed, skipping: %s",
+                    label,
+                    len(batch),
+                    first_exc,
+                )
+                return []
+            mid = len(batch) // 2
+            logger.info(
+                "%s batch of %d failed, splitting and retrying each half: %s",
+                label,
+                len(batch),
+                first_exc,
+            )
+            results: list[R] = []
+            for half in (batch[:mid], batch[mid:]):
                 try:
-                    return await call(batch)
+                    results.extend(await _guarded(half))
                 except Exception as exc:
-                    if attempt == _MAX_ATTEMPTS:
-                        logger.warning(
-                            "%s batch failed after %d attempt(s), skipping %d item(s): %s",
-                            label,
-                            attempt,
-                            len(batch),
-                            exc,
-                        )
-                        return []
-                    logger.info(
-                        "%s batch attempt %d failed, retrying: %s", label, attempt, exc
+                    logger.warning(
+                        "%s retry half of %d item(s) failed, skipping: %s",
+                        label,
+                        len(half),
+                        exc,
                     )
-            return []
+            return results
 
     results = await asyncio.gather(*(_one(batch) for batch in batch_list))
     return [item for batch_result in results for item in batch_result]
