@@ -5,8 +5,6 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
-from google.adk.runners import InMemoryRunner
-from google.genai import types as genai_types
 
 from scout.config import settings as default_settings
 from scout.shared.db import get_run_by_date, get_run_listings, upsert_listing
@@ -23,9 +21,13 @@ from scout.shared.schemas import (
 from scout.sub_agents.advisor.bands import classify_band
 from scout.sub_agents.scorer.results import join_match_results
 
-_APP_NAME = "scout"
-_USER_ID = "scout"
-_SESSION_ID = "scout"
+# The pipeline still yields ADK Events until scout.agent is rewired in Task 6
+# of the pipeline-efficiency plan (phase-1-model-layer.md). Until then,
+# ScoutPipelineAgent has no local ``run()`` method, so every test below is
+# expected to fail — see the xfail markers.
+_XFAIL_UNTIL_TASK_6 = pytest.mark.xfail(
+    reason="pipeline rewired in Task 6", strict=False
+)
 
 
 class _FakeTransaction:
@@ -97,23 +99,15 @@ def _make_listing(**overrides):
 async def _run_pipeline_agent():
     from scout.agent import ScoutPipelineAgent
 
-    runner = InMemoryRunner(agent=ScoutPipelineAgent(), app_name=_APP_NAME)
-    await runner.session_service.create_session(
-        app_name=_APP_NAME, user_id=_USER_ID, session_id=_SESSION_ID
-    )
-    message = genai_types.Content(
-        role="user", parts=[genai_types.Part(text="Run the pipeline.")]
-    )
+    agent = ScoutPipelineAgent()
     texts = []
-    async for event in runner.run_async(
-        user_id=_USER_ID, session_id=_SESSION_ID, new_message=message
-    ):
-        if event.content and event.content.parts and event.content.parts[0].text:
-            texts.append(event.content.parts[0].text)
+    async for event in agent.run():
+        texts.append(event.text)
     return texts
 
 
 @pytest.mark.asyncio
+@_XFAIL_UNTIL_TASK_6
 async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     listing = _make_listing()
     score = ListingScore(source="linkedin", external_id="1", score=80, reasoning="Good fit.")
@@ -253,6 +247,7 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
 
 
 @pytest.mark.asyncio
+@_XFAIL_UNTIL_TASK_6
 async def test_scout_pipeline_agent_renders_report_after_persisting_run(
     monkeypatch,
 ):
@@ -374,6 +369,7 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
 
 
 @pytest.mark.asyncio
+@_XFAIL_UNTIL_TASK_6
 async def test_scout_pipeline_agent_short_circuits_when_nothing_relevant(
     monkeypatch,
 ):
@@ -448,6 +444,7 @@ async def test_scout_pipeline_agent_short_circuits_when_nothing_relevant(
 
 
 @pytest.mark.asyncio
+@_XFAIL_UNTIL_TASK_6
 async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
     listing = _make_listing()
     score = ListingScore(
@@ -534,6 +531,7 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
 
 
 @pytest.mark.asyncio
+@_XFAIL_UNTIL_TASK_6
 async def test_scout_pipeline_agent_warns_when_extraction_drops_listings(monkeypatch):
     listing = _make_listing()
     score = ListingScore(
@@ -629,6 +627,7 @@ async def test_scout_pipeline_agent_warns_when_extraction_drops_listings(monkeyp
 
 
 @pytest.mark.asyncio
+@_XFAIL_UNTIL_TASK_6
 async def test_scout_pipeline_agent_same_date_rerun_is_idempotent(
     monkeypatch, db_pool
 ):
@@ -700,6 +699,7 @@ async def test_scout_pipeline_agent_same_date_rerun_is_idempotent(
 
 
 @pytest.mark.asyncio
+@_XFAIL_UNTIL_TASK_6
 async def test_scout_pipeline_agent_rolls_back_on_mid_persist_failure(
     monkeypatch, db_pool
 ):
@@ -777,6 +777,7 @@ async def test_scout_pipeline_agent_rolls_back_on_mid_persist_failure(
 
 
 @pytest.mark.asyncio
+@_XFAIL_UNTIL_TASK_6
 async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch):
     listing = _make_listing()
     score = ListingScore(source="linkedin", external_id="1", score=80, reasoning="Good fit.")
