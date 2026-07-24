@@ -209,10 +209,13 @@ if __name__ == "__main__":
     main()
 ```
 
-  - [ ] Verify it passes (`pytest tests/test_backfill_hashes.py -v`)
-  - [ ] Commit: `feat(db): add content-hash backfill script`
-  - [ ] ⚠️ **Stop for sign-off**, then run against dev:
-        `docker compose run --rm app python -m scout.backfill_hashes`
+  - [x] Verify it passes (`pytest tests/test_backfill_hashes.py -v`)
+  - [x] Commit: `feat(db): add content-hash backfill script`
+  - [x] ⚠️ **Stop for sign-off**, then run against dev:
+        `docker compose run --rm app python -m scout.backfill_hashes` —
+        human approved 2026-07-24; ran after a rebuild (the image predated
+        the new file), backfilled 241 listing hash(es); re-run confirmed
+        idempotent (0 on the second pass)
 
 ### Task 3: Time-based listing closure
 
