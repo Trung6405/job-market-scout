@@ -54,3 +54,25 @@ def test_select_top_matches_returns_empty_when_none_qualify():
     result = select_top_matches(matches, settings)
 
     assert result == []
+
+
+def test_select_top_matches_excludes_preference_failures(match_factory, listing_factory):
+    settings = Settings()
+    object.__setattr__(settings, "min_match_score", 50)
+    object.__setattr__(settings, "remote_only", True)
+
+    remote = match_factory(listing=listing_factory(external_id="r", is_remote=True), score=80)
+    onsite = match_factory(listing=listing_factory(external_id="o", is_remote=False), score=90)
+
+    selected = select_top_matches([remote, onsite], settings)
+    assert [m.listing.external_id for m in selected] == ["r"]
+
+
+def test_select_top_matches_still_applies_score_floor(match_factory):
+    settings = Settings()
+    object.__setattr__(settings, "min_match_score", 60)
+    object.__setattr__(settings, "remote_only", False)
+    object.__setattr__(settings, "preferred_locations", [])
+    object.__setattr__(settings, "min_salary", None)
+
+    assert select_top_matches([match_factory(score=59)], settings) == []

@@ -38,7 +38,7 @@ async def test_run_once_completes_without_raising(monkeypatch, db_pool):
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+    async def _fake_run_briefing(matches, settings, report_path=None):
         return {}
 
     class _UnclosablePool:

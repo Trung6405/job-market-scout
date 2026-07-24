@@ -140,7 +140,7 @@ class ScoutPipelineAgent:
 
         if settings.discord_bot_token and settings.discord_channel_id:
             await run_briefing(
-                relevant, scores, settings, report_path=report_paths["dashboard"]
+                matches, settings, report_path=report_paths["dashboard"]
             )
             yield PipelineEvent(self.name, "Briefing: Discord message sent")
         else:

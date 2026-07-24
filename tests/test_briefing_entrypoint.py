@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from scout.config import Settings
-from scout.shared.schemas import BriefingProse, Listing, ListingScore, MatchResult
+from scout.shared.schemas import BriefingProse, Listing, MatchResult
 from scout.sub_agents.briefing.briefing import run_briefing
 
 
@@ -35,15 +35,6 @@ def _discord_settings(**overrides):
     return Settings(**base)
 
 
-def _listing_and_score(match):
-    return match.listing, ListingScore(
-        source=match.listing.source,
-        external_id=match.listing.external_id,
-        score=match.score,
-        reasoning=match.reasoning,
-    )
-
-
 def _patch_briefing(monkeypatch, *, summarize, build, send):
     monkeypatch.setattr(
         "scout.sub_agents.briefing.briefing.summarize_matches", summarize
@@ -55,7 +46,6 @@ def _patch_briefing(monkeypatch, *, summarize, build, send):
 @pytest.mark.asyncio
 async def test_run_briefing_summarizes_and_sends_when_matches_qualify(monkeypatch):
     match = _make_match("1", "Platform Engineer", 88)
-    listing, score = _listing_and_score(match)
     settings = _discord_settings()
 
     summarize_calls = []
@@ -77,7 +67,7 @@ async def test_run_briefing_summarizes_and_sends_when_matches_qualify(monkeypatc
         monkeypatch, summarize=_fake_summarize, build=_fake_build, send=_fake_send
     )
 
-    result = await run_briefing([listing], [score], settings)
+    result = await run_briefing([match], settings)
 
     assert len(summarize_calls) == 1
     assert [m.listing.external_id for m in summarize_calls[0]] == ["1"]
@@ -90,7 +80,6 @@ async def test_run_briefing_summarizes_and_sends_when_matches_qualify(monkeypatc
 @pytest.mark.asyncio
 async def test_run_briefing_accepts_report_path_without_error(monkeypatch):
     match = _make_match("1", "Platform Engineer", 88)
-    listing, score = _listing_and_score(match)
     settings = _discord_settings()
     report_path = Path("reports/2026-07-21/dashboard.html")
 
@@ -109,13 +98,12 @@ async def test_run_briefing_accepts_report_path_without_error(monkeypatch):
 
     # report_path is accepted for call-site compatibility; it is not part of
     # the Discord message (report link dropped).
-    await run_briefing([listing], [score], settings, report_path=report_path)
+    await run_briefing([match], settings, report_path=report_path)
 
 
 @pytest.mark.asyncio
 async def test_run_briefing_skips_summarize_when_no_matches_qualify(monkeypatch):
     match = _make_match("1", "Platform Engineer", 10)
-    listing, score = _listing_and_score(match)
     settings = _discord_settings()
 
     summarize_calls = []
@@ -136,7 +124,7 @@ async def test_run_briefing_skips_summarize_when_no_matches_qualify(monkeypatch)
         monkeypatch, summarize=_fake_summarize, build=_fake_build, send=_fake_send
     )
 
-    await run_briefing([listing], [score], settings)
+    await run_briefing([match], settings)
 
     assert summarize_calls == []
     assert build_calls == [([], None)]
@@ -147,7 +135,6 @@ async def test_run_briefing_raises_before_summarizing_when_discord_not_configure
     monkeypatch,
 ):
     match = _make_match("1", "Platform Engineer", 88)
-    listing, score = _listing_and_score(match)
     settings = _discord_settings(discord_bot_token="", discord_channel_id="")
 
     summarize_calls = []
@@ -161,6 +148,6 @@ async def test_run_briefing_raises_before_summarizing_when_discord_not_configure
     )
 
     with pytest.raises(ValueError):
-        await run_briefing([listing], [score], settings)
+        await run_briefing([match], settings)
 
     assert summarize_calls == []

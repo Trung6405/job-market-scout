@@ -117,8 +117,8 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
         calls.append(("scorer", listings))
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
-        calls.append(("briefing", listings, scores, report_path))
+    async def _fake_run_briefing(matches, settings, report_path=None):
+        calls.append(("briefing", matches, report_path))
         return {}
 
     class _FakeConn:
@@ -224,8 +224,7 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     assert calls[10] == "pool_closed"
     assert calls[11] == (
         "briefing",
-        [listing],
-        [score],
+        expected_matches,
         Path("reports/2026-07-21/dashboard.html"),
     )
     assert "render_profile" in calls
@@ -262,7 +261,7 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+    async def _fake_run_briefing(matches, settings, report_path=None):
         calls.append("briefing")
         return {}
 
@@ -375,7 +374,7 @@ async def test_scout_pipeline_agent_short_circuits_when_nothing_relevant(
         calls.append("scorer")
         return []
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+    async def _fake_run_briefing(matches, settings, report_path=None):
         calls.append("briefing")
         return {}
 
@@ -452,7 +451,7 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+    async def _fake_run_briefing(matches, settings, report_path=None):
         return {}
 
     render_calls = []
@@ -535,7 +534,7 @@ async def test_scout_pipeline_agent_warns_when_extraction_drops_listings(monkeyp
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+    async def _fake_run_briefing(matches, settings, report_path=None):
         return {}
 
     class _FakeConn:
@@ -636,7 +635,7 @@ async def test_scout_pipeline_agent_same_date_rerun_is_idempotent(
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+    async def _fake_run_briefing(matches, settings, report_path=None):
         return {}
 
     async def _fake_requirements(listings, settings=None):
@@ -708,7 +707,7 @@ async def test_scout_pipeline_agent_rolls_back_on_mid_persist_failure(
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+    async def _fake_run_briefing(matches, settings, report_path=None):
         return {}
 
     async def _fake_requirements(listings, settings=None):
@@ -784,7 +783,7 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+    async def _fake_run_briefing(matches, settings, report_path=None):
         calls.append("briefing")
         return {}
 
