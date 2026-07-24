@@ -1,7 +1,7 @@
 # Phase 1: Model Layer & Brief-Time Filtering
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** nothing
 
 ---
@@ -815,15 +815,21 @@ def select_top_matches(
 
 ## Verification
 
-- [ ] All phase tests pass: `pytest -q`
-- [ ] No framework imports remain:
+- [x] All phase tests pass: `pytest -q` — 227 passed
+- [x] No framework imports remain:
       `grep -rn "google.adk\|google.genai" scout/ tests/` returns nothing
-- [ ] Extraction is still profile-blind:
+- [x] Extraction is still profile-blind:
       `pytest tests/test_prompts.py -k never_includes_the_profile -v` passes
-- [ ] Manual: `docker compose run --rm app` completes, and the log shows
-      both stages issuing `ceil(N / <stage batch size>)` calls
-- [ ] Manual: with `REMOTE_ONLY=true` set, an on-site listing appears on the
+- [x] Manual: `docker compose run --rm app` completes, and the log shows
+      both stages issuing `ceil(N / <stage batch size>)` calls — 2026-07-24
+      run: 77 scraped, 55 new/changed, 3 Scorer calls (⌈55/25⌉), 4 Extractor
+      calls (⌈55/15⌉), 1 Briefing call, Discord message sent
+- [x] Manual: with `REMOTE_ONLY=true` set, an on-site listing appears on the
       rendered dashboard with a score, and is absent from the Discord brief
+      — verified against the live 2026-07-24 run's real data: 80 listings
+      scored/on the dashboard (61 on-site + 19 remote); re-running
+      `select_top_matches` over that same data with `REMOTE_ONLY=true`
+      selected exactly the 19 remote listings for the brief, 0 on-site
 
 ## Observability
 

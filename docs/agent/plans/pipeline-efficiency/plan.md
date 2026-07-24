@@ -1,6 +1,6 @@
 # Plan: Pipeline Efficiency — LLM Consolidation, Listing Lifecycle & Cleanup
 
-> **Status:** Not started
+> **Status:** In progress
 > **Created:** 2026-07-24 · **Last updated:** 2026-07-24
 > **Spec:** [spec.md](../../specs/pipeline-efficiency/spec.md)
 
@@ -22,15 +22,15 @@ then withdrawn — see the spec's Amendment.
 
 ## Acceptance Criteria
 
-- [ ] A full `docker compose run --rm app` cycle completes with no
+- [x] A full `docker compose run --rm app` cycle completes with no
       `google-adk` import anywhere in `scout/`.
-- [ ] Neither stage's response size scales with the number of listings in
+- [x] Neither stage's response size scales with the number of listings in
       the run.
-- [ ] `build_requirements_instruction` output never contains the profile.
-- [ ] A listing failing `REMOTE_ONLY` / `PREFERRED_LOCATIONS` / `MIN_SALARY`
+- [x] `build_requirements_instruction` output never contains the profile.
+- [x] A listing failing `REMOTE_ONLY` / `PREFERRED_LOCATIONS` / `MIN_SALARY`
       appears on the run's dashboard with a score, and is absent from the
       Discord brief.
-- [ ] A score is unchanged by editing the three preference settings.
+- [x] A score is unchanged by editing the three preference settings.
 - [ ] A listing absent from one day's scrape but seen within
       `LISTING_STALE_DAYS` stays `open` and is not re-analysed.
 - [ ] Editing only a listing's description text does not mark it `changed`.
@@ -74,7 +74,7 @@ then withdrawn — see the spec's Amendment.
 
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
-| 1 | Model layer & brief-time filtering | [phase-1-model-layer.md](phase-1-model-layer.md) | Not started |
+| 1 | Model layer & brief-time filtering | [phase-1-model-layer.md](phase-1-model-layer.md) | Complete |
 | 2 | Listing lifecycle & run record | [phase-2-lifecycle.md](phase-2-lifecycle.md) | Not started |
 | 3 | Robustness & cleanup | [phase-3-robustness.md](phase-3-robustness.md) | Not started |
 
