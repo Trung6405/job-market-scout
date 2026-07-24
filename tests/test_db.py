@@ -103,6 +103,26 @@ async def test_upsert_listing_reopened_closed_listing_returns_changed(db_pool):
     assert classification == "changed"
 
 
+def test_content_hash_ignores_description(listing_factory):
+    from scout.shared.db import _content_hash
+
+    original = listing_factory(description="We need Python.")
+    reworded = listing_factory(description="We are looking for Python skills!")
+    assert _content_hash(original) == _content_hash(reworded)
+
+
+def test_content_hash_still_tracks_substantive_fields(listing_factory):
+    from scout.shared.db import _content_hash
+
+    base = listing_factory()
+    assert _content_hash(base) != _content_hash(listing_factory(title="Staff Engineer"))
+    assert _content_hash(base) != _content_hash(listing_factory(company="Other Ltd"))
+    assert _content_hash(base) != _content_hash(listing_factory(location="Sydney NSW"))
+    assert _content_hash(base) != _content_hash(listing_factory(is_remote=True))
+    assert _content_hash(base) != _content_hash(listing_factory(salary_min=90000.0))
+    assert _content_hash(base) != _content_hash(listing_factory(salary_max=120000.0))
+
+
 @pytest.mark.asyncio
 async def test_close_stale_listings_closes_unseen_and_keeps_seen_open(db_pool):
     seen = _make_listing(source="linkedin", external_id="job-seen")

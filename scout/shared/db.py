@@ -34,13 +34,20 @@ async def apply_schema(pool: asyncpg.Pool) -> None:
 
 
 def _content_hash(listing: Listing) -> str:
+    """Fingerprint the fields that change a listing's substance.
+
+    ``description`` is deliberately excluded: job boards re-word and
+    re-timestamp descriptions constantly, and including it meant any
+    cosmetic edit marked the listing ``changed`` and bought a full
+    re-analysis. The trade-off is accepted — a materially rewritten
+    description goes unnoticed until some other tracked field moves.
+    """
     payload = "\x00".join(
         [
             listing.title,
             listing.company,
             listing.location,
             str(listing.is_remote),
-            listing.description,
             str(listing.salary_min),
             str(listing.salary_max),
         ]
