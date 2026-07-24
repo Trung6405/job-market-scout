@@ -521,6 +521,52 @@ async def test_get_run_summaries_returns_band_counts(
 
 
 @pytest.mark.asyncio
+async def test_get_run_summaries_band_counts_are_not_inflated_by_gaps(
+    db_pool, listing_factory, match_factory
+):
+    """A listing's multiple gap rows must not multiply its band count.
+
+    ``get_run_summaries`` joins ``listing_gaps`` to compute the gaps total.
+    That join fans out each ``run_listings`` row once per gap, so counting
+    bands over the joined rows over-counts every listing by its gap-row
+    count — the exact reason the history page disagreed with the dashboard.
+    """
+    from scout.shared.db import get_run_summaries
+
+    async with db_pool.acquire() as conn:
+        listing = listing_factory(external_id="competitive")
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 24))
+        match = match_factory(listing=listing, score=70)
+        await record_run_listings(conn, run_id, [(match, "competitive")])
+        # Three gap rows on the single competitive listing.
+        await record_listing_gaps(
+            conn,
+            run_id,
+            [
+                (
+                    match,
+                    [
+                        SkillGap(skill="Go", requirement_level="must_have"),
+                        SkillGap(skill="Rust", requirement_level="must_have"),
+                        SkillGap(
+                            skill="Kubernetes", requirement_level="nice_to_have"
+                        ),
+                    ],
+                )
+            ],
+        )
+
+        summaries = await get_run_summaries(conn, limit=30)
+
+    stats = summaries[0].stats
+    assert stats["scored"] == 1
+    assert stats["competitive"] == 1
+    assert stats["avg_score"] == 70
+    assert stats["gaps"] == 3
+
+
+@pytest.mark.asyncio
 async def test_get_run_summaries_returns_zeroed_stats_for_empty_run(db_pool):
     from scout.shared.db import get_run_summaries
 
