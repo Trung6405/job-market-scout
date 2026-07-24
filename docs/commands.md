@@ -102,8 +102,9 @@ xdg-open reports/history.html
 - `reports/profile.html` — the candidate profile
 
 ### On the deployed server
-nginx serves `./reports/` at the VM's public IP (landing on `history.html`);
-the hello smoke-test page is at `/hello`. See [deployment](#deploy) below.
+The dashboard is published to an Azure Storage static website after each run,
+landing on `history.html` (see the Live dashboard links in the top-level
+`README.md`, and [deployment](#deploy) below).
 
 ---
 

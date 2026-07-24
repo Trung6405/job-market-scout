@@ -1,7 +1,7 @@
 # Production overlay — layered on top of docker-compose.yaml:
 #   docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --build
 # Leaves the base (local/dev) compose untouched. Adds restart policies for
-# the long-lived services. The dashboard (reports/ + hello/) is no longer
+# the long-lived services. The dashboard (reports/) is no longer
 # served from here — scheduled-run.yml publishes it to the Static Web App
 # instead, so it stays reachable while the VM is deallocated.
 services:

@@ -105,7 +105,7 @@ used. `.github/workflows/scheduled-run.yml` cron-triggers twice daily
 1. Starts the Azure VM `scout-vm` (`az vm start`, idempotent) and waits
    for SSH.
 2. Runs one pipeline cycle over SSH (`docker compose run --rm app`).
-3. Rsyncs `reports/` and `hello/` off the VM and publishes them to an
+3. Rsyncs `reports/` off the VM and publishes it to an
    Azure Storage Account configured for static website hosting
    (`infra/dashboard.bicep`), via `az storage blob upload-batch`
    reusing the workflow's OIDC login — no separate deploy-token secret.
