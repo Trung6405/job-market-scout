@@ -18,9 +18,6 @@ param adminSshPublicKey string
 @description('Source CIDR/IP allowed to reach SSH (port 22). Default * relies on key-only auth; narrow this to harden.')
 param sshSourceAddressPrefix string = '*'
 
-@description('Source CIDR/IP allowed to reach HTTP (port 80) — the hello smoke-test page. Set to a narrow range or "" to disable public web access.')
-param httpSourceAddressPrefix string = '*'
-
 @description('Set true only when first-creating the VM, or deliberately recreating it from scratch. Azure rejects any osProfile.customData value on an update to an already-existing VM (write-once, unconditionally — resending even an unchanged value fails), so this must stay false for routine redeploys of unrelated resources (NSG rules, VM size, etc.) once the VM exists.')
 param recreateVm bool = false
 
@@ -30,7 +27,7 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
   name: '${vmName}-nsg'
   location: location
   properties: {
-    securityRules: concat([
+    securityRules: [
       {
         name: 'allow-ssh'
         properties: {
@@ -44,21 +41,7 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
           destinationAddressPrefix: '*'
         }
       }
-    ], empty(httpSourceAddressPrefix) ? [] : [
-      {
-        name: 'allow-http'
-        properties: {
-          priority: 1010
-          direction: 'Inbound'
-          access: 'Allow'
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          destinationPortRange: '80'
-          sourceAddressPrefix: httpSourceAddressPrefix
-          destinationAddressPrefix: '*'
-        }
-      }
-    ])
+    ]
   }
 }
 

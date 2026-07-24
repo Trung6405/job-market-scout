@@ -109,18 +109,6 @@ ssh azureuser@"$IP" 'docker --version && docker compose version && rsync --versi
 ssh azureuser@"$IP" 'ls -ld /opt/job-market-scout'      # -> owner azureuser
 ```
 
-After the first `deploy.yml` run (which brings up the `hello` service from
-`docker-compose.prod.yaml`), confirm the VM is reachable over HTTP:
-
-```bash
-curl -fsS "http://$IP/" | grep -o 'Hello World'         # -> Hello World
-```
-
-…or just open `http://<IP>/` in a browser — you should see the **Hello World**
-page. This exercises the full path: public IP → NSG port 80 → nginx `hello`
-container. (Requires the NSG `allow-http` rule, i.e. `httpSourceAddressPrefix`
-not empty.)
-
 Expected: `nc` succeeds, `cloud-init status` is `done`, all three tools print
 versions, `docker ps` runs without permission error, and `/opt/job-market-scout`
 is owned by `azureuser`. If `cloud-init status` shows `error`, inspect the
@@ -149,9 +137,6 @@ az network nsg rule list -g <RESOURCE_GROUP> --nsg-name scout-vm-nsg -o table   
 - **SSH is open to `*`** by default (`sshSourceAddressPrefix`), relying on
   key-only auth (`disablePasswordAuthentication: true`). Narrow it to a known
   IP/CIDR to harden.
-- **HTTP (port 80) is open to `*`** by default (`httpSourceAddressPrefix`) for
-  the `hello` smoke-test page. Narrow it, or set it to `""` to close port 80
-  entirely (the NSG rule is then omitted).
 - **No secrets here.** Application secrets (`scout/.env` values) and the SSH
   private key belong in GitHub Actions secrets, rendered onto the VM at deploy
   time by `deploy.yml`.
