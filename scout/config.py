@@ -113,6 +113,16 @@ class Settings:
     model_concurrency: int = field(
         default_factory=partial(_env_int, "MODEL_CONCURRENCY", 3)
     )
+    # Output-token ceiling per model call. Headroom below deepseek-chat's
+    # 8192 output cap so a batch response is less likely to truncate mid-JSON.
+    model_max_tokens: int = field(
+        default_factory=partial(_env_int, "MODEL_MAX_TOKENS", 8000)
+    )
+    # Per-request timeout (seconds). Bounds a hung provider call so it can't
+    # stall the whole asyncio.gather fan-out of a stage.
+    model_timeout_seconds: int = field(
+        default_factory=partial(_env_int, "MODEL_TIMEOUT_SECONDS", 120)
+    )
     database_url: str = field(
         default_factory=partial(
             _env_str,
