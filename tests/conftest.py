@@ -45,7 +45,9 @@ async def db_pool():
         pytest.skip(f"Postgres unreachable: {exc}")
     await apply_schema(pool)
     async with pool.acquire() as conn:
-        await conn.execute("TRUNCATE TABLE run_listings, runs, listings CASCADE")
+        await conn.execute(
+            "TRUNCATE TABLE run_listings, runs, listings, resources CASCADE"
+        )
     yield pool
     await pool.close()
 
