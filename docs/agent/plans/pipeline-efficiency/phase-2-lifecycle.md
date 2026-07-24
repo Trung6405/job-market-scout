@@ -1,7 +1,7 @@
 # Phase 2: Listing Lifecycle & Run Record
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** Phase 1 complete
 
 ---
@@ -465,15 +465,21 @@ async def test_record_listing_gaps_only_replaces_supplied_listings(
 
 ## Verification
 
-- [ ] All phase tests pass: `pytest tests/test_db.py tests/test_tracker.py tests/test_backfill_hashes.py -v`
-- [ ] Full suite passes: `pytest -q`
-- [ ] Manual: run the pipeline twice in one day
-      (`docker compose run --rm app` twice) and confirm the run row's
-      `listings_scraped` and `listings_scored` do not drop between them:
-      `docker compose exec postgres psql -U scout -d scout -c "SELECT run_date, listings_scraped, listings_scored FROM runs ORDER BY run_date DESC LIMIT 3"`
-- [ ] Manual: confirm no listing was closed on the second run:
-      `... -c "SELECT count(*) FROM listings WHERE status = 'closed' AND closed_at > now() - interval '1 hour'"`
-      returns 0
+- [x] All phase tests pass: `pytest tests/test_db.py tests/test_tracker.py tests/test_backfill_hashes.py -v`
+- [x] Full suite passes: `pytest -q` — 236 passed
+- [x] Manual: ran the pipeline twice in one day (2026-07-24) against the
+      live dev DB — first run 77 scraped/80 scored, second (quieter) run 27
+      scraped/10 scored. Run row after both:
+      `listings_scraped = 77` (GREATEST kept the larger snapshot, did not
+      drop to 27) and `listings_scored = 89` (derived from the real
+      `run_listings` row count — 80 + 9 net-new after upserts — which also
+      self-corrected a stale `55` the row had held from before Task 4
+      existed).
+- [x] Manual: `SELECT count(*) FROM listings WHERE status = 'closed' AND
+      closed_at > now() - interval '1 hour'` returned 0 after the second
+      run — the closed-listing total actually *dropped* (164 → 156) because
+      8 previously-closed listings reappeared and were reopened as
+      `changed`, not because anything was newly closed.
 
 ## Rollback
 

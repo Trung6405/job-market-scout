@@ -31,10 +31,10 @@ then withdrawn — see the spec's Amendment.
       appears on the run's dashboard with a score, and is absent from the
       Discord brief.
 - [x] A score is unchanged by editing the three preference settings.
-- [ ] A listing absent from one day's scrape but seen within
+- [x] A listing absent from one day's scrape but seen within
       `LISTING_STALE_DAYS` stays `open` and is not re-analysed.
-- [ ] Editing only a listing's description text does not mark it `changed`.
-- [ ] Running the pipeline twice on one date leaves `listings_scraped` and
+- [x] Editing only a listing's description text does not mark it `changed`.
+- [x] Running the pipeline twice on one date leaves `listings_scraped` and
       `listings_scored` at or above the first run's values, and leaves the
       first run's gaps intact for listings the second did not re-analyse.
 - [ ] A malformed scraper job and an unparseable model batch each produce a
@@ -75,7 +75,7 @@ then withdrawn — see the spec's Amendment.
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
 | 1 | Model layer & brief-time filtering | [phase-1-model-layer.md](phase-1-model-layer.md) | Complete |
-| 2 | Listing lifecycle & run record | [phase-2-lifecycle.md](phase-2-lifecycle.md) | Not started |
+| 2 | Listing lifecycle & run record | [phase-2-lifecycle.md](phase-2-lifecycle.md) | Complete |
 | 3 | Robustness & cleanup | [phase-3-robustness.md](phase-3-robustness.md) | Not started |
 
 > All phases are planned in advance — every row above has a written,
