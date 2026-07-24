@@ -54,3 +54,20 @@ CREATE TABLE IF NOT EXISTS listing_gaps (
 
 ALTER TABLE listing_gaps ADD COLUMN IF NOT EXISTS met BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE listing_gaps ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'skill';
+
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS resources (
+    id BIGSERIAL PRIMARY KEY,
+    url TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    resource_type TEXT NOT NULL
+        CHECK (resource_type IN ('doc', 'course', 'repo', 'note')),
+    skills TEXT[] NOT NULL,
+    level TEXT CHECK (level IN ('beginner', 'intermediate', 'advanced')),
+    summary TEXT,
+    embedding VECTOR(384),
+    source TEXT NOT NULL,
+    last_verified TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
