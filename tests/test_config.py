@@ -148,6 +148,26 @@ def test_settings_reads_requirements_batch_size_env_override(monkeypatch):
     assert settings.requirements_batch_size == 5
 
 
+def test_settings_uses_model_call_defaults_when_env_unset(monkeypatch):
+    for var in ("MODEL_MAX_TOKENS", "MODEL_TIMEOUT_SECONDS"):
+        monkeypatch.delenv(var, raising=False)
+
+    settings = Settings()
+
+    assert settings.model_max_tokens == 8000
+    assert settings.model_timeout_seconds == 120
+
+
+def test_settings_reads_model_call_env_overrides(monkeypatch):
+    monkeypatch.setenv("MODEL_MAX_TOKENS", "4096")
+    monkeypatch.setenv("MODEL_TIMEOUT_SECONDS", "60")
+
+    settings = Settings()
+
+    assert settings.model_max_tokens == 4096
+    assert settings.model_timeout_seconds == 60
+
+
 def test_settings_has_no_gmail_fields():
     settings = Settings()
 

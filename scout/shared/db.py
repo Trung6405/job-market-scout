@@ -288,11 +288,20 @@ async def get_run_summaries(
                count(*) FILTER (WHERE run_listings.band = 'competitive') AS competitive,
                count(*) FILTER (WHERE run_listings.band = 'reach') AS reach,
                coalesce(round(avg(run_listings.score)), 0) AS avg_score,
-               count(listing_gaps.id) FILTER (
-                   WHERE listing_gaps.kind = 'skill' AND NOT listing_gaps.met
+               -- Gaps come from a correlated subquery, NOT a join: joining
+               -- listing_gaps fans out each run_listings row once per gap,
+               -- which would multiply every band count by that listing's
+               -- gap-row count (the history/dashboard mismatch bug).
+               (
+                   SELECT count(*)
+                   FROM listing_gaps
+                   JOIN run_listings AS rl
+                       ON rl.id = listing_gaps.run_listing_id
+                   WHERE rl.run_id = run_listings.run_id
+                     AND listing_gaps.kind = 'skill'
+                     AND NOT listing_gaps.met
                ) AS gaps
         FROM run_listings
-        LEFT JOIN listing_gaps ON listing_gaps.run_listing_id = run_listings.id
         WHERE run_listings.run_id = ANY($1::bigint[])
         GROUP BY run_listings.run_id
         """,

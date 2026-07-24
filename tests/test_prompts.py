@@ -99,24 +99,24 @@ def test_scorer_instruction_keeps_profile_and_rubric(listing_factory):
     assert '"scores"' in instruction
 
 
-def test_scorer_and_requirements_instructions_share_a_listings_prefix(listing_factory):
-    """The Scorer and Extractor read the same listings for a given batch.
-    Putting the (identical) listings JSON first in both prompts, ahead of
-    each prompt's own distinct instructions, lets the second call hit the
-    provider's automatic prefix cache on that shared block — measured in
-    scripts/spike_prefix_cache.py (see phase-1-model-layer.md Task 9)."""
+def test_scorer_and_requirements_put_listings_last(listing_factory):
+    """Invariant instructions lead so the rubric+profile form a cacheable
+    prefix across batches and days; the variable listings JSON trails."""
     settings = Settings()
     listings = [listing_factory()]
 
     scorer = build_scorer_instruction(settings, listings)
     requirements = build_requirements_instruction(settings, listings)
 
-    assert scorer.startswith("Listings:\n")
-    assert requirements.startswith("Listings:\n")
-
-    listings_json = scorer[len("Listings:\n") :].split("\n\n", 1)[0]
-    assert listings_json  # sanity: the JSON block is non-empty
-    assert requirements.startswith(f"Listings:\n{listings_json}")
+    for instruction in (scorer, requirements):
+        assert not instruction.startswith("Listings:\n")
+        # Nothing but the listings JSON follows the "Listings:" label.
+        head, tail = instruction.split("Listings:\n", 1)
+        assert head.strip()  # invariant content precedes the listings
+        assert tail.strip()  # the JSON block is present and non-empty
+    # Scorer's invariant prefix carries the rubric + profile.
+    assert scorer.index("Candidate profile:") < scorer.index("Listings:\n")
+    assert scorer.index("90-100") < scorer.index("Listings:\n")
 
 
 def test_requirements_instruction_never_includes_the_profile(listing_factory):

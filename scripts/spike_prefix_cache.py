@@ -1,15 +1,17 @@
 """Spike: does a byte-identical prompt prefix let the second call hit
 DeepSeek's automatic prefix cache and reduce billed tokens?
 
-Sends the same listings payload twice: once with the payload last
-(today's prompt shape, per build_scorer_instruction/
-build_requirements_instruction), once with it first so both calls share
-a long byte-identical prefix. Reads response.usage for a cached/prompt
-split.
+Sends the same listings payload twice: once with the payload last, once
+with it first so both calls share a long byte-identical prefix. Reads
+response.usage for a cached/prompt split.
+
+The shipped pipeline now places listings *last* (invariant instructions
+and profile first) per docs/agent/specs/llm-call-efficiency/spec.md — this
+spike remains a throwaway for later live measurement of the cache
+reduction; it was not itself updated to match the new prompt shape.
 
 Throwaway — not part of the shipped pipeline. See
 docs/agent/plans/pipeline-efficiency/phase-1-model-layer.md Task 9.
-Adopt reordering the real prompts only if this shows a real reduction.
 """
 
 from __future__ import annotations

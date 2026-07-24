@@ -33,6 +33,8 @@ async def complete_json(
         temperature=temperature,
         response_format={"type": "json_object"},
         api_key=settings.deepseek_api_key or None,
+        max_tokens=settings.model_max_tokens,
+        timeout=settings.model_timeout_seconds,
     )
     raw = response.choices[0].message.content
     if raw is None:
