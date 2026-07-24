@@ -314,8 +314,10 @@ async def get_run(conn: asyncpg.Connection, run_id: int) -> Run:
 - **Gate:** none
 - **Steps:**
   - [ ] Delete `scout/sub_agents/briefing/tools.py` — it is an empty file
-        left from the ADK layout. (`scout/sub_agents/scorer/tools.py` went
-        with the scorer package in Phase 1 Task 6.)
+        left from the ADK layout. (`scout/sub_agents/scorer/tools.py` was
+        already removed in Phase 1 Task 7; the `scorer` package itself
+        survives, now holding only `runner.py`, `results.py` and
+        `__init__.py`.)
   - [ ] Remove the `has_profile` parameter from `render_run` and
         `render_history` in `scout/sub_agents/advisor/report.py`, and the
         corresponding `{% if has_profile %}` guards in

@@ -8,20 +8,25 @@
 
 ## Overview
 
-Collapse the Scorer and Advisor's two model passes into one Analyst stage
-that runs over every new-or-changed listing, drop the `google-adk`
-dependency while keeping the pipeline's agent shell, and move preference
+Drop the `google-adk` dependency while keeping the pipeline's agent shell,
+give the Scorer the batching the Extractor already has, and move preference
 filtering from before the model call to brief selection. Then make the
 listing lifecycle and run record non-destructive, and clear the robustness
-and dead-weight items found in review. Done looks like: a run analyses every
-tracked listing exactly once, the dashboard shows all of them, the brief
-shows only the ones matching `.env` preferences, and a second run on the
-same date adds to the first rather than degrading it.
+and dead-weight items found in review. Done looks like: a run scores every
+tracked listing, the dashboard shows all of them, the brief shows only the
+ones matching `.env` preferences, and a second run on the same date adds to
+the first rather than degrading it.
+
+The Scorer and Extractor stay separate stages. Merging them was approved and
+then withdrawn — see the spec's Amendment.
 
 ## Acceptance Criteria
 
-- [ ] A full `docker compose run --rm app` cycle completes with one model
-      call per batch and no `google-adk` import anywhere in `scout/`.
+- [ ] A full `docker compose run --rm app` cycle completes with no
+      `google-adk` import anywhere in `scout/`.
+- [ ] Neither stage's response size scales with the number of listings in
+      the run.
+- [ ] `build_requirements_instruction` output never contains the profile.
 - [ ] A listing failing `REMOTE_ONLY` / `PREFERRED_LOCATIONS` / `MIN_SALARY`
       appears on the run's dashboard with a score, and is absent from the
       Discord brief.
@@ -42,13 +47,14 @@ same date adds to the first rather than degrading it.
 
 | Risk / unknown | Impact if wrong | Resolution |
 |----------------|-----------------|------------|
-| Merging scoring and extraction into one prompt degrades score quality — the model now does two jobs per listing | Scores drift; the dashboard and brief become untrustworthy, which is the product's whole value | **Spike: Phase 1 Task 1.** Capture a fixed set of real listings, score them under the current two-call path, then under the merged prompt, and compare before adopting. |
-| `litellm` may not honour `response_format={"type":"json_object"}` for `deepseek/deepseek-chat` when called directly rather than through ADK's `LiteLlm` wrapper | Phase 1's helper returns prose and every parse fails | **Spike: Phase 1 Task 2.** One live call asserting parseable JSON before the helper is built on top of it. |
+| `litellm` may not honour `response_format={"type":"json_object"}` for `deepseek/deepseek-chat` when called directly rather than through ADK's `LiteLlm` wrapper | Phase 1's helper returns prose and every parse fails | **Spike: Phase 1 Task 1.** One live call asserting parseable JSON before the helper is built on top of it. |
+| Prefix-cache ordering may not reduce billed tokens at all | The one remaining way to stop paying twice for description tokens doesn't exist, and the duplication stands | **Spike: Phase 1 Task 9.** Measure `response.usage` both ways; adopt only on evidence, never reorder the prompts speculatively. |
+| A future change quietly renders the profile into the extraction prompt | Requirements get softened for skills the student lacks — a silent false clear, the failure mode this work exists to protect | Regression test in Phase 1 Task 4 asserts the profile name never appears in `build_requirements_instruction` output. |
 | Removing the preference inputs changes the rubric, so scores stored before and after are not strictly comparable | The history page silently compares two rubrics | Accepted risk — recorded as a spec open question. Revisit only if the history trend reads as misleading. |
 | Narrowing the content hash invalidates every stored hash | First run after deploy re-analyses the entire table at full cost | Phase 2 ships a backfill script, run **before** the first pipeline run on the new code. |
 | A materially rewritten description no longer triggers re-analysis | A listing whose requirements genuinely changed is scored against stale text | Accepted risk — recorded as a spec open question. |
-| `tests/test_agent.py` asserts against ADK `Event` objects throughout | Phase 1 breaks a large test file in one go | Phase 1 Task 3 lands the local event type and migrates the assertions in the same commit, before the pipeline rewire. |
-| Bounded-concurrency batching may trip DeepSeek rate limits | Runs fail intermittently under load | Concurrency limit is a setting (`ANALYSIS_CONCURRENCY`, default 3); lower it if 429s appear. Per-batch retry already absorbs a single failure. |
+| `tests/test_agent.py` asserts against ADK `Event` objects throughout | Phase 1 breaks a large test file in one go | Phase 1 Task 2 lands the local event type and migrates the assertions; they xfail until Task 6 rewires the pipeline. The suite is knowingly not fully green in between. |
+| Bounded-concurrency batching may trip DeepSeek rate limits | Runs fail intermittently under load | Concurrency limit is a setting (`MODEL_CONCURRENCY`, default 3); lower it if 429s appear. Per-batch retry already absorbs a single failure. |
 
 ## Blast Radius
 
@@ -83,10 +89,10 @@ same date adds to the first rather than degrading it.
 ## Testing Strategy
 
 - **Unit:** Per-task TDD in the phase docs. New coverage for the JSON
-  completion helper, the merged analysis schema and batching, brief-time
-  preference filtering, time-based closure, the narrowed hash, run-record
-  accumulation, scoped gap replacement, and per-item tolerance in
-  normalisation and analysis.
+  completion helper, shared batching and per-batch tolerance, the
+  profile-blindness regression guard, brief-time preference filtering,
+  time-based closure, the narrowed hash, run-record accumulation, scoped gap
+  replacement, and per-item tolerance in scraper normalisation.
 - **Integration:** `pytest tests/test_agent.py` exercises the pipeline
   end-to-end against the `scout_test` database with the model call stubbed;
   it runs at the end of every phase.
@@ -115,8 +121,15 @@ same date adds to the first rather than degrading it.
 
 - Drop `google-adk`, keep the agent shell. The staged, event-emitting
   structure is retained in project-local types; only the dependency goes.
-- The Analyst analyses **every** new-or-changed listing. The dashboard is
-  the day's full market picture; the brief is the narrow slice.
+- **Scoring and extraction stay separate calls.** Merging them was approved
+  and then withdrawn — the Scorer needs the whole description *and* the
+  profile; the Extractor needs the whole description and must **not** see
+  the profile, or a requirement the student fails can be silently softened
+  away. Full reasoning in the spec's Amendment.
+- The Scorer gets the batching the Extractor already has. Its single-call
+  shape is the same one that truncated the Advisor and aborted a run.
+- Every new-or-changed listing is scored. The dashboard is the day's full
+  market picture; the brief is the narrow slice.
 - Preference filtering therefore moves **later** — out of the scorer and
   into `select_top_matches` — not earlier.
 - Scoring is preference-neutral: `preferred_locations`, `remote_only` and
@@ -126,14 +139,17 @@ same date adds to the first rather than degrading it.
 - `strip_code_fence` is retained as defensive parsing even with
   `response_format` set — it is already tested and costs nothing.
 - ⚠️ **One-way doors:**
-  - **Phase 1 Task 5** (merged prompt, preference inputs removed) changes
-    the meaning of every score stored afterwards. Requires human sign-off,
-    and must not run before the Task 1 spike has been reviewed.
+  - **Phase 1 Task 4** (preference inputs removed from the scoring prompt)
+    changes the meaning of every score stored afterwards. Requires human
+    sign-off.
   - **Phase 2 Task 2** (content-hash backfill) rewrites a column across the
     whole `listings` table. Requires human sign-off.
 
 ## Out of Scope
 
+- Merging scoring and extraction into one model call, or deriving the score
+  from the extracted requirements. Both considered and rejected — see the
+  spec's Amendment and Alternatives table.
 - Splitting runs into per-timestamp rows.
 - Changes to the scoring rubric's bands, thresholds, or skill/seniority
   reasoning, beyond removing the preference inputs.
