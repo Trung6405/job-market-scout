@@ -99,6 +99,26 @@ def test_scorer_instruction_keeps_profile_and_rubric(listing_factory):
     assert '"scores"' in instruction
 
 
+def test_scorer_and_requirements_instructions_share_a_listings_prefix(listing_factory):
+    """The Scorer and Extractor read the same listings for a given batch.
+    Putting the (identical) listings JSON first in both prompts, ahead of
+    each prompt's own distinct instructions, lets the second call hit the
+    provider's automatic prefix cache on that shared block — measured in
+    scripts/spike_prefix_cache.py (see phase-1-model-layer.md Task 9)."""
+    settings = Settings()
+    listings = [listing_factory()]
+
+    scorer = build_scorer_instruction(settings, listings)
+    requirements = build_requirements_instruction(settings, listings)
+
+    assert scorer.startswith("Listings:\n")
+    assert requirements.startswith("Listings:\n")
+
+    listings_json = scorer[len("Listings:\n") :].split("\n\n", 1)[0]
+    assert listings_json  # sanity: the JSON block is non-empty
+    assert requirements.startswith(f"Listings:\n{listings_json}")
+
+
 def test_requirements_instruction_never_includes_the_profile(listing_factory):
     """Extraction must stay profile-blind — see the spec's Amendment.
 

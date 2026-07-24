@@ -20,12 +20,16 @@ def _project_listing_for_scoring(listing: Listing, description_char_limit: int) 
     }
 
 
-# Preferences (location, remote, salary) are deliberately NOT given to the
-# scorer. They gate the brief instead — see briefing/filters.py. Scoring
-# them here too would count them twice: a strong role in the wrong city
-# would reach the dashboard already marked down, when the dashboard is
-# meant to show the day's full market.
-def build_scorer_instruction(settings: Settings, listings: list[Listing]) -> str:
+def _listings_block(settings: Settings, listings: list[Listing]) -> str:
+    """The listings JSON, as a leading block identical across every prompt
+    built for the same batch (Scorer and Extractor both call this).
+
+    Placed first, ahead of each prompt's own instructions, so the two
+    calls share a long byte-identical prefix — measured in
+    scripts/spike_prefix_cache.py to hit DeepSeek's automatic prefix cache
+    even though the two prompts' trailing instructions differ (see
+    docs/agent/plans/pipeline-efficiency/phase-1-model-layer.md Task 9).
+    """
     listings_json = json.dumps(
         [
             _project_listing_for_scoring(listing, settings.description_char_limit)
@@ -33,10 +37,21 @@ def build_scorer_instruction(settings: Settings, listings: list[Listing]) -> str
         ],
         indent=2,
     )
+    return f"Listings:\n{listings_json}"
+
+
+# Preferences (location, remote, salary) are deliberately NOT given to the
+# scorer. They gate the brief instead — see briefing/filters.py. Scoring
+# them here too would count them twice: a strong role in the wrong city
+# would reach the dashboard already marked down, when the dashboard is
+# meant to show the day's full market.
+def build_scorer_instruction(settings: Settings, listings: list[Listing]) -> str:
     return f"""\
+{_listings_block(settings, listings)}
+
 You are the job-match scorer for Job Market Scout.
 
-For each listing below, first identify the required skills and
+For each listing above, first identify the required skills and
 qualifications stated in its description — not nice-to-haves, the ones
 described as required, must-have, or similar. Check each one against the
 resume. A skill only counts as met if the resume states it or something
@@ -78,9 +93,6 @@ not invent listings beyond the ones provided, and do not call any tool.
 Candidate profile:
 {render_profile_text(settings.profile)}
 
-Listings to score:
-{listings_json}
-
 Return a JSON object with a single key "scores" containing a list of
 objects, each with "source" and "external_id" (copied exactly from the
 listing — together they identify it, since external_id alone may repeat
@@ -90,17 +102,12 @@ sentence). Return only the JSON object, no commentary.
 
 
 def build_requirements_instruction(settings: Settings, listings: list[Listing]) -> str:
-    listings_json = json.dumps(
-        [
-            _project_listing_for_scoring(listing, settings.description_char_limit)
-            for listing in listings
-        ],
-        indent=2,
-    )
     return f"""\
+{_listings_block(settings, listings)}
+
 You are the requirements extractor for Job Market Scout.
 
-For each listing below, read its description and identify two separate
+For each listing above, read its description and identify two separate
 lists of requirements:
 - "must_have": requirements explicitly stated as required, must-have,
   mandatory, or similar.
@@ -144,9 +151,6 @@ skill categories — a skill belongs in exactly one list, based on how
 the listing describes it. If a listing does not clearly state any
 requirements in a category, return an empty list for that category. Do
 not invent listings beyond the ones provided, and do not call any tool.
-
-Listings to extract requirements from:
-{listings_json}
 
 Return a JSON object with a single key "requirements" containing a list
 of objects, each with "source" and "external_id" (copied exactly from

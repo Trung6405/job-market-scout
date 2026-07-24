@@ -619,6 +619,26 @@ async def run_requirements_extraction(
   `tests/test_briefing_agent.py` (deleted),
   `tests/test_briefing_summarize.py`, `tests/test_briefing_entrypoint.py`,
   and `tests/test_briefing_embed_builder.py`.
+- **Task 9 (2026-07-24) — measured and adopted.** `scripts/spike_prefix_cache.py`
+  sent a 15-listing payload (~6,600 prompt tokens) three ways: (1) identical
+  prompt twice back-to-back, (2) today's shape (instructions, then
+  listings), (3) a Scorer-shaped prompt immediately followed by an
+  Extractor-shaped prompt sharing the same leading listings block but a
+  *different* trailing instruction — the scenario that actually matters,
+  since the Scorer and Extractor are separate calls with separate
+  instructions. Result: the differently-suffixed second call still hit
+  `cached_tokens=6528` of `prompt_tokens=6631` (98.4%), `prompt_cache_miss_tokens=103`.
+  DeepSeek's prefix cache matches on the shared leading block even when the
+  trailing text differs, and bills cached tokens at a steep discount — so
+  this doesn't require merging the two calls (which the spec's Amendment
+  rejected) to get most of the token saving that motivated the merge in
+  the first place. Adopted: `scout/prompts.py` gained a shared
+  `_listings_block()` helper, and both `build_scorer_instruction` and
+  `build_requirements_instruction` now open with it before their own
+  distinct instructions. Guarded by
+  `test_scorer_and_requirements_instructions_share_a_listings_prefix` in
+  `tests/test_prompts.py`, asserting both prompts start with a
+  byte-identical `"Listings:\n{json}"` block.
 - **Steps:**
   - [ ] Remove the `xfail` marks added in Task 2 from `tests/test_agent.py`
   - [ ] Verify they fail (`pytest tests/test_agent.py -v`)
@@ -784,7 +804,12 @@ def select_top_matches(
   - [ ] If the reduction is real, open a follow-up task to reorder both
         prompt builders so the listings block leads; if not, record that and
         stop — do **not** reorder the prompts speculatively
-  - [ ] Commit: `spike: measure prefix-cache effect of prompt ordering`
+  - [x] **Adopted in place** rather than as a separate follow-up task: the
+        change is small (one shared helper, both prompt builders reordered),
+        well-covered by the existing substring-only prompt tests (none
+        asserted ordering), and backed by a decisive measurement. See
+        Notes / Learnings for the numbers and the new regression test.
+  - [ ] Commit: `spike: measure prefix-cache effect and reorder prompts to share it`
 
 ---
 
