@@ -123,6 +123,13 @@ class Settings:
     briefing_max_matches: int = field(
         default_factory=partial(_env_int, "BRIEFING_MAX_MATCHES", 5)
     )
+    # Days a listing may go unseen before it is treated as closed. A daily
+    # scrape only sees RESULTS_WANTED per role within HOURS_OLD, so a still-open
+    # listing routinely misses a day; closing on first absence made it reopen
+    # as "changed" and bought a second full analysis of the same listing.
+    listing_stale_days: int = field(
+        default_factory=partial(_env_int, "LISTING_STALE_DAYS", 7)
+    )
     discord_bot_token: str = field(
         default_factory=partial(_env_str, "DISCORD_BOT_TOKEN", "")
     )

@@ -40,27 +40,52 @@ async def test_track_listings_returns_only_new_and_changed(db_pool):
 
 
 @pytest.mark.asyncio
-async def test_track_listings_closes_previously_open_listings_absent_from_batch(
-    db_pool,
-):
-    stale = _make_listing(source="linkedin", external_id="job-stale")
+async def test_track_listings_keeps_recently_absent_listing_open(db_pool):
+    """A listing missing from today's batch stays open — closure is driven
+    by how long it's gone unseen (LISTING_STALE_DAYS), not by absence from
+    a single run. A daily scrape only sees RESULTS_WANTED listings per role
+    within HOURS_OLD, so a still-open listing routinely misses a day."""
+    absent = _make_listing(source="linkedin", external_id="job-absent")
     async with db_pool.acquire() as conn:
-        await upsert_listing(conn, stale)
+        await upsert_listing(conn, absent)
 
     current = _make_listing(source="linkedin", external_id="job-current")
 
     await track_listings([current], pool=db_pool)
 
     async with db_pool.acquire() as conn:
-        stale_row = await conn.fetchrow(
-            "SELECT status FROM listings WHERE external_id = $1", "job-stale"
+        absent_row = await conn.fetchrow(
+            "SELECT status FROM listings WHERE external_id = $1", "job-absent"
         )
         current_row = await conn.fetchrow(
             "SELECT status FROM listings WHERE external_id = $1", "job-current"
         )
 
-    assert stale_row["status"] == "closed"
+    assert absent_row["status"] == "open"
     assert current_row["status"] == "open"
+
+
+@pytest.mark.asyncio
+async def test_track_listings_closes_long_unseen_listing(db_pool):
+    long_unseen = _make_listing(source="linkedin", external_id="job-long-unseen")
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, long_unseen)
+        await conn.execute(
+            "UPDATE listings SET last_seen_at = now() - interval '30 days' "
+            "WHERE external_id = $1",
+            "job-long-unseen",
+        )
+
+    current = _make_listing(source="linkedin", external_id="job-current")
+
+    await track_listings([current], pool=db_pool)
+
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT status FROM listings WHERE external_id = $1", "job-long-unseen"
+        )
+
+    assert row["status"] == "closed"
 
 
 @pytest.mark.asyncio

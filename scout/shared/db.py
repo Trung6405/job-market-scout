@@ -116,22 +116,28 @@ async def upsert_listing(
 
 
 async def close_stale_listings(
-    conn: asyncpg.Connection, seen_keys: list[tuple[str, str]]
+    conn: asyncpg.Connection, stale_days: int
 ) -> list[str]:
-    sources = [key[0] for key in seen_keys]
-    external_ids = [key[1] for key in seen_keys]
+    """Close listings unseen for longer than ``stale_days``.
+
+    Closure is deliberately time-based rather than "absent from this run":
+    a run only sees RESULTS_WANTED listings per role within HOURS_OLD, so a
+    still-open listing drops out of the results routinely. Closing on first
+    absence made it reopen as ``changed`` on its return, buying a second
+    full analysis of a listing that never changed.
+
+    ``last_seen_at`` is stamped by ``upsert_listing``, so this needs no
+    seen-key arrays.
+    """
     rows = await conn.fetch(
         """
         UPDATE listings
         SET status = 'closed', closed_at = now()
         WHERE status = 'open'
-          AND NOT (source, external_id) IN (
-              SELECT * FROM unnest($1::text[], $2::text[])
-          )
+          AND last_seen_at < now() - make_interval(days => $1)
         RETURNING external_id
         """,
-        sources,
-        external_ids,
+        stale_days,
     )
     return [row["external_id"] for row in rows]
 

@@ -124,27 +124,24 @@ def test_content_hash_still_tracks_substantive_fields(listing_factory):
 
 
 @pytest.mark.asyncio
-async def test_close_stale_listings_closes_unseen_and_keeps_seen_open(db_pool):
-    seen = _make_listing(source="linkedin", external_id="job-seen")
-    stale = _make_listing(source="linkedin", external_id="job-stale")
+async def test_close_stale_listings_keeps_recently_seen(db_pool, listing_factory):
     async with db_pool.acquire() as conn:
-        await upsert_listing(conn, seen)
-        await upsert_listing(conn, stale)
+        await upsert_listing(conn, listing_factory(external_id="fresh"))
+        closed = await close_stale_listings(conn, stale_days=7)
+        assert closed == []
+        status = await conn.fetchval("SELECT status FROM listings")
+        assert status == "open"
 
-        closed_ids = await close_stale_listings(conn, [(seen.source, seen.external_id)])
 
-        seen_row = await conn.fetchrow(
-            "SELECT status FROM listings WHERE external_id = $1", seen.external_id
-        )
-        stale_row = await conn.fetchrow(
-            "SELECT status, closed_at FROM listings WHERE external_id = $1",
-            stale.external_id,
-        )
-
-    assert closed_ids == ["job-stale"]
-    assert seen_row["status"] == "open"
-    assert stale_row["status"] == "closed"
-    assert stale_row["closed_at"] is not None
+@pytest.mark.asyncio
+async def test_close_stale_listings_closes_long_unseen(db_pool, listing_factory):
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing_factory(external_id="old"))
+        await conn.execute("UPDATE listings SET last_seen_at = now() - interval '30 days'")
+        closed = await close_stale_listings(conn, stale_days=7)
+        assert closed == ["old"]
+        status = await conn.fetchval("SELECT status FROM listings")
+        assert status == "closed"
 
 
 @pytest.mark.asyncio
