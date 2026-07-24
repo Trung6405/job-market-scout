@@ -254,6 +254,12 @@ async def record_listing_meta(
 
 
 async def get_run_by_date(conn: asyncpg.Connection, run_date: date) -> Run | None:
+    """Fetch a run by date. Used only by tests.
+
+    No production caller: the pipeline holds the run id from ``start_run``.
+    Kept as an assertion probe for ``tests/test_agent.py`` and
+    ``tests/test_db.py`` — not dead code, do not remove.
+    """
     row = await conn.fetchrow("SELECT * FROM runs WHERE run_date = $1", run_date)
     if row is None:
         return None
@@ -329,6 +335,12 @@ async def get_adjacent_runs(
 
 
 async def get_run_listings(conn: asyncpg.Connection, run_id: int) -> list[RunListing]:
+    """Fetch every run_listings row for a run. Used only by tests.
+
+    No production caller: ``get_run_details`` is what the report layer
+    reads from. Kept as an assertion probe for ``tests/test_agent.py`` and
+    ``tests/test_db.py`` — not dead code, do not remove.
+    """
     rows = await conn.fetch(
         "SELECT * FROM run_listings WHERE run_id = $1", run_id
     )
