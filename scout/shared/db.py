@@ -298,6 +298,18 @@ async def record_listing_gaps(
     # called on its own; when the caller (ScoutPipelineAgent) already holds a
     # run-scoped transaction, asyncpg nests this as a harmless savepoint.
     async with conn.transaction():
+        # Listings being (re)recorded, built from every match supplied —
+        # not just those with checks — so a listing whose requirements are
+        # now all met still has its stale gap rows cleared below.
+        listing_sources = [match.listing.source for match, _checks in gaps_by_match]
+        listing_external_ids = [
+            match.listing.external_id for match, _checks in gaps_by_match
+        ]
+
+        # Scoped to the listings supplied, not the whole run: recording one
+        # listing's gaps must not wipe another listing's gaps from the same
+        # run, which a whole-run delete did whenever a same-day re-run only
+        # re-analysed some of the run's listings.
         await conn.execute(
             """
             DELETE FROM listing_gaps
@@ -305,10 +317,15 @@ async def record_listing_gaps(
                 SELECT run_listings.id
                 FROM run_listings
                 JOIN listings ON listings.id = run_listings.listing_id
+                JOIN unnest($2::text[], $3::text[]) AS data(source, external_id)
+                    ON listings.source = data.source
+                   AND listings.external_id = data.external_id
                 WHERE run_listings.run_id = $1
             )
             """,
             run_id,
+            listing_sources,
+            listing_external_ids,
         )
 
         sources: list[str] = []

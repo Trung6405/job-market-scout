@@ -628,6 +628,37 @@ async def test_record_listing_gaps_delete_scoped_to_run_id(db_pool):
 
 
 @pytest.mark.asyncio
+async def test_record_listing_gaps_only_replaces_supplied_listings(
+    db_pool, listing_factory, match_factory
+):
+    """Recording one listing's gaps must not wipe another listing's gaps
+    from the same run -- a same-day re-run that only re-analyses some
+    listings should leave the rest of that run's gaps intact."""
+    first = listing_factory(external_id="first")
+    second = listing_factory(external_id="second")
+    async with db_pool.acquire() as conn:
+        for listing in (first, second):
+            await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 24))
+        await record_run_listings(
+            conn,
+            run_id,
+            [
+                (match_factory(listing=first), "competitive"),
+                (match_factory(listing=second), "competitive"),
+            ],
+        )
+
+        gap = SkillGap(skill="Go", requirement_level="must_have", met=False, kind="skill")
+        await record_listing_gaps(conn, run_id, [(match_factory(listing=first), [gap])])
+        await record_listing_gaps(conn, run_id, [(match_factory(listing=second), [gap])])
+
+        # Recording the second listing's gaps must not have wiped the first's.
+        total = await conn.fetchval("SELECT count(*) FROM listing_gaps")
+    assert total == 2
+
+
+@pytest.mark.asyncio
 async def test_record_listing_gaps_rolls_back_delete_when_insert_fails(db_pool):
     listing = _make_listing()
     async with db_pool.acquire() as conn:
