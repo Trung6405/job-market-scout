@@ -1,7 +1,7 @@
 # Phase 1: Schema, extension & image
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** nothing (this is P0, the foundation)
 
 ---
@@ -30,7 +30,7 @@ no existing test regresses.
 Per the repo's doc-gating rule, the approved docs are committed **once, right
 before this phase's code changes** — not earlier:
 
-- [ ] Commit the approved planning docs:
+- [x] Commit the approved planning docs:
 
 ```bash
 git add docs/project/specification/career-coach-agent-prs.md \
@@ -64,7 +64,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
     source TEXT, last_verified TIMESTAMPTZ, created_at TIMESTAMPTZ`.
     Later phases (P1 writer, P2 reader) rely on exactly these names/types.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_resources_schema.py`:
 
@@ -133,7 +133,7 @@ async def test_resources_url_is_unique(db_pool):
             )
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_resources_schema.py -v`
 Expected: FAIL (4 failed) — `test_resources_table_exists` sees `None` (no
@@ -143,7 +143,7 @@ extension, and both `test_resources_embedding_roundtrips` and
 "resources" does not exist`. (If Postgres is unreachable the tests `skip`
 instead — start the stack first: `docker compose up -d postgres`.)
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 **3a.** Append to the end of `scout/shared/schema.sql`:
 
@@ -197,7 +197,7 @@ fixture:
 docker compose up -d --force-recreate postgres
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_resources_schema.py -v`
 Expected: PASS (4 passed).
@@ -207,7 +207,7 @@ Then the regression gate — the whole suite on the new image:
 Run: `pytest`
 Expected: PASS (no existing DB test regresses; the image swap is transparent).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/test_resources_schema.py tests/conftest.py \
@@ -227,9 +227,9 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ## Verification
 
-- [ ] `pytest tests/test_resources_schema.py -v` → 4 passed.
-- [ ] `pytest` → full suite green on `pgvector/pgvector:pg16`.
-- [ ] Manual: `docker compose exec postgres psql -U scout -d scout -c "\dx vector"`
+- [x] `pytest tests/test_resources_schema.py -v` → 4 passed.
+- [x] `pytest` → full suite green on `pgvector/pgvector:pg16` (247 passed).
+- [x] Manual: `docker compose exec postgres psql -U scout -d scout -c "\dx vector"`
   lists the `vector` extension, and `\d resources` shows the columns above.
 
 ## Rollback
@@ -246,4 +246,17 @@ Reversibility.
 
 ## Notes / Learnings
 
-<Filled in during execution.>
+- The dev `scout` database only gets `apply_schema` run against it when the
+  pipeline actually runs — it was never initialized in this session, so the
+  first manual verification attempt (`psql -c "\dx vector"`) correctly showed
+  nothing installed. Applying `scout/shared/schema.sql` directly (same as CI's
+  "Load DB schema" step) confirmed the extension (`vector` 0.8.5) and the
+  `resources` table shape, and reconfirmed the pre-existing DDL is still
+  idempotent.
+- One run of `test_resources_embedding_roundtrips` alone (in a small,
+  filtered `pytest` invocation) was reported `SKIPPED — Postgres unreachable`,
+  but passed both in isolation and in the full 247-test suite run immediately
+  after. Consistent with a transient pool-creation race in the shared
+  `db_pool` fixture (`tests/conftest.py`, 2s connection timeout under
+  contention) — pre-existing test-infra behavior, not caused by this phase's
+  changes, and not reproduced on the full-suite regression run.

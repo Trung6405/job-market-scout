@@ -1,6 +1,6 @@
 # Plan: Career Coach P0 — Schema & pgvector Foundation
 
-> **Status:** Not started
+> **Status:** Complete
 > **Created:** 2026-07-24 · **Last updated:** 2026-07-24
 > **Spec:** [spec.md](../../specs/career-coach-p0-schema/spec.md)
 
@@ -18,15 +18,15 @@ passes.
 
 ## Acceptance Criteria
 
-- [ ] `CREATE EXTENSION IF NOT EXISTS vector` and a `resources` table exist in
+- [x] `CREATE EXTENSION IF NOT EXISTS vector` and a `resources` table exist in
   `scout/shared/schema.sql`, applied via the unchanged `apply_schema` path.
-- [ ] The local (`docker-compose.yaml`) and CI (`.github/workflows/deploy.yml`)
+- [x] The local (`docker-compose.yaml`) and CI (`.github/workflows/deploy.yml`)
   Postgres both run `pgvector/pgvector:pg16`.
-- [ ] A test inserts a `resources` row with a 384-dim embedding and reads it
+- [x] A test inserts a `resources` row with a 384-dim embedding and reads it
   back, and asserts the `vector` extension is installed and the `resources`
   relation exists.
-- [ ] `pytest` passes in full against the new image (no regression in existing
-  DB-backed tests).
+- [x] `pytest` passes in full against the new image (no regression in existing
+  DB-backed tests — 247 passed).
 
 ---
 
@@ -61,7 +61,7 @@ passes.
 
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
-| 1 | Schema, extension & image | [phase-1-schema-and-image.md](phase-1-schema-and-image.md) | Not started |
+| 1 | Schema, extension & image | [phase-1-schema-and-image.md](phase-1-schema-and-image.md) | Complete |
 
 > P0 is a single small phase; this plan has one phase doc holding its task-level
 > detail. Later Career Coach phases (P1–P7) are separate spec+plan pairs, not
@@ -124,12 +124,13 @@ passes.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met.
-- [ ] Phase 1 verification steps pass.
-- [ ] Local Postgres recreated on the pgvector image and full `pytest` green.
-- [ ] README/compose comments updated only if behaviour described there changed
-  (the compose `postgres` image line is the sole doc-relevant change).
-- [ ] No new lint or type-check warnings.
+- [x] All acceptance criteria met.
+- [x] Phase 1 verification steps pass.
+- [x] Local Postgres recreated on the pgvector image and full `pytest` green.
+- [x] README/compose comments updated only if behaviour described there changed
+  (the compose `postgres` image line was a plain value swap; no comment text
+  described the old image, so nothing else needed updating).
+- [x] No new lint or type-check warnings.
 
 ## Update Rules
 
