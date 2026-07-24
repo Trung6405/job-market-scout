@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import asyncpg
@@ -104,6 +105,7 @@ async def render_run(
         stats=_detail_stats(details),
         prev_run=prev_run,
         next_run=next_run,
+        is_today=run.run_date == date.today(),
     )
     dashboard_path = run_dir / "dashboard.html"
     dashboard_path.write_text(dashboard_html, encoding="utf-8")

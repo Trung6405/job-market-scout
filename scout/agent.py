@@ -8,6 +8,7 @@ from scout.config import settings as default_settings
 from scout.shared.db import (
     create_pool,
     finish_run,
+    get_adjacent_runs,
     record_listing_gaps,
     record_listing_meta,
     record_run_listings,
@@ -136,6 +137,14 @@ class ScoutPipelineAgent:
             # or a connection held for the transaction's duration.
             async with pool.acquire() as conn:
                 await render_history(conn, settings)
+                # The previous day's page was rendered when it was still the
+                # newest run, so its "next day" link was left empty. Now that
+                # this run exists, re-render that page so the link fills in —
+                # otherwise every day but the latest is stuck without a next
+                # link until someone runs a full rerender.
+                prev_run, _ = await get_adjacent_runs(conn, run_date)
+                if prev_run is not None:
+                    await render_run(conn, prev_run.id, settings)
             render_profile(profile, settings)
             yield PipelineEvent(
                 self.name, f"Report rendered: {report_paths['dashboard']}"

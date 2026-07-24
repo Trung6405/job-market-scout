@@ -93,7 +93,7 @@
     {% endif %}
     <div class="today">
       <span class="cur">{{ run.run_date.strftime('%a %d %b %Y') }}</span>
-      <span class="tag-today">Today</span>
+      {% if is_today %}<span class="tag-today">Today</span>{% endif %}
     </div>
     {% if next_run %}
     <a class="daynav" href="../{{ next_run.run_date }}/dashboard.html" title="Next day">{{ next_run.run_date.strftime('%a %d %b') }} ›</a>
