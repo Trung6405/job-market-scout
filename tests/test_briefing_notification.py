@@ -1,82 +1,99 @@
 from __future__ import annotations
 
-from email.message import EmailMessage
-
+import httpx
 import pytest
 
 from scout.config import Settings
-from scout.sub_agents.briefing.notification import send_email
+from scout.sub_agents.briefing.notification import (
+    ensure_discord_configured,
+    send_message,
+)
 
 
-class _FakeSmtp:
-    instances: list["_FakeSmtp"] = []
+class _FakeResponse:
+    def __init__(self, status_code: int):
+        self.status_code = status_code
 
-    def __init__(self, host, port):
-        self.host = host
-        self.port = port
-        self.login_calls = []
-        self.sent_messages = []
-        _FakeSmtp.instances.append(self)
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise httpx.HTTPStatusError(
+                "error", request=None, response=None  # type: ignore[arg-type]
+            )
 
-    def __enter__(self):
+
+class _FakeAsyncClient:
+    instances: list["_FakeAsyncClient"] = []
+
+    def __init__(self, *args, **kwargs):
+        self.post_calls: list[dict] = []
+        self.status_code = 200
+        _FakeAsyncClient.instances.append(self)
+
+    async def __aenter__(self):
         return self
 
-    def __exit__(self, *exc_info):
+    async def __aexit__(self, *exc_info):
         return False
 
-    def login(self, address, password):
-        self.login_calls.append((address, password))
-
-    def send_message(self, message):
-        self.sent_messages.append(message)
+    async def post(self, url, *, headers=None, json=None):
+        self.post_calls.append({"url": url, "headers": headers, "json": json})
+        return _FakeResponse(self.status_code)
 
 
 @pytest.fixture(autouse=True)
-def _reset_fake_smtp():
-    _FakeSmtp.instances = []
+def _reset_fake_client(monkeypatch):
+    _FakeAsyncClient.instances = []
+    monkeypatch.setattr(
+        "scout.sub_agents.briefing.notification.httpx.AsyncClient", _FakeAsyncClient
+    )
     yield
-    _FakeSmtp.instances = []
+    _FakeAsyncClient.instances = []
 
 
-def test_send_email_raises_when_gmail_address_missing(monkeypatch):
-    monkeypatch.setattr("smtplib.SMTP_SSL", _FakeSmtp)
-    settings = Settings(gmail_address="", gmail_app_password="secret")
+def _settings():
+    return Settings(discord_bot_token="bot-token", discord_channel_id="123456789")
 
+
+def test_ensure_discord_configured_raises_when_token_missing():
     with pytest.raises(ValueError):
-        send_email(EmailMessage(), settings)
-
-    assert _FakeSmtp.instances == []
+        ensure_discord_configured(Settings(discord_bot_token="", discord_channel_id="123"))
 
 
-def test_send_email_raises_when_app_password_missing(monkeypatch):
-    monkeypatch.setattr("smtplib.SMTP_SSL", _FakeSmtp)
-    settings = Settings(gmail_address="scout@example.com", gmail_app_password="")
-
+def test_ensure_discord_configured_raises_when_channel_missing():
     with pytest.raises(ValueError):
-        send_email(EmailMessage(), settings)
-
-    assert _FakeSmtp.instances == []
-
-
-def test_send_email_logs_in_and_sends(monkeypatch):
-    monkeypatch.setattr("smtplib.SMTP_SSL", _FakeSmtp)
-    settings = Settings(gmail_address="scout@example.com", gmail_app_password="secret")
-    message = EmailMessage()
-
-    send_email(message, settings)
-
-    smtp = _FakeSmtp.instances[0]
-    assert smtp.login_calls == [("scout@example.com", "secret")]
-    assert smtp.sent_messages == [message]
+        ensure_discord_configured(
+            Settings(discord_bot_token="tok", discord_channel_id="")
+        )
 
 
-def test_send_email_propagates_smtp_failures(monkeypatch):
-    class _FailingSmtp(_FakeSmtp):
-        def login(self, address, password):
-            raise RuntimeError("auth failed")
+@pytest.mark.asyncio
+async def test_send_message_posts_to_channel_with_bot_auth():
+    payload = {"embeds": [{"title": "hi"}]}
 
-    monkeypatch.setattr("smtplib.SMTP_SSL", _FailingSmtp)
-    settings = Settings(gmail_address="scout@example.com", gmail_app_password="secret")
+    await send_message(payload, _settings())
 
-    with pytest.raises(RuntimeError):
-        send_email(EmailMessage(), settings)
+    client = _FakeAsyncClient.instances[0]
+    assert len(client.post_calls) == 1
+    call = client.post_calls[0]
+    assert call["url"] == (
+        "https://discord.com/api/v10/channels/123456789/messages"
+    )
+    assert call["headers"]["Authorization"] == "Bot bot-token"
+    assert call["json"] == payload
+
+
+@pytest.mark.asyncio
+async def test_send_message_raises_on_non_success_response(monkeypatch):
+    payload = {"embeds": [{"title": "hi"}]}
+
+    class _FailingClient(_FakeAsyncClient):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.status_code = 403
+
+    monkeypatch.setattr(
+        "scout.sub_agents.briefing.notification.httpx.AsyncClient", _FailingClient
+    )
+
+    with pytest.raises(httpx.HTTPStatusError):
+        await send_message(payload, _settings())

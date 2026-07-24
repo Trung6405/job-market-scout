@@ -1,24 +1,24 @@
 from __future__ import annotations
 
-import smtplib
-from email.message import EmailMessage
+import httpx
 
 from scout.config import Settings
 
-_SMTP_HOST = "smtp.gmail.com"
-_SMTP_PORT = 465
+_DISCORD_API_BASE = "https://discord.com/api/v10"
 
 
-def ensure_gmail_configured(settings: Settings) -> None:
-    if not settings.gmail_address or not settings.gmail_app_password:
+def ensure_discord_configured(settings: Settings) -> None:
+    if not settings.discord_bot_token or not settings.discord_channel_id:
         raise ValueError(
-            "GMAIL_ADDRESS and GMAIL_APP_PASSWORD must both be set to send a "
-            "briefing email"
+            "DISCORD_BOT_TOKEN and DISCORD_CHANNEL_ID must both be set to send a "
+            "briefing message"
         )
 
 
-def send_email(message: EmailMessage, settings: Settings) -> None:
-    ensure_gmail_configured(settings)
-    with smtplib.SMTP_SSL(_SMTP_HOST, _SMTP_PORT) as smtp:
-        smtp.login(settings.gmail_address, settings.gmail_app_password)
-        smtp.send_message(message)
+async def send_message(payload: dict, settings: Settings) -> None:
+    ensure_discord_configured(settings)
+    url = f"{_DISCORD_API_BASE}/channels/{settings.discord_channel_id}/messages"
+    headers = {"Authorization": f"Bot {settings.discord_bot_token}"}
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, headers=headers, json=payload)
+        response.raise_for_status()

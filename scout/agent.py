@@ -164,14 +164,16 @@ class ScoutPipelineAgent(BaseAgent):
             await pool.close()
         yield _status_event(ctx, self.name, f"Run persisted: {run_date}")
 
-        if settings.gmail_address and settings.gmail_app_password:
+        if settings.discord_bot_token and settings.discord_channel_id:
             await run_briefing(
                 relevant, scores, settings, report_path=report_paths["dashboard"]
             )
-            yield _status_event(ctx, self.name, "Briefing: email sent")
+            yield _status_event(ctx, self.name, "Briefing: Discord message sent")
         else:
             yield _status_event(
-                ctx, self.name, "Briefing: skipped (GMAIL_ADDRESS/GMAIL_APP_PASSWORD not set)"
+                ctx,
+                self.name,
+                "Briefing: skipped (DISCORD_BOT_TOKEN/DISCORD_CHANNEL_ID not set)",
             )
 
 

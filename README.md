@@ -7,9 +7,11 @@ Multi-agent job market scout, scrapes listings, matches them to a resume, tracks
 - Docker Desktop (running, with its socket available — `jobspy-mcp` shells
   out to `docker run` per search and mounts `/var/run/docker.sock`)
 - A [DeepSeek API key](https://platform.deepseek.com/)
-- A Gmail account with 2FA enabled, so you can generate an
-  [app password](https://myaccount.google.com/apppasswords) (your regular
-  Gmail password won't work for SMTP)
+- A Discord bot for the daily briefing: create an application at the
+  [Discord Developer Portal](https://discord.com/developers/applications),
+  add a bot, invite it to your server with the **Send Messages**
+  permission, and note its **bot token** and the target **channel ID**
+  (enable Developer Mode in Discord, then right-click the channel → Copy ID)
 
 ### Setup
 1. Clone with submodules (the scraper vendors `jobspy-mcp-server`):
@@ -24,8 +26,8 @@ Multi-agent job market scout, scrapes listings, matches them to a resume, tracks
    ```
    cp scout/.env.example scout/.env
    ```
-   At minimum set `DEEPSEEK_API_KEY`, `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`,
-   and `GMAIL_RECIPIENT`. Adjust `SEARCH_ROLES`, `SEARCH_LOCATIONS`,
+   At minimum set `DEEPSEEK_API_KEY`, `DISCORD_BOT_TOKEN`, and
+   `DISCORD_CHANNEL_ID`. Adjust `SEARCH_ROLES`, `SEARCH_LOCATIONS`,
    `PREFERRED_LOCATIONS`, `REMOTE_ONLY`, `MIN_SALARY`, and
    `MIN_MATCH_SCORE` to taste.
 3. Copy the resume template and replace it with your own resume:
@@ -39,8 +41,8 @@ Multi-agent job market scout, scrapes listings, matches them to a resume, tracks
    ```
    cp scout/profile.json.example scout/profile.json
    ```
-   The pipeline scores and emails matches either way; an accurate profile
-   just makes skill-gap detection in the Advisor report meaningful.
+   The pipeline scores and posts matches to Discord either way; an accurate
+   profile just makes skill-gap detection in the Advisor report meaningful.
 5. Run the pipeline:
    ```
    docker compose up --build
@@ -49,7 +51,8 @@ Multi-agent job market scout, scrapes listings, matches them to a resume, tracks
    `jobspy-mcp` and `postgres` services, then runs one scrape → score →
    track → brief cycle via `python -m scout.main`. The Postgres schema is
    applied automatically on first run — no manual migration step needed.
-   Matches above `MIN_MATCH_SCORE` are emailed to `GMAIL_RECIPIENT`.
+   Matches above `MIN_MATCH_SCORE` are posted to your Discord channel
+   (`DISCORD_CHANNEL_ID`) as a single embed.
 
 ### Advisor report output
 
@@ -64,17 +67,9 @@ host (mounted from the container's `/app/reports`). Open
 links per skill gap are not implemented yet — gaps are shown by name
 only.
 
-By default the briefing email just shows the report's path as plain
-text (e.g. `reports/2026-07-21/dashboard.html`) — the app runs inside a
-container, so it has no way to know the report's absolute location on
-your host machine, and a `file://` link built from the container's own
-path (`/app/reports/...`) would not open on your host. To get a
-clickable link in the email instead, set `REPORT_HOST_DIR` in your
-`.env` to the absolute path of this project's `reports` directory on
-your host machine, e.g.:
-```
-REPORT_HOST_DIR=/home/you/job-market-scout/reports
-```
+The Discord briefing links each match straight to its listing; browse the
+full scored dashboard from the `./reports` directory (or the live URLs
+below).
 
 ### Live dashboard
 
