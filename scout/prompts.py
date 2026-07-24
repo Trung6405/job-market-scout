@@ -21,14 +21,17 @@ def _project_listing_for_scoring(listing: Listing, description_char_limit: int) 
 
 
 def _listings_block(settings: Settings, listings: list[Listing]) -> str:
-    """The listings JSON, as a leading block identical across every prompt
-    built for the same batch (Scorer and Extractor both call this).
+    """The listings JSON for one batch — the variable trailing suffix of
+    both the Scorer and Extractor prompts.
 
-    Placed first, ahead of each prompt's own instructions, so the two
-    calls share a long byte-identical prefix — measured in
-    scripts/spike_prefix_cache.py to hit DeepSeek's automatic prefix cache
-    even though the two prompts' trailing instructions differ (see
-    docs/agent/plans/pipeline-efficiency/phase-1-model-layer.md Task 9).
+    Placed last, after each prompt's own (invariant) instructions and, for
+    the Scorer, the candidate profile. That invariant text is identical
+    across every batch of a stage and across every day's run, so putting it
+    first makes it the shared leading prefix DeepSeek's automatic cache can
+    key on — see scripts/spike_prefix_cache.py and
+    docs/agent/specs/llm-call-efficiency/spec.md. The listings JSON itself
+    varies per batch and per stage (different batch sizes), so it can never
+    be part of that shared prefix and belongs at the end instead.
     """
     listings_json = json.dumps(
         [
@@ -47,11 +50,9 @@ def _listings_block(settings: Settings, listings: list[Listing]) -> str:
 # meant to show the day's full market.
 def build_scorer_instruction(settings: Settings, listings: list[Listing]) -> str:
     return f"""\
-{_listings_block(settings, listings)}
-
 You are the job-match scorer for Job Market Scout.
 
-For each listing above, first identify the required skills and
+For each listing in the Listings block below, first identify the required skills and
 qualifications stated in its description — not nice-to-haves, the ones
 described as required, must-have, or similar. Check each one against the
 resume. A skill only counts as met if the resume states it or something
@@ -98,16 +99,16 @@ objects, each with "source" and "external_id" (copied exactly from the
 listing — together they identify it, since external_id alone may repeat
 across sources), "score" (integer 0-100), and "reasoning" (one short
 sentence). Return only the JSON object, no commentary.
+
+{_listings_block(settings, listings)}
 """
 
 
 def build_requirements_instruction(settings: Settings, listings: list[Listing]) -> str:
     return f"""\
-{_listings_block(settings, listings)}
-
 You are the requirements extractor for Job Market Scout.
 
-For each listing above, read its description and identify two separate
+For each listing in the Listings block below, read its description and identify two separate
 lists of requirements:
 - "must_have": requirements explicitly stated as required, must-have,
   mandatory, or similar.
@@ -160,6 +161,8 @@ objects), "nice_to_have" (a list of {"name", "kind"} objects),
 "seniority" (short string or
 null), "work_type" (short string or null), and "team" (short string or
 null). Return only the JSON object, no commentary.
+
+{_listings_block(settings, listings)}
 """
 
 
