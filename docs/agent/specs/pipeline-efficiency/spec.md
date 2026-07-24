@@ -1,7 +1,7 @@
 # Spec: Pipeline Efficiency — LLM Consolidation, Listing Lifecycle & Cleanup
 
-> **Status:** Draft
-> **Created:** 2026-07-24 · **Approved:** —
+> **Status:** Approved
+> **Created:** 2026-07-24 · **Approved:** 2026-07-24
 > **Implementation plan:** [plan.md](../../plans/pipeline-efficiency/plan.md) *(created after approval)*
 
 ---
