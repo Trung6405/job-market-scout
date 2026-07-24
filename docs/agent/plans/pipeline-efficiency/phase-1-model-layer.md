@@ -813,5 +813,9 @@ preference-neutral prompt remain valid rows.
 
 ## Notes / Learnings
 
-<Filled in during execution — record the Task 1 finding on whether DeepSeek
-fences its JSON, and the Task 9 prefix-cache measurement.>
+- **Task 1 (2026-07-24):** `litellm.acompletion` called directly against
+  `deepseek/deepseek-chat` with `response_format={"type": "json_object"}`
+  returned clean, unfenced JSON (`'{"ok": true}'`) — no ADK `LiteLlm`
+  wrapper needed. `strip_code_fence` is kept regardless, as planned, since
+  it costs nothing and is a defensive guard against the model fencing on
+  a different prompt or under load.
