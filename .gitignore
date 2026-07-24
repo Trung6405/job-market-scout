@@ -231,3 +231,6 @@ agent_docs/
 
 # Advisor report output (rendered HTML, mounted as a Docker volume)
 /reports/
+
+# Personal daily worklog (kept private; mirrored to job-market-scout-worklog)
+docs/project/worklog/
