@@ -74,3 +74,15 @@ def test_normalize_job_handles_missing_optional_fields():
     assert listing.salary_min is None
     assert listing.salary_max is None
     assert listing.date_posted is None
+
+
+def test_normalize_job_skips_missing_site():
+    assert normalize_job(_job(site=None), _SCRAPED_AT) is None
+
+
+def test_normalize_job_skips_missing_id():
+    assert normalize_job(_job(id=None), _SCRAPED_AT) is None
+
+
+def test_normalize_job_skips_unparseable_url():
+    assert normalize_job(_job(jobUrl="not-a-url"), _SCRAPED_AT) is None

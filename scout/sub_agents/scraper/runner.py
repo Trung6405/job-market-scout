@@ -67,10 +67,12 @@ async def run_scraper(settings: Settings | None = None) -> list[Listing]:
 
     listings: list[Listing] = []
     seen: set[tuple[str, str]] = set()
+    skipped = 0
     for jobs in jobs_by_role:
         for job in jobs:
             listing = normalize_job(job, scraped_at)
             if listing is None:
+                skipped += 1
                 continue
             key = (listing.source, listing.external_id)
             if key in seen:
@@ -79,9 +81,10 @@ async def run_scraper(settings: Settings | None = None) -> list[Listing]:
             listings.append(listing)
 
     logger.info(
-        "Finished scrape: %d unique listing(s) after dedup (from %d raw)",
+        "Finished scrape: %d unique listing(s) after dedup (from %d raw, %d skipped)",
         len(listings),
         sum(len(jobs) for jobs in jobs_by_role),
+        skipped,
     )
 
     return listings
