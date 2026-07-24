@@ -347,6 +347,9 @@ async def test_start_run_refreshes_started_at_on_conflict(db_pool):
 async def test_finish_run_updates_counts_and_finished_at(db_pool):
     async with db_pool.acquire() as conn:
         run_id = await start_run(conn, date(2026, 7, 21))
+        # listings_scored is derived from run_listings, not the argument; no
+        # rows exist for this run_id, so it comes back 0. See
+        # test_finish_run_derives_scored_from_stored_rows for the derived case.
         await finish_run(conn, run_id, listings_scraped=42, listings_scored=10)
         row = await conn.fetchrow(
             "SELECT listings_scraped, listings_scored, finished_at FROM runs WHERE id = $1",
@@ -354,8 +357,39 @@ async def test_finish_run_updates_counts_and_finished_at(db_pool):
         )
 
     assert row["listings_scraped"] == 42
-    assert row["listings_scored"] == 10
+    assert row["listings_scored"] == 0
     assert row["finished_at"] is not None
+
+
+async def test_finish_run_derives_scored_from_stored_rows(
+    db_pool, listing_factory, match_factory
+):
+    async with db_pool.acquire() as conn:
+        listing = listing_factory()
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 24))
+        await record_run_listings(
+            conn, run_id, [(match_factory(listing=listing), "competitive")]
+        )
+
+        # Report a wrong count; the stored rows are the source of truth.
+        await finish_run(conn, run_id, listings_scraped=40, listings_scored=999)
+        scored = await conn.fetchval(
+            "SELECT listings_scored FROM runs WHERE id = $1", run_id
+        )
+        assert scored == 1
+
+
+async def test_finish_run_never_lowers_scraped_count(db_pool):
+    async with db_pool.acquire() as conn:
+        run_id = await start_run(conn, date(2026, 7, 24))
+        await finish_run(conn, run_id, listings_scraped=81, listings_scored=0)
+        # A quieter same-day re-run must not shrink the day's snapshot.
+        await finish_run(conn, run_id, listings_scraped=3, listings_scored=0)
+        scraped = await conn.fetchval(
+            "SELECT listings_scraped FROM runs WHERE id = $1", run_id
+        )
+        assert scraped == 81
 
 
 @pytest.mark.asyncio

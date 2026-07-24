@@ -160,17 +160,31 @@ async def finish_run(
     listings_scraped: int,
     listings_scored: int,
 ) -> None:
+    """Mark a run finished without letting a re-run degrade it.
+
+    Two runs on one date share a row (``runs.run_date`` is unique, kept
+    deliberately — see the pipeline-hardening spec). The second is usually
+    quieter than the first, so reporting its numbers verbatim used to zero
+    the morning's ``listings_scored`` while its ``run_listings`` rows stayed
+    in the table. Instead: ``listings_scored`` is derived from those rows,
+    and ``listings_scraped`` keeps the larger of the two snapshots.
+
+    ``listings_scored`` is passed but unused; it stays in the signature so
+    callers read symmetrically and so the derived value is obviously
+    authoritative.
+    """
     await conn.execute(
         """
         UPDATE runs
-        SET listings_scraped = $2,
-            listings_scored = $3,
+        SET listings_scraped = GREATEST(runs.listings_scraped, $2),
+            listings_scored = (
+                SELECT count(*) FROM run_listings WHERE run_listings.run_id = $1
+            ),
             finished_at = now()
         WHERE id = $1
         """,
         run_id,
         listings_scraped,
-        listings_scored,
     )
 
 
