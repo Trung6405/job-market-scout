@@ -16,6 +16,7 @@ from scout.shared.schemas import (
     Run,
     RunListing,
     RunListingDetail,
+    RunSummary,
     SkillGap,
 )
 
@@ -264,6 +265,51 @@ async def list_runs(conn: asyncpg.Connection, limit: int) -> list[Run]:
         "SELECT * FROM runs ORDER BY run_date DESC LIMIT $1", limit
     )
     return [Run(**dict(row)) for row in rows]
+
+
+async def get_run_summaries(
+    conn: asyncpg.Connection, limit: int
+) -> list[RunSummary]:
+    """Per-run aggregates for the history page, in two queries total."""
+    runs = await list_runs(conn, limit)
+    if not runs:
+        return []
+    rows = await conn.fetch(
+        """
+        SELECT run_listings.run_id,
+               count(*) AS scored,
+               count(*) FILTER (WHERE run_listings.band = 'strong_match') AS strong,
+               count(*) FILTER (WHERE run_listings.band = 'competitive') AS competitive,
+               count(*) FILTER (WHERE run_listings.band = 'reach') AS reach,
+               coalesce(round(avg(run_listings.score)), 0) AS avg_score,
+               count(listing_gaps.id) FILTER (
+                   WHERE listing_gaps.kind = 'skill' AND NOT listing_gaps.met
+               ) AS gaps
+        FROM run_listings
+        LEFT JOIN listing_gaps ON listing_gaps.run_listing_id = run_listings.id
+        WHERE run_listings.run_id = ANY($1::bigint[])
+        GROUP BY run_listings.run_id
+        """,
+        [run.id for run in runs],
+    )
+    stats_by_run = {row["run_id"]: dict(row) for row in rows}
+    summaries: list[RunSummary] = []
+    for run in runs:
+        row = stats_by_run.get(run.id, {})
+        summaries.append(
+            RunSummary(
+                run=run,
+                stats={
+                    "scored": int(row.get("scored", 0)),
+                    "strong": int(row.get("strong", 0)),
+                    "competitive": int(row.get("competitive", 0)),
+                    "reach": int(row.get("reach", 0)),
+                    "avg_score": int(row.get("avg_score", 0)),
+                    "gaps": int(row.get("gaps", 0)),
+                },
+            )
+        )
+    return summaries
 
 
 async def get_adjacent_runs(

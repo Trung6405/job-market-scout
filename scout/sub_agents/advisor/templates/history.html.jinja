@@ -78,7 +78,7 @@
       {% set ns.current_month = month_label %}
     {% endif %}
 
-    {% if day.details %}
+    {% if day.stats.scored %}
     <a class="day" href="{{ day.run.run_date }}/dashboard.html">
       <div class="date"><div class="d">{{ day.run.run_date.strftime('%d') }}</div><div class="w">{{ day.run.run_date.strftime('%a') }}</div></div>
       <div class="info">

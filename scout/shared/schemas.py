@@ -50,6 +50,18 @@ class Run(BaseModel):
     listings_scored: int
 
 
+class RunSummary(BaseModel):
+    """A run plus its aggregate counts, without any listing rows.
+
+    The history page needs band counts and an average, not descriptions.
+    Fetching full details per run meant loading every stored description
+    for the last thirty runs to render a table of numbers.
+    """
+
+    run: Run
+    stats: dict[str, int]
+
+
 class RunListing(BaseModel):
     id: int
     run_id: int

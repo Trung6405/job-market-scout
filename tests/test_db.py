@@ -490,6 +490,57 @@ async def test_list_runs_returns_most_recent_first(db_pool):
 
 
 @pytest.mark.asyncio
+async def test_get_run_summaries_returns_band_counts(
+    db_pool, listing_factory, match_factory
+):
+    from scout.shared.db import get_run_summaries
+
+    async with db_pool.acquire() as conn:
+        strong = listing_factory(external_id="strong")
+        reach = listing_factory(external_id="reach")
+        for listing in (strong, reach):
+            await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 24))
+        await record_run_listings(
+            conn,
+            run_id,
+            [
+                (match_factory(listing=strong, score=90), "strong_match"),
+                (match_factory(listing=reach, score=30), "reach"),
+            ],
+        )
+
+        summaries = await get_run_summaries(conn, limit=30)
+        assert len(summaries) == 1
+        summary = summaries[0]
+        assert summary.run.id == run_id
+        assert summary.stats["scored"] == 2
+        assert summary.stats["strong"] == 1
+        assert summary.stats["reach"] == 1
+        assert summary.stats["avg_score"] == 60
+
+
+@pytest.mark.asyncio
+async def test_get_run_summaries_returns_zeroed_stats_for_empty_run(db_pool):
+    from scout.shared.db import get_run_summaries
+
+    async with db_pool.acquire() as conn:
+        run_id = await start_run(conn, date(2026, 7, 24))
+        summaries = await get_run_summaries(conn, limit=30)
+
+    assert len(summaries) == 1
+    assert summaries[0].run.id == run_id
+    assert summaries[0].stats == {
+        "scored": 0,
+        "strong": 0,
+        "competitive": 0,
+        "reach": 0,
+        "avg_score": 0,
+        "gaps": 0,
+    }
+
+
+@pytest.mark.asyncio
 async def test_get_run_listings_returns_scored_listings_for_run(db_pool):
     listing_a = _make_listing(source="linkedin", external_id="job-a")
     listing_b = _make_listing(source="linkedin", external_id="job-b")

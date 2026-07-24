@@ -8,7 +8,12 @@ from markdown_it import MarkdownIt
 from markupsafe import Markup
 
 from scout.config import Settings
-from scout.shared.db import get_adjacent_runs, get_run, get_run_details, list_runs
+from scout.shared.db import (
+    get_adjacent_runs,
+    get_run,
+    get_run_details,
+    get_run_summaries,
+)
 from scout.shared.schemas import Listing, Profile, RunListingDetail
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -124,12 +129,8 @@ async def render_history(
     limit: int = 30,
     has_profile: bool = False,
 ) -> Path:
-    runs = await list_runs(conn, limit)
-
-    days = []
-    for run in runs:
-        details = await get_run_details(conn, run.id)
-        days.append({"run": run, "details": details, "stats": _detail_stats(details)})
+    summaries = await get_run_summaries(conn, limit)
+    days = [{"run": summary.run, "stats": summary.stats} for summary in summaries]
 
     history_template = _env.get_template("history.html.jinja")
     history_html = history_template.render(days=days, has_profile=has_profile)

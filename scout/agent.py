@@ -55,6 +55,10 @@ class ScoutPipelineAgent:
                         listings_scraped=len(listings),
                         listings_scored=0,
                     )
+                # History reads only committed aggregate counts across every
+                # run, not this run's own writes, so it doesn't need to share
+                # a connection with them.
+                async with pool.acquire() as conn:
                     await render_history(conn, settings, has_profile=True)
                 yield PipelineEvent(
                     self.name,
@@ -112,9 +116,9 @@ class ScoutPipelineAgent:
 
             # One transaction for the whole run so a mid-block failure leaves
             # nothing half-written: scores, gaps, meta, and the finished marker
-            # commit together or not at all. The report renders read this run's
-            # rows through the same connection, so they stay inside the
-            # transaction; render_profile touches no DB and stays outside.
+            # commit together or not at all. render_run reads this run's own
+            # in-flight rows through the same connection, so it stays inside
+            # the transaction; render_profile touches no DB and stays outside.
             async with pool.acquire() as conn:
                 async with conn.transaction():
                     await record_run_listings(conn, run_id, banded_matches)
@@ -129,7 +133,11 @@ class ScoutPipelineAgent:
                     report_paths = await render_run(
                         conn, run_id, settings, has_profile=True
                     )
-                    await render_history(conn, settings, has_profile=True)
+            # History reads only committed aggregate counts across every run,
+            # not this run's own writes, so it doesn't need the transaction
+            # or a connection held for the transaction's duration.
+            async with pool.acquire() as conn:
+                await render_history(conn, settings, has_profile=True)
             render_profile(profile, settings)
             yield PipelineEvent(
                 self.name, f"Report rendered: {report_paths['dashboard']}"
