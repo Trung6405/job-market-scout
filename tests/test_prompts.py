@@ -1,7 +1,11 @@
 from datetime import datetime, timezone
 
 from scout.config import Settings
-from scout.prompts import build_briefing_instruction, build_requirements_instruction
+from scout.prompts import (
+    build_briefing_instruction,
+    build_requirements_instruction,
+    build_scorer_instruction,
+)
 from scout.shared.profile import render_profile_text
 from scout.shared.schemas import Listing, MatchResult
 
@@ -74,3 +78,34 @@ def test_build_requirements_instruction_scopes_canonical_names_to_skills():
     canonical_idx = instruction.find("canonical name")
     window = instruction[max(0, canonical_idx - 200) : canonical_idx + 200]
     assert "skill" in window
+
+
+def test_scorer_instruction_omits_preferences(listing_factory):
+    settings = Settings()
+    object.__setattr__(settings, "preferred_locations", ["Melbourne"])
+    object.__setattr__(settings, "remote_only", True)
+    object.__setattr__(settings, "min_salary", 90000.0)
+
+    instruction = build_scorer_instruction(settings, [listing_factory()])
+    assert "Preferred locations" not in instruction
+    assert "Remote only" not in instruction
+    assert "Minimum salary" not in instruction
+
+
+def test_scorer_instruction_keeps_profile_and_rubric(listing_factory):
+    instruction = build_scorer_instruction(Settings(), [listing_factory()])
+    assert "Candidate profile:" in instruction
+    assert "90-100" in instruction
+    assert '"scores"' in instruction
+
+
+def test_requirements_instruction_never_includes_the_profile(listing_factory):
+    """Extraction must stay profile-blind — see the spec's Amendment.
+
+    If the profile leaks into this prompt, a model can soften a requirement
+    the student doesn't meet, and the gap silently disappears.
+    """
+    settings = Settings()
+    instruction = build_requirements_instruction(settings, [listing_factory()])
+    assert settings.profile.name not in instruction
+    assert "Candidate profile:" not in instruction

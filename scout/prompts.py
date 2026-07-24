@@ -20,6 +20,11 @@ def _project_listing_for_scoring(listing: Listing, description_char_limit: int) 
     }
 
 
+# Preferences (location, remote, salary) are deliberately NOT given to the
+# scorer. They gate the brief instead — see briefing/filters.py. Scoring
+# them here too would count them twice: a strong role in the wrong city
+# would reach the dashboard already marked down, when the dashboard is
+# meant to show the day's full market.
 def build_scorer_instruction(settings: Settings, listings: list[Listing]) -> str:
     listings_json = json.dumps(
         [
@@ -72,10 +77,6 @@ not invent listings beyond the ones provided, and do not call any tool.
 
 Candidate profile:
 {render_profile_text(settings.profile)}
-
-Preferred locations: {settings.preferred_locations or "no preference"}
-Remote only: {settings.remote_only}
-Minimum salary: {settings.min_salary if settings.min_salary is not None else "no floor"}
 
 Listings to score:
 {listings_json}
