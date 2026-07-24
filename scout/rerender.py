@@ -14,7 +14,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-from pathlib import Path
 
 from scout.config import settings as default_settings
 from scout.shared.db import create_pool, list_runs
@@ -29,24 +28,22 @@ _ALL_RUNS_LIMIT = 10_000
 
 async def rerender_all() -> None:
     settings = default_settings
-    has_profile = Path(settings.profile_path).is_file()
 
     pool = await create_pool(settings)
     try:
         async with pool.acquire() as conn:
             runs = await list_runs(conn, _ALL_RUNS_LIMIT)
             for run in runs:
-                await render_run(conn, run.id, settings, has_profile=has_profile)
+                await render_run(conn, run.id, settings)
                 logger.info("re-rendered run %s (%s)", run.id, run.run_date)
 
-            await render_history(conn, settings, has_profile=has_profile)
+            await render_history(conn, settings)
             logger.info("re-rendered history (%d run(s))", len(runs))
     finally:
         await pool.close()
 
-    if has_profile:
-        render_profile(load_profile(settings.profile_path), settings)
-        logger.info("re-rendered profile page")
+    render_profile(load_profile(settings.profile_path), settings)
+    logger.info("re-rendered profile page")
 
 
 def main() -> None:

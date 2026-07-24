@@ -54,10 +54,10 @@ async def test_run_once_completes_without_raising(monkeypatch, db_pool):
     async def _fake_create_pool(settings):
         return _UnclosablePool()
 
-    async def _fake_render_run(conn, run_id, settings, has_profile=False):
+    async def _fake_render_run(conn, run_id, settings):
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
-    async def _fake_render_history(conn, settings, has_profile=False):
+    async def _fake_render_history(conn, settings):
         return Path("reports/history.html")
 
     def _fake_render_profile(profile, settings):

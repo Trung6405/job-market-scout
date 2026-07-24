@@ -59,7 +59,7 @@ class ScoutPipelineAgent:
                 # run, not this run's own writes, so it doesn't need to share
                 # a connection with them.
                 async with pool.acquire() as conn:
-                    await render_history(conn, settings, has_profile=True)
+                    await render_history(conn, settings)
                 yield PipelineEvent(
                     self.name,
                     "No new or changed listings — nothing to score or brief.",
@@ -130,14 +130,12 @@ class ScoutPipelineAgent:
                         listings_scraped=len(listings),
                         listings_scored=len(matches),
                     )
-                    report_paths = await render_run(
-                        conn, run_id, settings, has_profile=True
-                    )
+                    report_paths = await render_run(conn, run_id, settings)
             # History reads only committed aggregate counts across every run,
             # not this run's own writes, so it doesn't need the transaction
             # or a connection held for the transaction's duration.
             async with pool.acquire() as conn:
-                await render_history(conn, settings, has_profile=True)
+                await render_history(conn, settings)
             render_profile(profile, settings)
             yield PipelineEvent(
                 self.name, f"Report rendered: {report_paths['dashboard']}"

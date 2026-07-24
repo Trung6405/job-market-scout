@@ -87,7 +87,6 @@ async def render_run(
     conn: asyncpg.Connection,
     run_id: int,
     settings: Settings,
-    has_profile: bool = False,
 ) -> dict[str, Path]:
     run = await get_run(conn, run_id)
     details = await get_run_details(conn, run_id)
@@ -103,7 +102,6 @@ async def render_run(
         run=run,
         details=details,
         stats=_detail_stats(details),
-        has_profile=has_profile,
         prev_run=prev_run,
         next_run=next_run,
     )
@@ -113,9 +111,7 @@ async def render_run(
 
     job_detail_template = _env.get_template("job-detail.html.jinja")
     for detail in details:
-        job_detail_html = job_detail_template.render(
-            run=run, detail=detail, has_profile=has_profile
-        )
+        job_detail_html = job_detail_template.render(run=run, detail=detail)
         job_detail_path = run_dir / f"job-detail-{detail.run_listing_id}.html"
         job_detail_path.write_text(job_detail_html, encoding="utf-8")
         paths[f"job_detail_{detail.run_listing_id}"] = job_detail_path
@@ -127,13 +123,12 @@ async def render_history(
     conn: asyncpg.Connection,
     settings: Settings,
     limit: int = 30,
-    has_profile: bool = False,
 ) -> Path:
     summaries = await get_run_summaries(conn, limit)
     days = [{"run": summary.run, "stats": summary.stats} for summary in summaries]
 
     history_template = _env.get_template("history.html.jinja")
-    history_html = history_template.render(days=days, has_profile=has_profile)
+    history_html = history_template.render(days=days)
 
     output_dir = Path(settings.report_output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
