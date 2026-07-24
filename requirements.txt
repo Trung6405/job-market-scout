@@ -24,9 +24,6 @@ fastuuid==0.14.0
 filelock==3.29.7
 frozenlist==1.8.0
 fsspec==2026.6.0
-google-adk==2.4.0
-google-auth==2.56.0
-google-genai==2.11.0
 graphviz==0.21
 h11==0.16.0
 hf-xet==1.5.1
