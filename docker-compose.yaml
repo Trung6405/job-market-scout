@@ -11,8 +11,6 @@ services:
     environment:
       JOBSPY_MCP_URL: http://jobspy-mcp:9423
       DATABASE_URL: postgresql://scout:scout@postgres:5432/scout
-    ports:
-      - "8000:8000"
     volumes:
       - ./reports:/app/reports
       - ./scout/profile.json:/app/scout/profile.json:ro

@@ -132,6 +132,22 @@ def test_settings_reads_briefing_env_overrides(monkeypatch):
     assert settings.discord_channel_id == "123456789"
 
 
+def test_settings_uses_requirements_batch_size_default_when_env_unset(monkeypatch):
+    monkeypatch.delenv("REQUIREMENTS_BATCH_SIZE", raising=False)
+
+    settings = Settings()
+
+    assert settings.requirements_batch_size == 15
+
+
+def test_settings_reads_requirements_batch_size_env_override(monkeypatch):
+    monkeypatch.setenv("REQUIREMENTS_BATCH_SIZE", "5")
+
+    settings = Settings()
+
+    assert settings.requirements_batch_size == 5
+
+
 def test_settings_has_no_gmail_fields():
     settings = Settings()
 

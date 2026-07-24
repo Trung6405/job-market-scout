@@ -5,8 +5,6 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
-from google.adk.runners import InMemoryRunner
-from google.genai import types as genai_types
 
 from scout.config import settings as default_settings
 from scout.shared.db import get_run_by_date, get_run_listings, upsert_listing
@@ -22,10 +20,6 @@ from scout.shared.schemas import (
 )
 from scout.sub_agents.advisor.bands import classify_band
 from scout.sub_agents.scorer.results import join_match_results
-
-_APP_NAME = "scout"
-_USER_ID = "scout"
-_SESSION_ID = "scout"
 
 
 class _FakeTransaction:
@@ -97,19 +91,10 @@ def _make_listing(**overrides):
 async def _run_pipeline_agent():
     from scout.agent import ScoutPipelineAgent
 
-    runner = InMemoryRunner(agent=ScoutPipelineAgent(), app_name=_APP_NAME)
-    await runner.session_service.create_session(
-        app_name=_APP_NAME, user_id=_USER_ID, session_id=_SESSION_ID
-    )
-    message = genai_types.Content(
-        role="user", parts=[genai_types.Part(text="Run the pipeline.")]
-    )
+    agent = ScoutPipelineAgent()
     texts = []
-    async for event in runner.run_async(
-        user_id=_USER_ID, session_id=_SESSION_ID, new_message=message
-    ):
-        if event.content and event.content.parts and event.content.parts[0].text:
-            texts.append(event.content.parts[0].text)
+    async for event in agent.run():
+        texts.append(event.text)
     return texts
 
 
@@ -132,8 +117,8 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
         calls.append(("scorer", listings))
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
-        calls.append(("briefing", listings, scores, report_path))
+    async def _fake_run_briefing(matches, settings, report_path=None):
+        calls.append(("briefing", matches, report_path))
         return {}
 
     class _FakeConn:
@@ -170,11 +155,11 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
             ("finish_run", run_id, listings_scraped, listings_scored)
         )
 
-    async def _fake_render_run(conn, run_id, settings, has_profile=False):
+    async def _fake_render_run(conn, run_id, settings):
         calls.append(("render_run", run_id))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
-    async def _fake_render_history(conn, settings, has_profile=False):
+    async def _fake_render_history(conn, settings):
         calls.append("render_history")
         return Path("reports/history.html")
 
@@ -239,8 +224,7 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     assert calls[10] == "pool_closed"
     assert calls[11] == (
         "briefing",
-        [listing],
-        [score],
+        expected_matches,
         Path("reports/2026-07-21/dashboard.html"),
     )
     assert "render_profile" in calls
@@ -277,7 +261,7 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+    async def _fake_run_briefing(matches, settings, report_path=None):
         calls.append("briefing")
         return {}
 
@@ -323,12 +307,12 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
     async def _fake_record_listing_meta(conn, run_id, meta_by_match):
         pass
 
-    async def _fake_render_run(conn, run_id, settings, has_profile=False):
-        calls.append(("render_run", conn, run_id, settings, has_profile))
+    async def _fake_render_run(conn, run_id, settings):
+        calls.append(("render_run", conn, run_id, settings))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
-    async def _fake_render_history(conn, settings, has_profile=False):
-        calls.append(("render_history", conn, settings, has_profile))
+    async def _fake_render_history(conn, settings):
+        calls.append(("render_history", conn, settings))
         return Path("reports/history.html")
 
     def _fake_render_profile(profile_arg, settings):
@@ -359,10 +343,8 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
     assert calls[1][0] == "render_run"
     assert calls[1][2] == 1
     assert calls[1][3] is default_settings
-    assert calls[1][4] is True  # has_profile — a profile was loaded
     assert calls[2][0] == "render_history"
     assert calls[2][2] is default_settings
-    assert calls[2][3] is True  # has_profile
     assert calls[3][0] == "render_profile"
     assert calls[3][1] is profile
     assert calls[3][2] is default_settings
@@ -390,7 +372,7 @@ async def test_scout_pipeline_agent_short_circuits_when_nothing_relevant(
         calls.append("scorer")
         return []
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+    async def _fake_run_briefing(matches, settings, report_path=None):
         calls.append("briefing")
         return {}
 
@@ -422,7 +404,7 @@ async def test_scout_pipeline_agent_short_circuits_when_nothing_relevant(
     async def _fake_finish_run(conn, run_id, *, listings_scraped, listings_scored):
         calls.append(("finish_run", run_id, listings_scraped, listings_scored))
 
-    async def _fake_render_history(conn, settings, has_profile=False):
+    async def _fake_render_history(conn, settings):
         calls.append("render_history")
         return Path("reports/history.html")
 
@@ -467,16 +449,16 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+    async def _fake_run_briefing(matches, settings, report_path=None):
         return {}
 
     render_calls = []
 
-    async def _fake_render_run(conn, run_id, settings, has_profile=False):
+    async def _fake_render_run(conn, run_id, settings):
         render_calls.append(("render_run", run_id))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
-    async def _fake_render_history(conn, settings, has_profile=False):
+    async def _fake_render_history(conn, settings):
         render_calls.append("render_history")
         return Path("reports/history.html")
 
@@ -550,7 +532,7 @@ async def test_scout_pipeline_agent_warns_when_extraction_drops_listings(monkeyp
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+    async def _fake_run_briefing(matches, settings, report_path=None):
         return {}
 
     class _FakeConn:
@@ -594,10 +576,10 @@ async def test_scout_pipeline_agent_warns_when_extraction_drops_listings(monkeyp
     async def _fake_run_requirements_extraction(listings, settings=None):
         return []
 
-    async def _fake_render_run(conn, run_id, settings, has_profile=False):
+    async def _fake_render_run(conn, run_id, settings):
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
-    async def _fake_render_history(conn, settings, has_profile=False):
+    async def _fake_render_history(conn, settings):
         return Path("reports/history.html")
 
     def _fake_render_profile(profile_arg, settings):
@@ -651,7 +633,7 @@ async def test_scout_pipeline_agent_same_date_rerun_is_idempotent(
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+    async def _fake_run_briefing(matches, settings, report_path=None):
         return {}
 
     async def _fake_requirements(listings, settings=None):
@@ -660,10 +642,10 @@ async def test_scout_pipeline_agent_same_date_rerun_is_idempotent(
     def _fake_render_profile(profile, settings):
         return Path("reports/profile.html")
 
-    async def _fake_render_run(conn, run_id, settings, has_profile=False):
+    async def _fake_render_run(conn, run_id, settings):
         return {"dashboard": Path("reports/x/dashboard.html")}
 
-    async def _fake_render_history(conn, settings, has_profile=False):
+    async def _fake_render_history(conn, settings):
         return Path("reports/history.html")
 
     class _UnclosablePool:
@@ -723,7 +705,7 @@ async def test_scout_pipeline_agent_rolls_back_on_mid_persist_failure(
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+    async def _fake_run_briefing(matches, settings, report_path=None):
         return {}
 
     async def _fake_requirements(listings, settings=None):
@@ -732,10 +714,10 @@ async def test_scout_pipeline_agent_rolls_back_on_mid_persist_failure(
     def _fake_render_profile(profile, settings):
         return Path("reports/profile.html")
 
-    async def _fake_render_run(conn, run_id, settings, has_profile=False):
+    async def _fake_render_run(conn, run_id, settings):
         return {"dashboard": Path("reports/x/dashboard.html")}
 
-    async def _fake_render_history(conn, settings, has_profile=False):
+    async def _fake_render_history(conn, settings):
         return Path("reports/history.html")
 
     async def _boom(conn, run_id, *, listings_scraped, listings_scored):
@@ -799,7 +781,7 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
     async def _fake_run_scorer(listings, settings):
         return [score]
 
-    async def _fake_run_briefing(listings, scores, settings, report_path=None):
+    async def _fake_run_briefing(matches, settings, report_path=None):
         calls.append("briefing")
         return {}
 
@@ -847,11 +829,11 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
     async def _fake_record_listing_meta(conn, run_id, meta_by_match):
         calls.append(("record_listing_meta", run_id, meta_by_match))
 
-    async def _fake_render_run(conn, run_id, settings, has_profile=False):
+    async def _fake_render_run(conn, run_id, settings):
         calls.append(("render_run", run_id))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
-    async def _fake_render_history(conn, settings, has_profile=False):
+    async def _fake_render_history(conn, settings):
         calls.append("render_history")
         return Path("reports/history.html")
 

@@ -105,7 +105,7 @@ async def test_render_run_writes_dashboard_and_job_detail_files(db_pool, tmp_pat
         )
 
         settings = Settings(report_output_dir=str(tmp_path))
-        paths = await render_run(conn, run_id, settings, has_profile=True)
+        paths = await render_run(conn, run_id, settings)
 
     run_dir = tmp_path / "2026-07-21"
     dashboard_path = run_dir / "dashboard.html"
@@ -126,31 +126,6 @@ async def test_render_run_writes_dashboard_and_job_detail_files(db_pool, tmp_pat
     assert "PostgreSQL" in job_detail_html
     assert '../history.html' in job_detail_html
     assert 'href="../profile.html"' in job_detail_html
-
-
-@pytest.mark.asyncio
-async def test_render_run_profile_nav_link_is_inert_when_no_profile(db_pool, tmp_path):
-    listing = _make_listing()
-    async with db_pool.acquire() as conn:
-        await upsert_listing(conn, listing)
-        run_id = await start_run(conn, date(2026, 7, 21))
-        match = MatchResult(listing=listing, score=88, reasoning="Great fit")
-        await record_run_listings(conn, run_id, [(match, "strong_match")])
-        await finish_run(conn, run_id, listings_scraped=24, listings_scored=1)
-
-        settings = Settings(report_output_dir=str(tmp_path))
-        # has_profile defaults to False — no profile.json exists in this scenario.
-        paths = await render_run(conn, run_id, settings)
-
-    dashboard_html = paths["dashboard"].read_text(encoding="utf-8")
-    assert 'href="../profile.html"' not in dashboard_html
-    assert "My Profile" in dashboard_html  # nav item still shown, just inert
-
-    job_detail_paths = [p for key, p in paths.items() if key.startswith("job_detail_")]
-    assert job_detail_paths
-    job_detail_html = job_detail_paths[0].read_text(encoding="utf-8")
-    assert 'href="../profile.html"' not in job_detail_html
-    assert "My Profile" in job_detail_html
 
 
 @pytest.mark.asyncio
@@ -197,7 +172,7 @@ async def test_render_run_job_detail_shows_snapshot_breakdown_and_checklist(
         )
 
         settings = Settings(report_output_dir=str(tmp_path))
-        paths = await render_run(conn, run_id, settings, has_profile=True)
+        paths = await render_run(conn, run_id, settings)
 
     job_detail_html = paths[f"job_detail_{run_listing_id}"].read_text(encoding="utf-8")
 
@@ -245,7 +220,7 @@ async def test_render_run_job_detail_coverage_counts_skills_only(db_pool, tmp_pa
             "SELECT id FROM run_listings WHERE run_id = $1", run_id
         )
         settings = Settings(report_output_dir=str(tmp_path))
-        paths = await render_run(conn, run_id, settings, has_profile=True)
+        paths = await render_run(conn, run_id, settings)
 
     html = paths[f"job_detail_{run_listing_id}"].read_text(encoding="utf-8")
 
@@ -305,7 +280,7 @@ async def test_render_run_job_detail_shows_non_skill_requirements_as_context(
             "SELECT id FROM run_listings WHERE run_id = $1", run_id
         )
         settings = Settings(report_output_dir=str(tmp_path))
-        paths = await render_run(conn, run_id, settings, has_profile=True)
+        paths = await render_run(conn, run_id, settings)
 
     html = paths[f"job_detail_{run_listing_id}"].read_text(encoding="utf-8")
 
@@ -343,7 +318,7 @@ async def test_render_run_job_detail_omits_context_when_all_skills(db_pool, tmp_
             "SELECT id FROM run_listings WHERE run_id = $1", run_id
         )
         settings = Settings(report_output_dir=str(tmp_path))
-        paths = await render_run(conn, run_id, settings, has_profile=True)
+        paths = await render_run(conn, run_id, settings)
 
     html = paths[f"job_detail_{run_listing_id}"].read_text(encoding="utf-8")
 
@@ -431,27 +406,8 @@ async def test_render_history_reflects_runs_including_empty_day(db_pool, tmp_pat
     assert "Graduate Software Engineer" not in html  # history is summary-only
     assert "day empty" in html
     assert "2026-07-21/dashboard.html" in html
-    # has_profile defaults to False — nav link must not point at a 404.
-    assert 'href="profile.html"' not in html
-    assert "My Profile" in html
-
-
-@pytest.mark.asyncio
-async def test_render_history_profile_nav_link_is_clickable_when_profile_exists(
-    db_pool, tmp_path
-):
-    listing = _make_listing()
-    async with db_pool.acquire() as conn:
-        await upsert_listing(conn, listing)
-        run_id = await start_run(conn, date(2026, 7, 21))
-        match = MatchResult(listing=listing, score=88, reasoning="Great fit")
-        await record_run_listings(conn, run_id, [(match, "strong_match")])
-        await finish_run(conn, run_id, listings_scraped=24, listings_scored=1)
-
-        settings = Settings(report_output_dir=str(tmp_path))
-        history_path = await render_history(conn, settings, has_profile=True)
-
-    html = history_path.read_text(encoding="utf-8")
+    # The profile page is always rendered (settings hard-requires profile.json
+    # at import), so the nav link is always clickable.
     assert 'href="profile.html"' in html
 
 

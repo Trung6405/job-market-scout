@@ -103,28 +103,45 @@ async def test_upsert_listing_reopened_closed_listing_returns_changed(db_pool):
     assert classification == "changed"
 
 
+def test_content_hash_ignores_description(listing_factory):
+    from scout.shared.db import _content_hash
+
+    original = listing_factory(description="We need Python.")
+    reworded = listing_factory(description="We are looking for Python skills!")
+    assert _content_hash(original) == _content_hash(reworded)
+
+
+def test_content_hash_still_tracks_substantive_fields(listing_factory):
+    from scout.shared.db import _content_hash
+
+    base = listing_factory()
+    assert _content_hash(base) != _content_hash(listing_factory(title="Staff Engineer"))
+    assert _content_hash(base) != _content_hash(listing_factory(company="Other Ltd"))
+    assert _content_hash(base) != _content_hash(listing_factory(location="Sydney NSW"))
+    assert _content_hash(base) != _content_hash(listing_factory(is_remote=True))
+    assert _content_hash(base) != _content_hash(listing_factory(salary_min=90000.0))
+    assert _content_hash(base) != _content_hash(listing_factory(salary_max=120000.0))
+
+
 @pytest.mark.asyncio
-async def test_close_stale_listings_closes_unseen_and_keeps_seen_open(db_pool):
-    seen = _make_listing(source="linkedin", external_id="job-seen")
-    stale = _make_listing(source="linkedin", external_id="job-stale")
+async def test_close_stale_listings_keeps_recently_seen(db_pool, listing_factory):
     async with db_pool.acquire() as conn:
-        await upsert_listing(conn, seen)
-        await upsert_listing(conn, stale)
+        await upsert_listing(conn, listing_factory(external_id="fresh"))
+        closed = await close_stale_listings(conn, stale_days=7)
+        assert closed == []
+        status = await conn.fetchval("SELECT status FROM listings")
+        assert status == "open"
 
-        closed_ids = await close_stale_listings(conn, [(seen.source, seen.external_id)])
 
-        seen_row = await conn.fetchrow(
-            "SELECT status FROM listings WHERE external_id = $1", seen.external_id
-        )
-        stale_row = await conn.fetchrow(
-            "SELECT status, closed_at FROM listings WHERE external_id = $1",
-            stale.external_id,
-        )
-
-    assert closed_ids == ["job-stale"]
-    assert seen_row["status"] == "open"
-    assert stale_row["status"] == "closed"
-    assert stale_row["closed_at"] is not None
+@pytest.mark.asyncio
+async def test_close_stale_listings_closes_long_unseen(db_pool, listing_factory):
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing_factory(external_id="old"))
+        await conn.execute("UPDATE listings SET last_seen_at = now() - interval '30 days'")
+        closed = await close_stale_listings(conn, stale_days=7)
+        assert closed == ["old"]
+        status = await conn.fetchval("SELECT status FROM listings")
+        assert status == "closed"
 
 
 @pytest.mark.asyncio
@@ -330,6 +347,9 @@ async def test_start_run_refreshes_started_at_on_conflict(db_pool):
 async def test_finish_run_updates_counts_and_finished_at(db_pool):
     async with db_pool.acquire() as conn:
         run_id = await start_run(conn, date(2026, 7, 21))
+        # listings_scored is derived from run_listings, not the argument; no
+        # rows exist for this run_id, so it comes back 0. See
+        # test_finish_run_derives_scored_from_stored_rows for the derived case.
         await finish_run(conn, run_id, listings_scraped=42, listings_scored=10)
         row = await conn.fetchrow(
             "SELECT listings_scraped, listings_scored, finished_at FROM runs WHERE id = $1",
@@ -337,8 +357,39 @@ async def test_finish_run_updates_counts_and_finished_at(db_pool):
         )
 
     assert row["listings_scraped"] == 42
-    assert row["listings_scored"] == 10
+    assert row["listings_scored"] == 0
     assert row["finished_at"] is not None
+
+
+async def test_finish_run_derives_scored_from_stored_rows(
+    db_pool, listing_factory, match_factory
+):
+    async with db_pool.acquire() as conn:
+        listing = listing_factory()
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 24))
+        await record_run_listings(
+            conn, run_id, [(match_factory(listing=listing), "competitive")]
+        )
+
+        # Report a wrong count; the stored rows are the source of truth.
+        await finish_run(conn, run_id, listings_scraped=40, listings_scored=999)
+        scored = await conn.fetchval(
+            "SELECT listings_scored FROM runs WHERE id = $1", run_id
+        )
+        assert scored == 1
+
+
+async def test_finish_run_never_lowers_scraped_count(db_pool):
+    async with db_pool.acquire() as conn:
+        run_id = await start_run(conn, date(2026, 7, 24))
+        await finish_run(conn, run_id, listings_scraped=81, listings_scored=0)
+        # A quieter same-day re-run must not shrink the day's snapshot.
+        await finish_run(conn, run_id, listings_scraped=3, listings_scored=0)
+        scraped = await conn.fetchval(
+            "SELECT listings_scraped FROM runs WHERE id = $1", run_id
+        )
+        assert scraped == 81
 
 
 @pytest.mark.asyncio
@@ -436,6 +487,57 @@ async def test_list_runs_returns_most_recent_first(db_pool):
         runs = await list_runs(conn, limit=2)
 
     assert [run.run_date for run in runs] == [date(2026, 7, 21), date(2026, 7, 20)]
+
+
+@pytest.mark.asyncio
+async def test_get_run_summaries_returns_band_counts(
+    db_pool, listing_factory, match_factory
+):
+    from scout.shared.db import get_run_summaries
+
+    async with db_pool.acquire() as conn:
+        strong = listing_factory(external_id="strong")
+        reach = listing_factory(external_id="reach")
+        for listing in (strong, reach):
+            await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 24))
+        await record_run_listings(
+            conn,
+            run_id,
+            [
+                (match_factory(listing=strong, score=90), "strong_match"),
+                (match_factory(listing=reach, score=30), "reach"),
+            ],
+        )
+
+        summaries = await get_run_summaries(conn, limit=30)
+        assert len(summaries) == 1
+        summary = summaries[0]
+        assert summary.run.id == run_id
+        assert summary.stats["scored"] == 2
+        assert summary.stats["strong"] == 1
+        assert summary.stats["reach"] == 1
+        assert summary.stats["avg_score"] == 60
+
+
+@pytest.mark.asyncio
+async def test_get_run_summaries_returns_zeroed_stats_for_empty_run(db_pool):
+    from scout.shared.db import get_run_summaries
+
+    async with db_pool.acquire() as conn:
+        run_id = await start_run(conn, date(2026, 7, 24))
+        summaries = await get_run_summaries(conn, limit=30)
+
+    assert len(summaries) == 1
+    assert summaries[0].run.id == run_id
+    assert summaries[0].stats == {
+        "scored": 0,
+        "strong": 0,
+        "competitive": 0,
+        "reach": 0,
+        "avg_score": 0,
+        "gaps": 0,
+    }
 
 
 @pytest.mark.asyncio
@@ -577,6 +679,37 @@ async def test_record_listing_gaps_delete_scoped_to_run_id(db_pool):
 
 
 @pytest.mark.asyncio
+async def test_record_listing_gaps_only_replaces_supplied_listings(
+    db_pool, listing_factory, match_factory
+):
+    """Recording one listing's gaps must not wipe another listing's gaps
+    from the same run -- a same-day re-run that only re-analyses some
+    listings should leave the rest of that run's gaps intact."""
+    first = listing_factory(external_id="first")
+    second = listing_factory(external_id="second")
+    async with db_pool.acquire() as conn:
+        for listing in (first, second):
+            await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 24))
+        await record_run_listings(
+            conn,
+            run_id,
+            [
+                (match_factory(listing=first), "competitive"),
+                (match_factory(listing=second), "competitive"),
+            ],
+        )
+
+        gap = SkillGap(skill="Go", requirement_level="must_have", met=False, kind="skill")
+        await record_listing_gaps(conn, run_id, [(match_factory(listing=first), [gap])])
+        await record_listing_gaps(conn, run_id, [(match_factory(listing=second), [gap])])
+
+        # Recording the second listing's gaps must not have wiped the first's.
+        total = await conn.fetchval("SELECT count(*) FROM listing_gaps")
+    assert total == 2
+
+
+@pytest.mark.asyncio
 async def test_record_listing_gaps_rolls_back_delete_when_insert_fails(db_pool):
     listing = _make_listing()
     async with db_pool.acquire() as conn:
@@ -692,3 +825,12 @@ async def test_get_listing_gaps_defaults_kind_to_skill_for_legacy_rows(db_pool):
     assert stored == [
         SkillGap(skill="Go", requirement_level="must_have", met=False, kind="skill")
     ]
+
+
+@pytest.mark.asyncio
+async def test_get_run_raises_for_unknown_id(db_pool):
+    from scout.shared.db import get_run
+
+    async with db_pool.acquire() as conn:
+        with pytest.raises(LookupError, match="no run with id"):
+            await get_run(conn, 999_999)

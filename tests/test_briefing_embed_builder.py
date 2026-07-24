@@ -1,9 +1,25 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from scout.config import Settings
-from scout.shared.schemas import BriefingProse, BriefingTakeaway
+from scout.shared.schemas import BriefingProse, BriefingTakeaway, Listing, MatchResult
 from scout.sub_agents.briefing.embed_builder import build_embed
-from tests.test_briefing_agent import _make_match
+
+
+def _make_match(external_id: str, title: str, score: int) -> MatchResult:
+    listing = Listing(
+        source="linkedin",
+        external_id=external_id,
+        title=title,
+        company="Acme Corp",
+        location="Remote",
+        is_remote=True,
+        url=f"https://www.linkedin.com/jobs/view/{external_id}",
+        description="Build backend systems.",
+        scraped_at=datetime(2026, 7, 15, tzinfo=timezone.utc),
+    )
+    return MatchResult(listing=listing, score=score, reasoning="Good fit.")
 
 
 def _settings():

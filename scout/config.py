@@ -98,6 +98,21 @@ class Settings:
     description_char_limit: int = field(
         default_factory=partial(_env_int, "DESCRIPTION_CHAR_LIMIT", 1500)
     )
+    # Listings per model call. One response must hold every listing in its
+    # batch, and the model caps output tokens, so a large batch truncates the
+    # JSON mid-value and fails to parse. Separate sizes because a score is
+    # far smaller per listing than a requirement list.
+    scorer_batch_size: int = field(
+        default_factory=partial(_env_int, "SCORER_BATCH_SIZE", 25)
+    )
+    requirements_batch_size: int = field(
+        default_factory=partial(_env_int, "REQUIREMENTS_BATCH_SIZE", 15)
+    )
+    # Concurrent model calls in flight. Bounded so a large day doesn't trip
+    # provider rate limits; lower it if 429s appear.
+    model_concurrency: int = field(
+        default_factory=partial(_env_int, "MODEL_CONCURRENCY", 3)
+    )
     database_url: str = field(
         default_factory=partial(
             _env_str,
@@ -107,6 +122,13 @@ class Settings:
     )
     briefing_max_matches: int = field(
         default_factory=partial(_env_int, "BRIEFING_MAX_MATCHES", 5)
+    )
+    # Days a listing may go unseen before it is treated as closed. A daily
+    # scrape only sees RESULTS_WANTED per role within HOURS_OLD, so a still-open
+    # listing routinely misses a day; closing on first absence made it reopen
+    # as "changed" and bought a second full analysis of the same listing.
+    listing_stale_days: int = field(
+        default_factory=partial(_env_int, "LISTING_STALE_DAYS", 7)
     )
     discord_bot_token: str = field(
         default_factory=partial(_env_str, "DISCORD_BOT_TOKEN", "")

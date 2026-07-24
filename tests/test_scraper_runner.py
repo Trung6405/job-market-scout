@@ -91,3 +91,19 @@ async def test_run_scraper_deduplicates_across_roles(monkeypatch):
     listings = await run_scraper(settings)
 
     assert len(listings) == 1
+
+
+@pytest.mark.asyncio
+async def test_run_scraper_logs_skipped_count(monkeypatch, caplog):
+    async def _fake_fetch_jobs(url, **params):
+        return [_job(), _job(id="2", company=None)]
+
+    monkeypatch.setattr(
+        "scout.sub_agents.scraper.runner.fetch_jobs", _fake_fetch_jobs
+    )
+
+    with caplog.at_level("INFO"):
+        listings = await run_scraper(Settings(search_roles=["backend engineer"]))
+
+    assert len(listings) == 1
+    assert "1 skipped" in caplog.text

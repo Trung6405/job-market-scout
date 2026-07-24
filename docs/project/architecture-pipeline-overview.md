@@ -9,21 +9,32 @@
 ## Pipeline
 
 `scout/agent.py`'s `ScoutPipelineAgent` runs six stages in order, in a
-single container, per daily run:
+single container, per daily run. It is a plain class — no external agent
+framework — with a `run()` method yielding `PipelineEvent`s
+(`scout/shared/events.py`) that `scout/main.py` logs as it iterates them.
+Every LLM call in the pipeline goes through one helper,
+`complete_json()` (`scout/shared/llm.py`): a stateless prompt-in,
+schema-out call to `litellm.acompletion` with `response_format={"type":
+"json_object"}`, validated into a Pydantic model. Stages whose model
+response can grow with the number of listings (Scorer, Advisor) batch
+their calls through `scout/shared/batching.py`, which runs batches
+concurrently under a bounded semaphore and retries a failed batch once
+before skipping it with a warning — one truncated or malformed response
+costs that batch's listings, not the whole run.
 
 ```
 Scraper → Tracker → Scorer → Advisor → Persistence/Report → Briefing
 ```
 
-🤖 = LLM agent stage · ⚙️ = deterministic code stage
+🤖 = LLM-calling stage · ⚙️ = deterministic code stage
 
 | Stage | Type | Module | Responsibility |
 |---|---|---|---|
 | **Scraper** | 🤖 | `scout/sub_agents/scraper/` | Fetch current job listings for the configured roles/locations from job boards and the web. |
 | **Tracker** | ⚙️ | `scout/sub_agents/tracker/` | Diff scraped listings against the DB; persist all listings; mark new/changed/closed; dedupe; pass only new/changed listings downstream. |
-| **Scorer** | 🤖 | `scout/sub_agents/scorer/` | LLM-score each relevant listing 0–100 against the configured profile/preferences. |
+| **Scorer** | 🤖 | `scout/sub_agents/scorer/` | LLM-score every relevant listing 0–100 against the configured profile, batched. Preference-neutral: `remote_only`/`preferred_locations`/`min_salary` are not scoring inputs, so a listing the student wouldn't want still gets a fair score and a place on the dashboard — preferences narrow the Briefing instead (see below). |
 | **Advisor** | 🤖 + ⚙️ | `scout/sub_agents/advisor/` | Turn raw scores into personalized guidance — see below. |
-| **Briefing** | 🤖 | `scout/sub_agents/briefing/` | Summarize the run and email the daily briefing, linking to the rendered report. |
+| **Briefing** | 🤖 | `scout/sub_agents/briefing/` | Filter scored matches to the ones passing the student's preferences (`scout/sub_agents/briefing/filters.py::passes_preferences`) and the minimum score, summarize the top matches, and send the daily briefing, linking to the rendered report. |
 
 ## Why the Advisor stage exists
 
@@ -32,9 +43,13 @@ the email and then discarded. That's not enough to answer "why is this
 job a good/bad match for me" or to let a student browse past runs. The
 Advisor stage exists to close that gap. It has four responsibilities:
 
-- **`agent.py` / `runner.py`** — a second LLM pass (DeepSeek via
-  `LiteLlm`) that extracts structured requirements (must-have /
-  nice-to-have skills) from each listing's raw text.
+- **`runner.py`** — a second, batched LLM pass (DeepSeek, via
+  `complete_json`) that extracts structured requirements (must-have /
+  nice-to-have skills) from each listing's raw text. Deliberately
+  profile-blind — the prompt never renders the student's profile, so a
+  requirement can't be softened or dropped because the student happens
+  not to meet it (see `docs/agent/specs/pipeline-efficiency/spec.md`'s
+  Amendment for why this ruled out merging this pass with the Scorer's).
 - **`gaps.py`** — pure function `evaluate_requirements(requirements, profile)`
   diffing extracted requirements against the student's `profile.json`
   `tech_stack`, returning a met/unmet checklist entry per requirement

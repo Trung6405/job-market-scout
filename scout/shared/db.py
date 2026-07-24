@@ -16,6 +16,7 @@ from scout.shared.schemas import (
     Run,
     RunListing,
     RunListingDetail,
+    RunSummary,
     SkillGap,
 )
 
@@ -34,13 +35,20 @@ async def apply_schema(pool: asyncpg.Pool) -> None:
 
 
 def _content_hash(listing: Listing) -> str:
+    """Fingerprint the fields that change a listing's substance.
+
+    ``description`` is deliberately excluded: job boards re-word and
+    re-timestamp descriptions constantly, and including it meant any
+    cosmetic edit marked the listing ``changed`` and bought a full
+    re-analysis. The trade-off is accepted — a materially rewritten
+    description goes unnoticed until some other tracked field moves.
+    """
     payload = "\x00".join(
         [
             listing.title,
             listing.company,
             listing.location,
             str(listing.is_remote),
-            listing.description,
             str(listing.salary_min),
             str(listing.salary_max),
         ]
@@ -109,22 +117,28 @@ async def upsert_listing(
 
 
 async def close_stale_listings(
-    conn: asyncpg.Connection, seen_keys: list[tuple[str, str]]
+    conn: asyncpg.Connection, stale_days: int
 ) -> list[str]:
-    sources = [key[0] for key in seen_keys]
-    external_ids = [key[1] for key in seen_keys]
+    """Close listings unseen for longer than ``stale_days``.
+
+    Closure is deliberately time-based rather than "absent from this run":
+    a run only sees RESULTS_WANTED listings per role within HOURS_OLD, so a
+    still-open listing drops out of the results routinely. Closing on first
+    absence made it reopen as ``changed`` on its return, buying a second
+    full analysis of a listing that never changed.
+
+    ``last_seen_at`` is stamped by ``upsert_listing``, so this needs no
+    seen-key arrays.
+    """
     rows = await conn.fetch(
         """
         UPDATE listings
         SET status = 'closed', closed_at = now()
         WHERE status = 'open'
-          AND NOT (source, external_id) IN (
-              SELECT * FROM unnest($1::text[], $2::text[])
-          )
+          AND last_seen_at < now() - make_interval(days => $1)
         RETURNING external_id
         """,
-        sources,
-        external_ids,
+        stale_days,
     )
     return [row["external_id"] for row in rows]
 
@@ -147,17 +161,31 @@ async def finish_run(
     listings_scraped: int,
     listings_scored: int,
 ) -> None:
+    """Mark a run finished without letting a re-run degrade it.
+
+    Two runs on one date share a row (``runs.run_date`` is unique, kept
+    deliberately — see the pipeline-hardening spec). The second is usually
+    quieter than the first, so reporting its numbers verbatim used to zero
+    the morning's ``listings_scored`` while its ``run_listings`` rows stayed
+    in the table. Instead: ``listings_scored`` is derived from those rows,
+    and ``listings_scraped`` keeps the larger of the two snapshots.
+
+    ``listings_scored`` is passed but unused; it stays in the signature so
+    callers read symmetrically and so the derived value is obviously
+    authoritative.
+    """
     await conn.execute(
         """
         UPDATE runs
-        SET listings_scraped = $2,
-            listings_scored = $3,
+        SET listings_scraped = GREATEST(runs.listings_scraped, $2),
+            listings_scored = (
+                SELECT count(*) FROM run_listings WHERE run_listings.run_id = $1
+            ),
             finished_at = now()
         WHERE id = $1
         """,
         run_id,
         listings_scraped,
-        listings_scored,
     )
 
 
@@ -226,6 +254,12 @@ async def record_listing_meta(
 
 
 async def get_run_by_date(conn: asyncpg.Connection, run_date: date) -> Run | None:
+    """Fetch a run by date. Used only by tests.
+
+    No production caller: the pipeline holds the run id from ``start_run``.
+    Kept as an assertion probe for ``tests/test_agent.py`` and
+    ``tests/test_db.py`` — not dead code, do not remove.
+    """
     row = await conn.fetchrow("SELECT * FROM runs WHERE run_date = $1", run_date)
     if row is None:
         return None
@@ -237,6 +271,51 @@ async def list_runs(conn: asyncpg.Connection, limit: int) -> list[Run]:
         "SELECT * FROM runs ORDER BY run_date DESC LIMIT $1", limit
     )
     return [Run(**dict(row)) for row in rows]
+
+
+async def get_run_summaries(
+    conn: asyncpg.Connection, limit: int
+) -> list[RunSummary]:
+    """Per-run aggregates for the history page, in two queries total."""
+    runs = await list_runs(conn, limit)
+    if not runs:
+        return []
+    rows = await conn.fetch(
+        """
+        SELECT run_listings.run_id,
+               count(*) AS scored,
+               count(*) FILTER (WHERE run_listings.band = 'strong_match') AS strong,
+               count(*) FILTER (WHERE run_listings.band = 'competitive') AS competitive,
+               count(*) FILTER (WHERE run_listings.band = 'reach') AS reach,
+               coalesce(round(avg(run_listings.score)), 0) AS avg_score,
+               count(listing_gaps.id) FILTER (
+                   WHERE listing_gaps.kind = 'skill' AND NOT listing_gaps.met
+               ) AS gaps
+        FROM run_listings
+        LEFT JOIN listing_gaps ON listing_gaps.run_listing_id = run_listings.id
+        WHERE run_listings.run_id = ANY($1::bigint[])
+        GROUP BY run_listings.run_id
+        """,
+        [run.id for run in runs],
+    )
+    stats_by_run = {row["run_id"]: dict(row) for row in rows}
+    summaries: list[RunSummary] = []
+    for run in runs:
+        row = stats_by_run.get(run.id, {})
+        summaries.append(
+            RunSummary(
+                run=run,
+                stats={
+                    "scored": int(row.get("scored", 0)),
+                    "strong": int(row.get("strong", 0)),
+                    "competitive": int(row.get("competitive", 0)),
+                    "reach": int(row.get("reach", 0)),
+                    "avg_score": int(row.get("avg_score", 0)),
+                    "gaps": int(row.get("gaps", 0)),
+                },
+            )
+        )
+    return summaries
 
 
 async def get_adjacent_runs(
@@ -256,6 +335,12 @@ async def get_adjacent_runs(
 
 
 async def get_run_listings(conn: asyncpg.Connection, run_id: int) -> list[RunListing]:
+    """Fetch every run_listings row for a run. Used only by tests.
+
+    No production caller: ``get_run_details`` is what the report layer
+    reads from. Kept as an assertion probe for ``tests/test_agent.py`` and
+    ``tests/test_db.py`` — not dead code, do not remove.
+    """
     rows = await conn.fetch(
         "SELECT * FROM run_listings WHERE run_id = $1", run_id
     )
@@ -271,6 +356,18 @@ async def record_listing_gaps(
     # called on its own; when the caller (ScoutPipelineAgent) already holds a
     # run-scoped transaction, asyncpg nests this as a harmless savepoint.
     async with conn.transaction():
+        # Listings being (re)recorded, built from every match supplied —
+        # not just those with checks — so a listing whose requirements are
+        # now all met still has its stale gap rows cleared below.
+        listing_sources = [match.listing.source for match, _checks in gaps_by_match]
+        listing_external_ids = [
+            match.listing.external_id for match, _checks in gaps_by_match
+        ]
+
+        # Scoped to the listings supplied, not the whole run: recording one
+        # listing's gaps must not wipe another listing's gaps from the same
+        # run, which a whole-run delete did whenever a same-day re-run only
+        # re-analysed some of the run's listings.
         await conn.execute(
             """
             DELETE FROM listing_gaps
@@ -278,10 +375,15 @@ async def record_listing_gaps(
                 SELECT run_listings.id
                 FROM run_listings
                 JOIN listings ON listings.id = run_listings.listing_id
+                JOIN unnest($2::text[], $3::text[]) AS data(source, external_id)
+                    ON listings.source = data.source
+                   AND listings.external_id = data.external_id
                 WHERE run_listings.run_id = $1
             )
             """,
             run_id,
+            listing_sources,
+            listing_external_ids,
         )
 
         sources: list[str] = []
@@ -331,10 +433,16 @@ async def get_listing_gaps(conn: asyncpg.Connection, run_listing_id: int) -> lis
     return [SkillGap(**dict(row)) for row in rows]
 
 
-async def get_run(conn: asyncpg.Connection, run_id: int) -> Run | None:
+async def get_run(conn: asyncpg.Connection, run_id: int) -> Run:
+    """Fetch a run by id.
+
+    Non-optional on purpose: every caller dereferences the result
+    immediately, so an Optional return only moved the failure to a less
+    informative ``AttributeError`` further down.
+    """
     row = await conn.fetchrow("SELECT * FROM runs WHERE id = $1", run_id)
     if row is None:
-        return None
+        raise LookupError(f"no run with id {run_id}")
     return Run(**dict(row))
 
 
