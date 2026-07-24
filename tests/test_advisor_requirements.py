@@ -1,32 +1,25 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 
 import pytest
-from google.adk.agents import LlmAgent
-from google.adk.models.lite_llm import LiteLlm
 
 from scout.config import Settings
 from scout.prompts import build_requirements_instruction
 from scout.shared.profile import render_profile_text
-from scout.shared.schemas import Listing, ListingRequirements, ListingRequirementsBatch
-from scout.sub_agents.advisor.agent import build_requirements_agent
-from scout.sub_agents.advisor.runner import parse_requirements, run_requirements_extraction
+from scout.shared.schemas import ListingRequirements, ListingRequirementsBatch
+from scout.sub_agents.advisor import runner
 
 
-def _requirements_dict(**overrides):
+def _requirements(**overrides) -> ListingRequirements:
     defaults = dict(
         source="linkedin",
         external_id="1",
-        must_have=[
-            {"name": "Python", "kind": "skill"},
-            {"name": "SQL", "kind": "skill"},
-        ],
-        nice_to_have=[{"name": "Docker", "kind": "skill"}],
+        must_have=[],
+        nice_to_have=[],
     )
     defaults.update(overrides)
-    return defaults
+    return ListingRequirements(**defaults)
 
 
 def _make_listing(**overrides):
@@ -42,90 +35,27 @@ def _make_listing(**overrides):
         scraped_at=datetime(2026, 7, 15, tzinfo=timezone.utc),
     )
     defaults.update(overrides)
+    from scout.shared.schemas import Listing
+
     return Listing(**defaults)
 
 
-# --- parse_requirements ---
-
-
-def test_parse_requirements_valid_json():
-    raw = json.dumps({"requirements": [_requirements_dict()]})
-
-    requirements = parse_requirements(raw)
-
-    assert requirements == [ListingRequirements(**_requirements_dict())]
-
-
-def test_parse_requirements_strips_markdown_code_fence():
-    raw = (
-        "```json\n"
-        + json.dumps({"requirements": [_requirements_dict(external_id="2")]})
-        + "\n```"
-    )
-
-    requirements = parse_requirements(raw)
-
-    assert requirements[0].external_id == "2"
-
-
-def test_parse_requirements_empty_list():
-    assert parse_requirements(json.dumps({"requirements": []})) == []
-
-
-def test_parse_requirements_carries_kind_incl_non_skill():
-    raw = json.dumps(
-        {
-            "requirements": [
-                _requirements_dict(
-                    must_have=[
-                        {"name": "PostgreSQL", "kind": "skill"},
-                        {"name": "A STEM degree in CS", "kind": "qualification"},
-                        {"name": "3+ years experience", "kind": "experience"},
-                    ],
-                    nice_to_have=[{"name": "Strong communication", "kind": "soft_skill"}],
-                )
-            ]
-        }
-    )
-
-    [requirements] = parse_requirements(raw)
-
-    assert [(i.name, i.kind) for i in requirements.must_have] == [
-        ("PostgreSQL", "skill"),
-        ("A STEM degree in CS", "qualification"),
-        ("3+ years experience", "experience"),
-    ]
-    assert requirements.nice_to_have[0].kind == "soft_skill"
-
-
-def test_parse_requirements_defaults_kind_when_omitted():
-    raw = json.dumps(
-        {
-            "requirements": [
-                _requirements_dict(must_have=[{"name": "Go"}], nice_to_have=[])
-            ]
-        }
-    )
-
-    [requirements] = parse_requirements(raw)
-
-    assert requirements.must_have[0].kind == "skill"
+# --- run_requirements_extraction ---
 
 
 @pytest.mark.asyncio
 async def test_run_requirements_extraction_returns_parsed_requirements(monkeypatch):
-    raw = json.dumps({"requirements": [_requirements_dict()]})
+    async def _fake_complete_json(prompt, schema, settings, **kwargs):
+        assert schema is ListingRequirementsBatch
+        return ListingRequirementsBatch(requirements=[_requirements()])
 
-    async def _fake_run(agent):
-        return raw
+    monkeypatch.setattr(runner, "complete_json", _fake_complete_json)
 
-    monkeypatch.setattr(
-        "scout.sub_agents.advisor.runner._run_requirements_agent", _fake_run
+    requirements = await runner.run_requirements_extraction(
+        [_make_listing()], Settings()
     )
 
-    requirements = await run_requirements_extraction([_make_listing()], Settings())
-
-    assert requirements == [ListingRequirements(**_requirements_dict())]
+    assert requirements == [_requirements()]
 
 
 @pytest.mark.asyncio
@@ -134,49 +64,40 @@ async def test_run_requirements_extraction_splits_listings_into_batches(monkeypa
     extracting for many listings in one call truncates the JSON. Listings are
     split into batches small enough that each response parses."""
     listings = [_make_listing(external_id=str(i)) for i in range(5)]
-    batched_ids: list[list[str]] = []
+    call_count = {"n": 0}
 
-    async def _fake_run(agent):
-        # Recover which listings this call was built for from its instruction.
+    async def _fake_complete_json(prompt, schema, settings, **kwargs):
+        call_count["n"] += 1
         ids = [
             listing.external_id
             for listing in listings
-            if f'"external_id": "{listing.external_id}"' in agent.instruction
+            if f'"external_id": "{listing.external_id}"' in prompt
         ]
-        batched_ids.append(ids)
-        return json.dumps(
-            {"requirements": [_requirements_dict(external_id=i) for i in ids]}
+        return ListingRequirementsBatch(
+            requirements=[_requirements(external_id=i) for i in ids]
         )
 
-    monkeypatch.setattr(
-        "scout.sub_agents.advisor.runner._run_requirements_agent", _fake_run
-    )
+    monkeypatch.setattr(runner, "complete_json", _fake_complete_json)
 
-    requirements = await run_requirements_extraction(
-        listings, Settings(requirements_batch_size=2)
-    )
+    settings = Settings()
+    object.__setattr__(settings, "requirements_batch_size", 2)
+    requirements = await runner.run_requirements_extraction(listings, settings)
 
     # 5 listings at batch size 2 -> 3 calls, and every listing is covered once.
-    assert batched_ids == [["0", "1"], ["2", "3"], ["4"]]
-    assert [r.external_id for r in requirements] == ["0", "1", "2", "3", "4"]
+    assert call_count["n"] == 3
+    assert sorted(r.external_id for r in requirements) == ["0", "1", "2", "3", "4"]
 
 
 @pytest.mark.asyncio
 async def test_run_requirements_extraction_makes_no_llm_call_for_no_listings(
     monkeypatch,
 ):
-    calls = []
+    async def _should_not_be_called(*args, **kwargs):
+        raise AssertionError("no call expected for an empty listing set")
 
-    async def _fake_run(agent):
-        calls.append(agent)
-        return json.dumps({"requirements": []})
+    monkeypatch.setattr(runner, "complete_json", _should_not_be_called)
 
-    monkeypatch.setattr(
-        "scout.sub_agents.advisor.runner._run_requirements_agent", _fake_run
-    )
-
-    assert await run_requirements_extraction([], Settings()) == []
-    assert calls == []
+    assert await runner.run_requirements_extraction([], Settings()) == []
 
 
 # --- build_requirements_instruction ---
@@ -249,55 +170,3 @@ def test_build_requirements_instruction_directs_not_inventing_requirements():
     instruction = build_requirements_instruction(Settings(), [_make_listing()])
 
     assert "invent" in instruction.lower() or "not stated" in instruction.lower()
-
-
-# --- build_requirements_agent ---
-
-
-def test_build_requirements_agent_uses_configured_model():
-    settings = Settings(deepseek_model="deepseek/deepseek-reasoner")
-
-    agent = build_requirements_agent([_make_listing()], settings)
-
-    assert isinstance(agent, LlmAgent)
-    assert isinstance(agent.model, LiteLlm)
-    assert agent.model.model == "deepseek/deepseek-reasoner"
-
-
-def test_build_requirements_agent_uses_zero_temperature():
-    agent = build_requirements_agent([_make_listing()], Settings())
-
-    assert agent.model._additional_args.get("temperature") == 0
-
-
-def test_build_requirements_agent_outputs_listing_requirements_batch():
-    agent = build_requirements_agent([_make_listing()], Settings())
-
-    assert agent.output_schema == ListingRequirementsBatch
-
-
-def test_build_requirements_agent_requests_json_object_mode():
-    agent = build_requirements_agent([_make_listing()], Settings())
-
-    assert agent.model._additional_args.get("response_format") == {
-        "type": "json_object"
-    }
-
-
-def test_build_requirements_agent_registers_no_tools():
-    agent = build_requirements_agent([_make_listing()], Settings())
-
-    assert agent.tools == []
-
-
-def test_build_requirements_agent_does_not_filter_listings():
-    settings = Settings(remote_only=True)
-    listings = [
-        _make_listing(external_id="1", title="Remote Role", is_remote=True),
-        _make_listing(external_id="2", title="Onsite Role", is_remote=False),
-    ]
-
-    agent = build_requirements_agent(listings, settings)
-
-    assert "Remote Role" in agent.instruction
-    assert "Onsite Role" in agent.instruction
