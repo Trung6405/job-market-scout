@@ -421,10 +421,16 @@ async def get_listing_gaps(conn: asyncpg.Connection, run_listing_id: int) -> lis
     return [SkillGap(**dict(row)) for row in rows]
 
 
-async def get_run(conn: asyncpg.Connection, run_id: int) -> Run | None:
+async def get_run(conn: asyncpg.Connection, run_id: int) -> Run:
+    """Fetch a run by id.
+
+    Non-optional on purpose: every caller dereferences the result
+    immediately, so an Optional return only moved the failure to a less
+    informative ``AttributeError`` further down.
+    """
     row = await conn.fetchrow("SELECT * FROM runs WHERE id = $1", run_id)
     if row is None:
-        return None
+        raise LookupError(f"no run with id {run_id}")
     return Run(**dict(row))
 
 

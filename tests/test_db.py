@@ -825,3 +825,12 @@ async def test_get_listing_gaps_defaults_kind_to_skill_for_legacy_rows(db_pool):
     assert stored == [
         SkillGap(skill="Go", requirement_level="must_have", met=False, kind="skill")
     ]
+
+
+@pytest.mark.asyncio
+async def test_get_run_raises_for_unknown_id(db_pool):
+    from scout.shared.db import get_run
+
+    async with db_pool.acquire() as conn:
+        with pytest.raises(LookupError, match="no run with id"):
+            await get_run(conn, 999_999)
