@@ -200,3 +200,31 @@ Return a single JSON object with two keys: "intro" (string) and
 copied exactly from the match, and "takeaway", one short sentence).
 Return only the JSON object, no commentary.
 """
+
+
+def build_coach_tagging_instruction(readme_text: str) -> str:
+    return f"""\
+You are the resource tagger for Job Market Scout's Career Coach.
+
+Read the README below and identify:
+- "skills": the specific technical skills, tools, frameworks, or
+  languages this repository is about or teaches (e.g. ["kubernetes",
+  "helm"]). Use canonical names — no version numbers or punctuation
+  decoration.
+- "resource_type": always "repo" for a GitHub repository README.
+- "level": the intended audience level, exactly one of "beginner",
+  "intermediate", or "advanced", if the README states or clearly implies
+  one, else null.
+- "summary": one sentence (max ~30 words) describing what this
+  repository is and why it is useful to learn from.
+
+Only use what the README actually says. Do not invent skills not
+evidenced in the text, and do not call any tool.
+
+Return a JSON object with exactly these four keys: "skills" (list of
+strings), "resource_type" (string), "level" (string or null), "summary"
+(string). Return only the JSON object, no commentary.
+
+README:
+{readme_text[:4000]}
+"""
