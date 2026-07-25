@@ -13,6 +13,7 @@ from scout.shared.schemas import (
     Listing,
     ListingRequirements,
     MatchResult,
+    Resource,
     Run,
     RunListing,
     RunListingDetail,
@@ -521,3 +522,38 @@ async def get_run_details(conn: asyncpg.Connection, run_id: int) -> list[RunList
             )
         )
     return details
+
+
+async def insert_resource(
+    conn: asyncpg.Connection, resource: Resource, embedding: list[float]
+) -> Literal["new", "duplicate"]:
+    embedding_text = "[" + ",".join(str(x) for x in embedding) + "]"
+    inserted_id = await conn.fetchval(
+        """
+        INSERT INTO resources (url, title, resource_type, skills, level, summary, embedding, source)
+        VALUES ($1, $2, $3, $4, $5, $6, $7::vector, $8)
+        ON CONFLICT (url) DO NOTHING
+        RETURNING id
+        """,
+        str(resource.url),
+        resource.title,
+        resource.resource_type,
+        resource.skills,
+        resource.level,
+        resource.summary,
+        embedding_text,
+        resource.source,
+    )
+    return "new" if inserted_id is not None else "duplicate"
+
+
+async def get_resource_urls(conn: asyncpg.Connection) -> set[str]:
+    rows = await conn.fetch("SELECT url FROM resources")
+    return {row["url"] for row in rows}
+
+
+async def get_distinct_gap_skills(conn: asyncpg.Connection) -> list[str]:
+    rows = await conn.fetch(
+        "SELECT DISTINCT skill FROM listing_gaps WHERE kind = 'skill' AND NOT met"
+    )
+    return [row["skill"] for row in rows]
