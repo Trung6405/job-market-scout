@@ -146,6 +146,30 @@ class Settings:
     discord_channel_id: str = field(
         default_factory=partial(_env_str, "DISCORD_CHANNEL_ID", "")
     )
+    github_pat: str = field(
+        default_factory=partial(_env_str, "GITHUB_PAT", "")
+    )
+    # Candidates kept per skill after GitHub search filtering (stars,
+    # pushed-within, archived, README) — bounds both API and LLM-tagging
+    # spend per skill per run.
+    coach_top_n_per_skill: int = field(
+        default_factory=partial(_env_int, "COACH_TOP_N_PER_SKILL", 5)
+    )
+    # Seed coverage before per-skill search has run enough cycles to find
+    # everything on its own. Default set covers the profile's current
+    # domains (umbrella PRS Q1) — refinable via env, no code change needed.
+    coach_awesome_lists: list[str] = field(
+        default_factory=partial(
+            _env_csv,
+            "COACH_AWESOME_LISTS",
+            "https://github.com/vinta/awesome-python,"
+            "https://github.com/mjhea0/awesome-fastapi,"
+            "https://github.com/enaqx/awesome-react,"
+            "https://github.com/dzharii/awesome-typescript,"
+            "https://github.com/veggiemonk/awesome-docker,"
+            "https://github.com/kristofferandreasen/awesome-azure",
+        )
+    )
     profile: Profile = field(init=False)
 
     def __post_init__(self) -> None:
