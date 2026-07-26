@@ -37,7 +37,15 @@ async def _seed_kubernetes_gap(db_pool, listing_factory, match_factory) -> None:
         await record_listing_gaps(conn, run_id, [(match, [gap])])
 
 
-def _mock_candidate_pipeline(monkeypatch) -> None:
+def _mock_candidate_pipeline(monkeypatch) -> dict[str, list]:
+    """Wire up fake candidate pipeline mocks and return call-tracking lists.
+
+    The returned dict exposes "tag_readme" and "embed" lists that each mock
+    appends to when invoked, so callers can assert these expensive calls are
+    NOT re-spent on a subsequent run for an already-stored URL.
+    """
+    calls: dict[str, list] = {"tag_readme": [], "embed": []}
+
     monkeypatch.setattr(
         "scout.sub_agents.coach.runner.search_candidates",
         lambda skill, settings: ["https://github.com/kubernetes/kubernetes"],
@@ -48,6 +56,7 @@ def _mock_candidate_pipeline(monkeypatch) -> None:
     )
 
     async def _fake_tag_readme(readme_text, settings):
+        calls["tag_readme"].append((readme_text, settings))
         return ResourceTags(
             skills=["kubernetes"],
             resource_type="repo",
@@ -55,8 +64,14 @@ def _mock_candidate_pipeline(monkeypatch) -> None:
             summary="Container orchestration platform.",
         )
 
+    def _fake_embed(text):
+        calls["embed"].append(text)
+        return [0.1] * 384
+
     monkeypatch.setattr("scout.sub_agents.coach.runner.tag_readme", _fake_tag_readme)
-    monkeypatch.setattr("scout.sub_agents.coach.runner.embed", lambda text: [0.1] * 384)
+    monkeypatch.setattr("scout.sub_agents.coach.runner.embed", _fake_embed)
+
+    return calls
 
 
 @pytest.mark.asyncio
@@ -83,7 +98,7 @@ async def test_run_coach_aggregator_second_run_inserts_nothing_new(
     db_pool, listing_factory, match_factory, monkeypatch
 ):
     await _seed_kubernetes_gap(db_pool, listing_factory, match_factory)
-    _mock_candidate_pipeline(monkeypatch)
+    calls = _mock_candidate_pipeline(monkeypatch)
 
     await runner.run_coach_aggregator(_test_settings())
     second_summary = await runner.run_coach_aggregator(_test_settings())
@@ -95,6 +110,11 @@ async def test_run_coach_aggregator_second_run_inserts_nothing_new(
             "https://github.com/kubernetes/kubernetes",
         )
     assert count == 1
+    # The already-stored URL must be skipped entirely on the second run, not
+    # re-fetched or re-tagged: no additional LLM/embedding cost should be
+    # spent. Both counts should reflect only the first run's single call.
+    assert len(calls["tag_readme"]) == 1
+    assert len(calls["embed"]) == 1
 
 
 @pytest.mark.asyncio
