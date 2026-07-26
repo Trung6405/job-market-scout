@@ -210,3 +210,11 @@ class Profile(BaseModel):
     domain_knowledge: list[DomainKnowledge]
     background: Background
     projects: list[Project]
+
+
+class CoachSummary(BaseModel):
+    """One aggregator pass's result — logged by coach_aggregator.py."""
+
+    candidates_seen: int
+    inserted: int
+    duplicates: int
