@@ -13,7 +13,7 @@ param location string
 @description('Globally-unique name for the Storage Account that hosts the dashboard via static website hosting.')
 param dashboardStorageAccountName string = 'trung6405scoutdash'
 
-// Serves the reports dashboard (reports/ + hello/) independent of the VM's
+// Serves the reports dashboard (reports/) independent of the VM's
 // start/deallocate cycle, so it's reachable even while scout-vm is off.
 // Static website hosting itself (the $web container, index/error docs) is a
 // data-plane setting with no ARM property, so it's enabled by an `az

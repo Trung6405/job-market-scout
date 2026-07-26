@@ -100,7 +100,7 @@ four-stage flow; treat them as historical until refreshed.
 | FR-13 | The Notification module SHALL send the briefing to the user's email address via Gmail. |
 | FR-14 | All scraping and scoring behaviour SHALL be driven by the file-based config (roles/keywords, locations, profile, preferences) with no role-specific logic in code. |
 | FR-15 | `profile.json` SHALL be the single, required candidate source used by scoring, the briefing, and gap detection; the system SHALL fail fast at startup with a clear error if it is missing or invalid. |
-| FR-16 | The rendered reports dashboard (`reports/` + `hello/`) SHALL be published to a static website host after each run, so it remains reachable while the VM is deallocated. |
+| FR-16 | The rendered reports dashboard (`reports/`) SHALL be published to a static website host after each run, so it remains reachable while the VM is deallocated. |
 
 ---
 

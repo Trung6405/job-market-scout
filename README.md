@@ -86,7 +86,6 @@ after each scheduled pipeline run (see
 | History | <https://trung6405scoutdash.z44.web.core.windows.net/history.html> |
 | My profile | <https://trung6405scoutdash.z44.web.core.windows.net/profile.html> |
 | A given day | `https://trung6405scoutdash.z44.web.core.windows.net/<YYYY-MM-DD>/dashboard.html` |
-| Hello smoke-test page | <https://trung6405scoutdash.z44.web.core.windows.net/hello/> |
 
 The root serves the history index (the static-website host allows only
 one global index document, so `index.html` is a copy of `history.html`).
