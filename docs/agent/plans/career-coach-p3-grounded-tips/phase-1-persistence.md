@@ -1,7 +1,7 @@
 # Phase 1: Persistence & Schema
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** nothing (P0/P1 merged; P2 not needed by this phase)
 
 ---
@@ -32,7 +32,7 @@ generating tips yet.
 - **Files:** `scout/shared/schemas.py`, `tests/test_coach_tips_schemas.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: a `GroundedTip` round-trips its three fields, and
+  - [x] Write failing test: a `GroundedTip` round-trips its three fields, and
         `RunListingDetail` defaults `tips` to `[]` when not supplied.
 
     ```python
@@ -64,9 +64,9 @@ generating tips yet.
         assert detail.tips == []
     ```
 
-  - [ ] Verify it fails (`pytest tests/test_coach_tips_schemas.py -v`) —
+  - [x] Verify it fails (`pytest tests/test_coach_tips_schemas.py -v`) —
         expected: `ImportError: cannot import name 'GroundedTip'`
-  - [ ] Implement: add `GroundedTip` next to `RetrievedResource` in
+  - [x] Implement: add `GroundedTip` next to `RetrievedResource` in
         `scout/shared/schemas.py`, and the `tips` field on `RunListingDetail`.
 
     ```python
@@ -103,15 +103,15 @@ generating tips yet.
         team: str | None = None
     ```
 
-  - [ ] Verify it passes (`pytest tests/test_coach_tips_schemas.py -v`)
-  - [ ] Commit: `feat(coach): add GroundedTip schema and detail tips field`
+  - [x] Verify it passes (`pytest tests/test_coach_tips_schemas.py -v`)
+  - [x] Commit: `feat(coach): add GroundedTip schema and detail tips field`
 
 ### Task 2: `listing_tips` table
 
 - **Files:** `scout/shared/schema.sql`, `tests/test_coach_tips_db.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: after `apply_schema`, a tip row inserted against a
+  - [x] Write failing test: after `apply_schema`, a tip row inserted against a
         run listing is readable, and deleting the parent run cascades it away.
 
     ```python
@@ -200,9 +200,9 @@ generating tips yet.
             assert remaining == 0
     ```
 
-  - [ ] Verify it fails (`pytest tests/test_coach_tips_db.py -v`) — expected:
+  - [x] Verify it fails (`pytest tests/test_coach_tips_db.py -v`) — expected:
         `asyncpg.exceptions.UndefinedTableError: relation "listing_tips" does not exist`
-  - [ ] Implement: append to `scout/shared/schema.sql`, after the
+  - [x] Implement: append to `scout/shared/schema.sql`, after the
         `listing_gaps` block and before the `resources` block, so the tips
         table sits with the run-scoped tables it belongs to.
 
@@ -216,15 +216,15 @@ generating tips yet.
     );
     ```
 
-  - [ ] Verify it passes (`pytest tests/test_coach_tips_db.py -v`)
-  - [ ] Commit: `feat(coach): add listing_tips table`
+  - [x] Verify it passes (`pytest tests/test_coach_tips_db.py -v`)
+  - [x] Commit: `feat(coach): add listing_tips table`
 
 ### Task 3: `record_listing_tips`
 
 - **Files:** `scout/shared/db.py`, `tests/test_coach_tips_db.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: recording tips for a match writes one row per tip;
+  - [x] Write failing test: recording tips for a match writes one row per tip;
         recording again for the same listing replaces rather than duplicates;
         another listing's tips in the same run are left alone.
 
@@ -290,9 +290,9 @@ generating tips yet.
             assert [row["tip"] for row in rows] == ["new"]
     ```
 
-  - [ ] Verify it fails (`pytest tests/test_coach_tips_db.py -v`) — expected:
+  - [x] Verify it fails (`pytest tests/test_coach_tips_db.py -v`) — expected:
         `ImportError: cannot import name 'record_listing_tips'`
-  - [ ] Implement in `scout/shared/db.py`, below `record_listing_gaps`.
+  - [x] Implement in `scout/shared/db.py`, below `record_listing_gaps`.
         Note this deliberately resolves ids first and then uses
         `executemany`, rather than `record_listing_gaps`' single `unnest`
         insert: `cited_urls` is a `TEXT[]` column, and an array-of-arrays does
@@ -373,8 +373,8 @@ generating tips yet.
     Add `GroundedTip` to the existing `from scout.shared.schemas import (...)`
     block at the top of `db.py`.
 
-  - [ ] Verify it passes (`pytest tests/test_coach_tips_db.py -v`)
-  - [ ] Commit: `feat(coach): add record_listing_tips`
+  - [x] Verify it passes (`pytest tests/test_coach_tips_db.py -v`)
+  - [x] Commit: `feat(coach): add record_listing_tips`
 
 ### Task 4: `get_run_details` returns stored tips
 
@@ -483,4 +483,23 @@ harmlessly, or dropped with `DROP TABLE listing_tips;`.
 
 ## Notes / Learnings
 
-<Filled in during execution.>
+- **Task 3's code block contradicted its own checklist — a plan bug.** The
+  checklist promised a test asserting "another listing's tips in the same run
+  are left alone," but the code block below it seeded only one listing, so the
+  scoped DELETE — the entire reason this helper diverges from a run-wide
+  delete — shipped unverified. Caught in review, fixed in `50baf37`, and the
+  new test was confirmed to genuinely guard the behaviour by temporarily
+  widening the DELETE to run-wide and watching only that test fail. Lesson for
+  later phases: where a task's prose describes an assertion, check the code
+  block actually contains it — the prose is the requirement, the block is only
+  a starting point.
+- **The `TEXT[]`/`executemany` rationale lived only in the plan's prose.** It
+  needed to be an in-code comment next to the `executemany` call, since a
+  maintainer comparing `record_listing_tips` to `record_listing_gaps` sees only
+  the code. Added in the same fix commit. Phase 2 and 3 code blocks carry their
+  rationale as comments already; keep it that way.
+- **Checkbox discipline.** Tasks 1-3 were implemented without their phase-doc
+  checkboxes being ticked in the same commit, because the dispatch contract
+  didn't ask for it; they were swept in the Phase 1 bookkeeping commit, which
+  plan-standards discourages. From Task 4 onward the dispatch requires each
+  implementer to tick its own task's boxes in its own commit.
