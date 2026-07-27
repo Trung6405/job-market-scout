@@ -196,6 +196,14 @@ checks_by_match ──► unmet skill gaps
 
 ## Amendments *(only after approval — never silently edit approved content)*
 
+- **2026-07-27 — "P4 changes only Jinja" corrected.** The Proposed Approach
+  said P4 "changes only Jinja". Writing P4's spec showed that is not quite
+  true: surfacing tips needs two new Jinja filters registered in
+  `scout/sub_agents/advisor/report.py` — one to linkify a tip's citations
+  safely, one to compute the page's citation budget. The claim's substance
+  holds — P4 touches no schema, no persistence, and nothing in
+  `scout/sub_agents/coach/` — but it changes the Advisor's renderer as well as
+  its template. No P3 scope or requirement changed.
 - **2026-07-27 — P2 merged; dependency and open question updated.** The spec
   was written while P2 was an unmerged branch, so it recorded P3 as branched
   off P2's tip and carried an open question about P2's API changing before
