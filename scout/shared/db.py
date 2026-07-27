@@ -14,6 +14,7 @@ from scout.shared.schemas import (
     ListingRequirements,
     MatchResult,
     Resource,
+    RetrievedResource,
     Run,
     RunListing,
     RunListingDetail,
@@ -524,10 +525,19 @@ async def get_run_details(conn: asyncpg.Connection, run_id: int) -> list[RunList
     return details
 
 
+def vector_text(values: list[float]) -> str:
+    """Render an embedding in pgvector's text input form.
+
+    Always passed as a bound parameter and cast with ``::vector`` in SQL, never
+    interpolated into a statement, so there is no injection surface here.
+    """
+    return "[" + ",".join(str(value) for value in values) + "]"
+
+
 async def insert_resource(
     conn: asyncpg.Connection, resource: Resource, embedding: list[float]
 ) -> Literal["new", "duplicate"]:
-    embedding_text = "[" + ",".join(str(x) for x in embedding) + "]"
+    embedding_text = vector_text(embedding)
     inserted_id = await conn.fetchval(
         """
         INSERT INTO resources (url, title, resource_type, skills, level, summary, embedding, source)
@@ -550,6 +560,71 @@ async def insert_resource(
 async def get_resource_urls(conn: asyncpg.Connection) -> set[str]:
     rows = await conn.fetch("SELECT url FROM resources")
     return {row["url"] for row in rows}
+
+
+async def get_resources_for_skills(
+    conn: asyncpg.Connection,
+    skills: list[str],
+    vectors: list[list[float]],
+    k: int,
+    max_age_days: int,
+) -> dict[str, list[RetrievedResource]]:
+    """Retrieve the top-`k` resources for each skill, hybrid-ranked.
+
+    ``skills`` must already be normalized, and ``vectors`` holds each one's
+    query embedding at the same index. For every skill the exact ``skills[]``
+    pre-filter runs first and cosine ranking only orders what survives it —
+    the pre-filter is what guarantees a "java" gap can't surface JavaScript
+    resources, since similarity alone cannot separate them (D-CC-3).
+
+    The pre-filter is written as ``skills @> ARRAY[q.skill]`` rather than the
+    equivalent ``q.skill = ANY(skills)`` because only the containment form can
+    use a GIN index on ``skills``. No such index exists yet — the corpus is
+    small enough that a scan is fine — but the predicate is kept in the shape
+    that can use one, since this filter runs first and over every row.
+
+    Every requested skill gets a key; one that matches nothing maps to an
+    empty list. The dict is pre-seeded to guarantee that, because
+    ``CROSS JOIN LATERAL`` emits no row at all for a skill with no matches
+    rather than a null-filled one.
+    """
+    if not skills:
+        return {}
+
+    rows = await conn.fetch(
+        """
+        SELECT q.skill AS query_skill,
+               r.url,
+               r.title,
+               r.resource_type,
+               r.skills,
+               r.level,
+               r.summary,
+               r.similarity
+        FROM unnest($1::text[], $2::text[]) AS q(skill, vec)
+        CROSS JOIN LATERAL (
+            SELECT url, title, resource_type, skills, level, summary,
+                   1 - (embedding <=> q.vec::vector) AS similarity
+            FROM resources
+            WHERE skills @> ARRAY[q.skill]
+              AND embedding IS NOT NULL
+              AND (last_verified IS NULL
+                   OR last_verified > now() - make_interval(days => $3))
+            ORDER BY embedding <=> q.vec::vector
+            LIMIT $4
+        ) r
+        """,
+        skills,
+        [vector_text(vector) for vector in vectors],
+        max_age_days,
+        k,
+    )
+
+    results: dict[str, list[RetrievedResource]] = {skill: [] for skill in skills}
+    for row in rows:
+        data = dict(row)
+        results[data.pop("query_skill")].append(RetrievedResource(**data))
+    return results
 
 
 async def get_distinct_gap_skills(conn: asyncpg.Connection) -> list[str]:

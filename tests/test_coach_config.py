@@ -9,7 +9,13 @@ from scout.config import Settings
 
 @pytest.fixture(autouse=True)
 def _clear_coach_env(monkeypatch):
-    for name in ("GITHUB_PAT", "COACH_TOP_N_PER_SKILL", "COACH_AWESOME_LISTS"):
+    for name in (
+        "GITHUB_PAT",
+        "COACH_TOP_N_PER_SKILL",
+        "COACH_AWESOME_LISTS",
+        "COACH_TOP_K",
+        "COACH_RESOURCE_MAX_AGE_DAYS",
+    ):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -38,3 +44,22 @@ def test_coach_awesome_lists_reads_csv_env(monkeypatch):
         "https://github.com/a/b",
         "https://github.com/c/d",
     ]
+
+
+def test_coach_top_k_defaults_to_three():
+    """The PRS specifies "top 2-3"; 3 gives P3 the widest choice to trim from."""
+    assert Settings().coach_top_k == 3
+
+
+def test_coach_top_k_reads_env(monkeypatch):
+    monkeypatch.setenv("COACH_TOP_K", "2")
+    assert Settings().coach_top_k == 2
+
+
+def test_coach_resource_max_age_days_defaults_to_ninety():
+    assert Settings().coach_resource_max_age_days == 90
+
+
+def test_coach_resource_max_age_days_reads_env(monkeypatch):
+    monkeypatch.setenv("COACH_RESOURCE_MAX_AGE_DAYS", "30")
+    assert Settings().coach_resource_max_age_days == 30

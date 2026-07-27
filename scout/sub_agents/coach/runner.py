@@ -14,7 +14,7 @@ from scout.shared.db import (
     insert_resource,
 )
 from scout.shared.schemas import CoachSummary, Resource
-from scout.shared.skills import normalize_skill
+from scout.shared.skills import normalize_skills
 from scout.sub_agents.coach.bootstrap import harvest_awesome_list
 from scout.sub_agents.coach.embeddings import embed
 from scout.sub_agents.coach.github_search import fetch_readme, search_candidates
@@ -41,15 +41,11 @@ def _canonical_skills(skills: list[str]) -> list[str]:
     match (FR-CC-1/FR-CC-7), so the guarantee has to be deterministic. Two
     variants that normalize to the same token ("K8s", "kubernetes") collapse
     into one entry; order is preserved so the tagger's primary skill stays first.
+
+    Delegates to the shared helper the retriever also uses on read — the two
+    sides of the exact-match guarantee must not be able to drift apart.
     """
-    canonical: list[str] = []
-    seen: set[str] = set()
-    for skill in skills:
-        normalized = normalize_skill(skill)
-        if normalized and normalized not in seen:
-            seen.add(normalized)
-            canonical.append(normalized)
-    return canonical
+    return normalize_skills(skills)
 
 
 def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:

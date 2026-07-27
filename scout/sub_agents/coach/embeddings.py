@@ -15,3 +15,16 @@ def _get_model() -> SentenceTransformer:
 
 def embed(text: str) -> list[float]:
     return _get_model().encode(text, normalize_embeddings=True).tolist()
+
+
+def embed_many(texts: list[str]) -> list[list[float]]:
+    """Embed several texts in one encode call, preserving input order.
+
+    The retriever has a whole run's distinct gap skills available at once, so
+    it can amortise per-call overhead instead of paying it per skill. Returns
+    vectors positionally aligned with ``texts`` — the retriever pairs them
+    with skill names by index, so order is load-bearing.
+    """
+    if not texts:
+        return []
+    return _get_model().encode(texts, normalize_embeddings=True).tolist()
