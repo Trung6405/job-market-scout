@@ -60,6 +60,26 @@ jobs:
     # test job alone — useful for verifying CI without touching the VM.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # Serializes against Scheduled run, which drives the same single VM. Both
+    # workflows `az vm start` it, work over SSH, then `az vm deallocate` it. If
+    # they overlap, whichever finishes first deallocates the VM out from under
+    # the other: the platform sends a Hyper-V shutdown request, systemd SIGTERMs
+    # sshd, and the other run's SSH dies with "Connection closed by remote host"
+    # (exit 255) at whatever arbitrary point it had reached. This killed the
+    # 2026-07-27 and 2026-07-23 scheduled runs. The group name is a lock on the
+    # VM, so it MUST match the one in scheduled-run.yml verbatim.
+    #
+    # Job-level, not workflow-level: the workflow-level `deploy-<ref>` group
+    # above still guards Deploy against itself and must stay, and putting the VM
+    # lock here keeps the `test` job free to run while another run holds the VM.
+    #
+    # cancel-in-progress: false is load-bearing. Cancelling a run skips its
+    # `if: always()` Deallocate VM step, which would leave the VM running and
+    # billing indefinitely — the exact cost leak this whole start/deallocate
+    # dance exists to prevent. Queue behind the holder instead.
+    concurrency:
+      group: scout-vm
+      cancel-in-progress: false
     env:
       APP_DIR: /opt/job-market-scout
       VM_USER: ${{ vars.VM_USER }}

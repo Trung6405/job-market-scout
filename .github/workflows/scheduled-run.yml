@@ -19,6 +19,12 @@ permissions:
 jobs:
   run-job:
     runs-on: ubuntu-latest
+    # Serializes against Deploy, which drives the same single VM — see the long
+    # note on deploy.yml's `deploy` job for the failure this prevents. The group
+    # name is a lock on the VM, so it MUST match deploy.yml's verbatim.
+    concurrency:
+      group: scout-vm
+      cancel-in-progress: false
     env:
       APP_DIR: /opt/job-market-scout
       VM_USER: ${{ vars.VM_USER }}
