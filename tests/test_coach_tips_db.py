@@ -4,7 +4,8 @@ from datetime import date
 
 import pytest
 
-from scout.shared.db import record_run_listings, start_run, upsert_listing
+from scout.shared.db import record_listing_tips, record_run_listings, start_run, upsert_listing
+from scout.shared.schemas import GroundedTip
 
 pytestmark = pytest.mark.asyncio
 
@@ -80,3 +81,59 @@ async def test_listing_tips_cascade_with_run_listing(
             run_listing_id,
         )
         assert remaining == 0
+
+
+async def test_record_listing_tips_writes_one_row_per_tip(
+    db_pool, listing_factory, match_factory
+):
+    async with db_pool.acquire() as conn:
+        match = match_factory(listing=listing_factory(external_id="tips-1"))
+        run_id = await _seed_run(conn, [match])
+
+        await record_listing_tips(
+            conn,
+            run_id,
+            [
+                (
+                    match,
+                    [
+                        GroundedTip(
+                            gap_skill="Kubernetes",
+                            tip="Start with kubernetes/examples.",
+                            cited_urls=["https://github.com/k/examples"],
+                        ),
+                        GroundedTip(
+                            gap_skill="Terraform",
+                            tip="Read the module registry docs.",
+                            cited_urls=["https://github.com/t/modules"],
+                        ),
+                    ],
+                )
+            ],
+        )
+
+        rows = await conn.fetch(
+            "SELECT gap_skill, cited_urls FROM listing_tips ORDER BY gap_skill"
+        )
+        assert [row["gap_skill"] for row in rows] == ["Kubernetes", "Terraform"]
+        assert list(rows[0]["cited_urls"]) == ["https://github.com/k/examples"]
+
+
+async def test_record_listing_tips_replaces_previous_tips(
+    db_pool, listing_factory, match_factory
+):
+    async with db_pool.acquire() as conn:
+        match = match_factory(listing=listing_factory(external_id="tips-1"))
+        run_id = await _seed_run(conn, [match])
+        first = [
+            GroundedTip(gap_skill="Kubernetes", tip="old", cited_urls=["https://a/b"])
+        ]
+        second = [
+            GroundedTip(gap_skill="Kubernetes", tip="new", cited_urls=["https://a/b"])
+        ]
+
+        await record_listing_tips(conn, run_id, [(match, first)])
+        await record_listing_tips(conn, run_id, [(match, second)])
+
+        rows = await conn.fetch("SELECT tip FROM listing_tips")
+        assert [row["tip"] for row in rows] == ["new"]
