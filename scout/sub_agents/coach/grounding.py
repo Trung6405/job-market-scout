@@ -130,8 +130,12 @@ def canonical_url(url: str) -> str:
     strict nor too loose.
 
     Surrounding whitespace is dropped, the scheme is lowercased, and the
-    whole authority is lowercased — host, and with it any port or userinfo,
-    since neither carries case that distinguishes two resources. A trailing
+    whole authority is lowercased — host, and with it any port or userinfo
+    that happens to be present. The host is the only part of that where
+    lowercasing is actually cosmetic (DNS names are case-insensitive); a port
+    is digits, so it is a no-op there; and userinfo *is* case-sensitive per
+    RFC 3986, so folding it is a real (if remote) risk, accepted because the
+    corpus is GitHub repo roots and never carries userinfo at all. A trailing
     slash on a path names the same resource, so it goes too. Together these
     stop a real citation being stripped over formatting. Everything else is
     left alone deliberately: path case is significant, and folding it would
@@ -237,10 +241,31 @@ def _tidy(text: str) -> str:
     text = re.sub(r"\(\s*\)|\(\s*[A-Za-z]{1,6}:?\s+\)", "", text)
     # The other wrappers the extractor stops at. Unlike parentheses these are
     # never taken with the URL by `_removal_span` — there is no close pattern
-    # for them — so stripping a wrapped citation always orphans the pair. P4
-    # renders `listing_tips.tip` verbatim, so '<>' or '""' left behind is
-    # user-visible debris.
-    text = re.sub(r"<\s*>|\[\s*\]|\"\s*\"|'\s*'", "", text)
+    # for them — so stripping a wrapped citation always orphans one or both
+    # sides of the pair. P4 renders `listing_tips.tip` verbatim, so this
+    # debris is user-visible.
+    #
+    # The bracket forms tolerate whitespace between the pair (`< >`, `[ ]`)
+    # because those shapes are never meaningful prose on their own. The quote
+    # form must not: two adjacent quoted terms — `"apply" "diff"` — are
+    # ordinary writing, and `_tidy` runs on every tip, not just ones a strip
+    # touched, so a `\s*` here would eat the text between them along with the
+    # whitespace. An orphaned pair left by a strip has nothing at all between
+    # its delimiters (both are stop characters the URL match halts at, so
+    # neither is ever pulled into the removed span), so matching only the
+    # empty pair still clears every orphan.
+    text = re.sub(r"<\s*>|\[\s*\]|\"\"|''", "", text)
+    # `*` and the backtick are not stop characters — the URL pattern's
+    # negated class does not exclude them — so `**url**` and `` `url` `` are
+    # not wrapped, they widen the match: the closing delimiter is swallowed
+    # into the URL and removed with it, leaving only the opening one stray in
+    # the prose (`See **https://bad/x** then` -> `See ** then`). What is left
+    # behind is therefore a single delimiter with whitespace on both sides,
+    # not a pair, so this rule clears a lone token rather than an empty pair.
+    # It must not touch `**bold** and **also bold**`: every `**` there sits
+    # flush against a word on at least one side, so the whitespace-on-both-
+    # sides test excludes all four of them.
+    text = re.sub(r"(?<!\S)(?:\*\*|`)(?!\S)", "", text)
     text = re.sub(r"[ \t]{2,}", " ", text)
     text = re.sub(r"\s+([.,;:!?])", r"\1", text)
     # A single space stranded at the end of a line: neither rule above fires

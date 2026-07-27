@@ -340,6 +340,44 @@ def test_tidy_leaves_intact_parentheticals_alone(text):
     assert validate_grounding(text, ALLOWED).text == text
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Two adjacent quoted terms, not a strip's orphaned pair. A `\s*`
+        # between the quotes would eat "diff" / "best practices" along with
+        # the whitespace that separates the two quoted terms.
+        'Read "apply" "diff" in order.',
+        "Use Kubernetes' 'best practices' guide.",
+    ],
+)
+def test_tidy_leaves_adjacent_quoted_terms_alone(text):
+    assert validate_grounding(text, ALLOWED).text == text
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        # `*` and the backtick are not stop characters, so the URL match
+        # widens through the closing delimiter and takes it out with the
+        # URL, leaving only the opening one stray in the prose.
+        ("See **https://bad.test/x** then stop.", "See then stop."),
+        ("Run `https://bad.test/x` now.", "Run now."),
+    ],
+)
+def test_stray_emphasis_and_backtick_delimiters_are_cleared(text, expected):
+    result = validate_grounding(text, ALLOWED)
+    assert result.text == expected
+    assert result.cited_urls == []
+
+
+def test_tidy_leaves_adjacent_emphasis_runs_alone():
+    # Two complete `**...**` runs, not a strip's stray delimiter: every `**`
+    # here sits flush against a word on at least one side, so the
+    # whitespace-on-both-sides rule for a stray delimiter must not fire.
+    text = "**bold** and **also bold**"
+    assert validate_grounding(text, ALLOWED).text == text
+
+
 def test_repeated_allowed_url_is_cited_once():
     text = (
         "Clone https://github.com/k/examples, then read "
@@ -483,8 +521,15 @@ def test_removal_never_damages_a_neighbouring_url(
 )
 def test_cited_urls_always_matches_the_returned_text(text):
     """The invariant the caller's "drop tips citing nothing" rule depends on:
-    `cited_urls` is derived from the returned text, so it can never claim a
-    citation the reader will not find."""
+    `cited_urls` is derived from the returned text, so every URL it names is
+    one `extract_urls` can also find in that text — up to canonical equality,
+    not string equality. `cited_urls` carries the allowlist's spelling, the
+    text carries the model's, and the two differ whenever the model's casing
+    or trailing slash does: `cited_urls` can record
+    `https://github.com/k/examples` while the reader sees
+    `HTTPS://GitHub.com/k/examples/` in the tip. What can never happen is
+    `cited_urls` naming a citation with no canonically-equal match in the
+    text at all."""
     result = validate_grounding(text, ALLOWED)
     assert result.cited_urls == extract_urls(result.text)
 
