@@ -140,4 +140,15 @@ for the daily run. No new workflow file, no additional VM start/stop.
 
 ## Amendments *(only after approval — never silently edit approved content)*
 
-- —
+- **2026-07-27 — `resources.skills[]` is normalized on write.** Surfaced while
+  brainstorming P2. As built, the tagged skills were stored verbatim from the
+  LLM, relying on the tagging prompt's "use canonical names" instruction. That
+  is best-effort wording, not the deterministic guarantee FR-CC-1 names
+  (`normalize_skill`), so a tagger returning `"K8s"` or `"React.js"` would have
+  written rows the P2 retriever's exact `skills[]` pre-filter (FR-CC-7) could
+  never match. `normalize_skill` moves from `scout/sub_agents/advisor/gaps.py`
+  to `scout/shared/skills.py` — it is now the shared canonical form on both
+  sides of retrieval, and the Coach importing it from the Advisor would have
+  been the wrong dependency direction. `runner.py` applies it (deduping
+  collisions, dropping empties) before constructing each `Resource`.
+  No backfill: the corpus is empty until this ships.

@@ -38,13 +38,17 @@ async def _seed_kubernetes_gap(db_pool, listing_factory, match_factory) -> None:
         await record_listing_gaps(conn, run_id, [(match, [gap])])
 
 
-def _mock_candidate_pipeline(monkeypatch) -> dict[str, list]:
+def _mock_candidate_pipeline(monkeypatch, skills: list[str] | None = None) -> dict[str, list]:
     """Wire up fake candidate pipeline mocks and return call-tracking lists.
 
     The returned dict exposes "tag_readme" and "embed" lists that each mock
     appends to when invoked, so callers can assert these expensive calls are
     NOT re-spent on a subsequent run for an already-stored URL.
+
+    ``skills`` overrides what the fake tagger returns, so a test can feed in
+    non-canonical wording and assert what actually lands in the column.
     """
+    tagged_skills = ["kubernetes"] if skills is None else skills
     calls: dict[str, list] = {"tag_readme": [], "embed": []}
 
     monkeypatch.setattr(
@@ -59,7 +63,7 @@ def _mock_candidate_pipeline(monkeypatch) -> dict[str, list]:
     async def _fake_tag_readme(readme_text, settings):
         calls["tag_readme"].append((readme_text, settings))
         return ResourceTags(
-            skills=["kubernetes"],
+            skills=tagged_skills,
             resource_type="repo",
             level="intermediate",
             summary="Container orchestration platform.",
@@ -95,6 +99,29 @@ async def test_run_coach_aggregator_inserts_new_resource(
 
 
 @pytest.mark.asyncio
+async def test_run_coach_aggregator_normalizes_tagged_skills(
+    db_pool, listing_factory, match_factory, monkeypatch
+):
+    """Stored ``skills[]`` must be canonical (FR-CC-1), not the tagger's wording.
+
+    The tagging prompt only *asks* for canonical names; the retriever's exact
+    ``skills[]`` pre-filter needs a deterministic guarantee, so
+    ``normalize_skill`` is applied on write.
+    """
+    await _seed_kubernetes_gap(db_pool, listing_factory, match_factory)
+    _mock_candidate_pipeline(monkeypatch, skills=["K8s", "React.js", "  Postgres "])
+
+    await runner.run_coach_aggregator(_test_settings())
+
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT skills FROM resources WHERE url = $1",
+            "https://github.com/kubernetes/kubernetes",
+        )
+    assert row["skills"] == ["kubernetes", "react", "postgresql"]
+
+
+@pytest.mark.asyncio
 async def test_run_coach_aggregator_second_run_inserts_nothing_new(
     db_pool, listing_factory, match_factory, monkeypatch
 ):
@@ -122,6 +149,13 @@ async def test_run_coach_aggregator_second_run_inserts_nothing_new(
 async def test_run_coach_aggregator_skips_when_github_pat_unset(db_pool):
     summary = await runner.run_coach_aggregator(_test_settings(github_pat=""))
     assert summary == type(summary)(candidates_seen=0, inserted=0, duplicates=0)
+
+
+def test_canonical_skills_collapses_variants_and_drops_empties():
+    assert runner._canonical_skills(["K8s", "Kubernetes", "React.js", "!!", "  "]) == [
+        "kubernetes",
+        "react",
+    ]
 
 
 def test_gather_candidate_urls_throttles_between_skill_searches(monkeypatch):
