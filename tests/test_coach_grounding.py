@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from scout.sub_agents.coach.grounding import extract_urls
+from scout.sub_agents.coach.grounding import canonical_url, extract_urls
 
 
 @pytest.mark.parametrize(
@@ -156,3 +156,59 @@ def test_extract_urls_returns_the_whole_token_when_truncated(text, expected):
 )
 def test_extract_urls_keeps_legitimate_wraps_intact(text, expected):
     assert extract_urls(text) == expected
+
+
+@pytest.mark.parametrize(
+    "a,b",
+    [
+        ("https://github.com/k/examples", "https://github.com/k/examples/"),
+        ("https://GitHub.com/k/examples", "https://github.com/k/examples"),
+        ("HTTPS://github.com/k/examples", "https://github.com/k/examples"),
+        ("  https://github.com/k/examples  ", "https://github.com/k/examples"),
+    ],
+)
+def test_canonical_url_ignores_cosmetic_differences(a, b):
+    assert canonical_url(a) == canonical_url(b)
+
+
+@pytest.mark.parametrize(
+    "a,b",
+    [
+        # Path case is meaningful on GitHub and everywhere else.
+        ("https://github.com/k/Examples", "https://github.com/k/examples"),
+        # A fabricated sibling path must never canonicalize onto a real one.
+        ("https://github.com/k/examples-v2", "https://github.com/k/examples"),
+        ("https://github.com/k/examples", "https://gitlab.com/k/examples"),
+        ("http://github.com/k/examples", "https://github.com/k/examples"),
+    ],
+)
+def test_canonical_url_preserves_meaningful_differences(a, b):
+    assert canonical_url(a) != canonical_url(b)
+
+
+@pytest.mark.parametrize(
+    "a,b",
+    [
+        # The corpus stores GitHub repo roots, so the likeliest fabrication is a
+        # real root with extra path segments glued on. Nothing may trim them.
+        ("https://github.com/k/examples/docs/setup", "https://github.com/k/examples"),
+        ("https://github.com/k/examples/blob/main/README.md", "https://github.com/k/examples"),
+        # A trailing slash is only cosmetic on the *last* segment; it never
+        # licenses dropping a segment that carries meaning.
+        ("https://github.com/k/examples/docs/", "https://github.com/k/examples"),
+        # A plausible near-miss host: same registrable domain, different
+        # subdomain, entirely different content.
+        ("https://docs.github.com/k/examples", "https://github.com/k/examples"),
+        ("https://raw.githubusercontent.com/k/examples", "https://github.com/k/examples"),
+        # Query and fragment are carried through, not dropped, so a deep link
+        # dressed up as a repo root stays distinguishable from the root itself.
+        ("https://github.com/k/examples?tab=readme", "https://github.com/k/examples"),
+        ("https://github.com/k/examples#install", "https://github.com/k/examples"),
+        # Host case folds, but userinfo/port do not vanish: a lookalike
+        # authority must not canonicalize onto the bare host.
+        ("https://github.com:8080/k/examples", "https://github.com/k/examples"),
+        ("https://github.com@evil.test/k/examples", "https://github.com/k/examples"),
+    ],
+)
+def test_canonical_url_preserves_further_near_miss_differences(a, b):
+    assert canonical_url(a) != canonical_url(b)

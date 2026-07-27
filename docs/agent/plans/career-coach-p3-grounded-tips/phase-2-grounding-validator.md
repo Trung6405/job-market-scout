@@ -120,7 +120,7 @@ in Phase 3 to avoid emitting it.
 - **Files:** `scout/sub_agents/coach/grounding.py`, `tests/test_coach_grounding.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: cosmetic differences compare equal, meaningful
+  - [x] Write failing test: cosmetic differences compare equal, meaningful
         differences do not.
 
     ```python
@@ -156,9 +156,9 @@ in Phase 3 to avoid emitting it.
         assert canonical_url(a) != canonical_url(b)
     ```
 
-  - [ ] Verify it fails (`pytest tests/test_coach_grounding.py -v`) — expected:
+  - [x] Verify it fails (`pytest tests/test_coach_grounding.py -v`) — expected:
         `ImportError: cannot import name 'canonical_url'`
-  - [ ] Implement in `grounding.py`.
+  - [x] Implement in `grounding.py`.
 
     ```python
     def canonical_url(url: str) -> str:
@@ -185,8 +185,8 @@ in Phase 3 to avoid emitting it.
         )
     ```
 
-  - [ ] Verify it passes (`pytest tests/test_coach_grounding.py -v`)
-  - [ ] Commit: `feat(coach): add URL canonicalization for allowlist comparison`
+  - [x] Verify it passes (`pytest tests/test_coach_grounding.py -v`)
+  - [x] Commit: `feat(coach): add URL canonicalization for allowlist comparison`
 
 ### Task 3: `validate_grounding`
 

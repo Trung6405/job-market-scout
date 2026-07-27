@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from urllib.parse import urlsplit, urlunsplit
 
 # LLM prose wraps URLs in parentheses, Markdown link syntax, angle brackets
 # and quotes, and ends sentences with them, so the pattern stops at whitespace
@@ -99,3 +100,27 @@ def extract_urls(text: str) -> list[str]:
         )
         urls.append(raw.rstrip(_TRAILING_PUNCTUATION))
     return urls
+
+
+def canonical_url(url: str) -> str:
+    """Normalize only what is cosmetic, so comparison is neither too
+    strict nor too loose.
+
+    Scheme and host are case-insensitive per RFC 3986 and a trailing
+    slash on a path names the same resource, so normalizing those stops a
+    real citation being stripped over formatting. Everything else is left
+    alone deliberately: path case is significant, and folding it would let
+    a fabricated near-miss path canonicalize onto a real one — which is
+    exactly the failure this validator exists to catch. The scheme is
+    compared, not normalized away, so http:// and https:// stay distinct.
+    """
+    parts = urlsplit(url.strip())
+    return urlunsplit(
+        (
+            parts.scheme.lower(),
+            parts.netloc.lower(),
+            parts.path.rstrip("/"),
+            parts.query,
+            parts.fragment,
+        )
+    )
