@@ -1,6 +1,6 @@
 # Plan: Career Coach P2 — Retriever
 
-> **Status:** Not started
+> **Status:** In progress
 > **Created:** 2026-07-27 · **Last updated:** 2026-07-27
 > **Spec:** [spec.md](../../specs/career-coach-p2-retriever/spec.md)
 
@@ -62,7 +62,7 @@ nothing consumes it yet.
 
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
-| 1 | Retrieval query in the shared data layer | [phase-1-retrieval-query.md](phase-1-retrieval-query.md) | Not started |
+| 1 | Retrieval query in the shared data layer | [phase-1-retrieval-query.md](phase-1-retrieval-query.md) | Complete |
 | 2 | Retriever module and config | [phase-2-retriever-module.md](phase-2-retriever-module.md) | Not started |
 
 > All phases are planned in advance — every row above has a written,

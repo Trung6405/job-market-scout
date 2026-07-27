@@ -110,3 +110,44 @@ async def test_maps_each_skill_to_its_own_resources(db_pool):
 async def test_empty_skill_list_returns_empty_mapping(db_pool):
     async with db_pool.acquire() as conn:
         assert await get_resources_for_skills(conn, [], [], k=3, max_age_days=90) == {}
+
+
+@pytest.mark.asyncio
+async def test_excludes_stale_and_unrankable_resources(db_pool):
+    """Only live, rankable rows come back.
+
+    A NULL `last_verified` means "never checked", which is every row P1
+    writes — those are trusted. Once P5 begins stamping successful checks, a
+    URL that fails re-verification stops receiving a fresh stamp and ages out
+    on its own, which is how FR-CC-10 is satisfied without the retriever
+    changing.
+    """
+    now = datetime.now(timezone.utc)
+    async with db_pool.acquire() as conn:
+        await _seed_resource(conn, "https://example.com/never", ["kubernetes"], _unit(0))
+        await _seed_resource(
+            conn,
+            "https://example.com/fresh",
+            ["kubernetes"],
+            _unit(1),
+            last_verified=now - timedelta(days=1),
+        )
+        await _seed_resource(
+            conn,
+            "https://example.com/stale",
+            ["kubernetes"],
+            _unit(2),
+            last_verified=now - timedelta(days=200),
+        )
+        await _seed_resource(
+            conn, "https://example.com/unrankable", ["kubernetes"], None
+        )
+
+        results = await get_resources_for_skills(
+            conn, ["kubernetes"], [_unit(0)], k=10, max_age_days=90
+        )
+
+    assert {str(r.url) for r in results["kubernetes"]} == {
+        "https://example.com/never",
+        "https://example.com/fresh",
+    }

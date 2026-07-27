@@ -1,7 +1,7 @@
 # Phase 1: Retrieval Query in the Shared Data Layer
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** In progress
+> **Status:** Complete
 > **Depends on:** nothing (P0 schema and P1's normalized `resources.skills[]`
 > are already on this branch)
 
@@ -97,23 +97,23 @@ wrong-skill, unranked, or stale ones.
 - **Files:** `scout/shared/db.py`, `tests/test_coach_retrieval_db.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: seed one `kubernetes` row with `last_verified`
+  - [x] Write failing test: seed one `kubernetes` row with `last_verified`
         NULL, one verified yesterday, one verified 200 days ago, and one with
         a NULL embedding; assert only the first two are returned
-  - [ ] Verify it fails (`pytest tests/test_coach_retrieval_db.py -q`)
-  - [ ] Add `embedding IS NOT NULL` and
+  - [x] Verify it fails (`pytest tests/test_coach_retrieval_db.py -q`)
+  - [x] Add `embedding IS NOT NULL` and
         `(last_verified IS NULL OR last_verified > now() - make_interval(days => $n))`
         to the pre-filter
-  - [ ] Verify it passes (`pytest tests/test_coach_retrieval_db.py -q`)
-  - [ ] Commit: `feat(coach): exclude stale and unrankable resources from retrieval`
+  - [x] Verify it passes (`pytest tests/test_coach_retrieval_db.py -q`)
+  - [x] Commit: `feat(coach): exclude stale and unrankable resources from retrieval`
 
 ---
 
 ## Verification
 
-- [ ] All phase tests pass:
+- [x] All phase tests pass:
       `pytest tests/test_coach_retrieval_db.py tests/test_coach_schemas.py -q`
-- [ ] Full regression: `pytest -q` — confirms the new `scout/shared/db.py`
+- [x] Full regression: `pytest -q` — confirms the new `scout/shared/db.py`
       helper and schema addition break no existing caller
 
 ## Rollback
@@ -146,6 +146,19 @@ A third test beyond the two the plan listed covers the `skills=[]` early
 return, which short-circuits before any query is issued. Added because Phase 2
 depends on that behaviour: `retrieve_for_skills` must touch neither `embed`
 nor the database when a run has no gaps.
+
+**Task 5 — deviation from the planned task order.** Both filters were written
+into Task 3's query rather than added here, so this test passed on first run.
+Since no red-green cycle proved it, the test was checked by mutation instead:
+widening the staleness window and dropping the `embedding IS NOT NULL` guard
+makes it fail, so it does constrain the behaviour it claims to.
+
+That mutation exposed something worth keeping: a NULL-embedding row comes back
+with `similarity = None`, which `RetrievedResource` rejects outright because
+Task 2 made the field required. The SQL guard is still the real defence — an
+unrankable row should never reach the model — but the required field means a
+regression there surfaces as a loud validation error rather than a silently
+unranked result.
 
 **Unplanned finding — `CROSS JOIN LATERAL` drops skills with no matches.**
 Querying for `["kubernetes", "react"]` where nothing is tagged `react`
