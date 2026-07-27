@@ -1,7 +1,7 @@
 # Phase 1: Renderer Filters
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** In progress
+> **Status:** Complete
 > **Depends on:** nothing
 
 ---
@@ -198,25 +198,25 @@ phase; the template is untouched.
   `tests/test_advisor_linkify.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: rendering the string template
+  - [x] Write failing test: rendering the string template
         `{{ text|linkify(1) }}` and `{{ detail|citation_cap }}` through
         `report._env` produces the expected output — i.e. both filters are
         reachable by the names the template will use.
-  - [ ] Verify it fails (`pytest tests/test_advisor_linkify.py -v`)
-  - [ ] Implement minimal change: add `env.filters["linkify"] = _linkify` and
+  - [x] Verify it fails (`pytest tests/test_advisor_linkify.py -v`)
+  - [x] Implement minimal change: add `env.filters["linkify"] = _linkify` and
         `env.filters["citation_cap"] = _citation_cap` in `_get_env()`,
         alongside the four existing registrations.
-  - [ ] Verify it passes (`pytest tests/test_advisor_linkify.py -v`)
-  - [ ] Commit: `feat(advisor): register linkify and citation_cap filters`
+  - [x] Verify it passes (`pytest tests/test_advisor_linkify.py -v`) — 48 passed
+  - [x] Commit: `feat(advisor): register linkify and citation_cap filters`
 
 ---
 
 ## Verification
 
-- [ ] All phase tests pass: `pytest tests/test_advisor_linkify.py -v`
-- [ ] No regression in the renderer suite:
-      `pytest tests/test_advisor_report.py -v` (nothing rendered has changed
-      yet — this phase adds capability the template does not call)
+- [x] All phase tests pass: `pytest tests/test_advisor_linkify.py -v` — 48 passed
+- [x] No regression in the renderer suite: full `pytest` run green, 371
+      passed (nothing rendered has changed yet — this phase adds capability
+      the template does not call)
 
 ## Rollback
 

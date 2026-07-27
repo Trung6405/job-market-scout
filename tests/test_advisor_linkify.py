@@ -5,7 +5,12 @@ from datetime import datetime, timezone
 import pytest
 
 from scout.shared.schemas import GroundedTip, Listing, RunListingDetail, SkillGap
-from scout.sub_agents.advisor.report import _citation_cap, _iter_urls, _linkify
+from scout.sub_agents.advisor.report import (
+    _citation_cap,
+    _env,
+    _iter_urls,
+    _linkify,
+)
 
 
 def _detail(gap_skills: list[str], tip_skills: list[str]) -> RunListingDetail:
@@ -284,3 +289,27 @@ def test_citation_cap_counts_a_duplicated_tip_once() -> None:
     first renders — so it must not halve the budget."""
     detail = _detail(["Kubernetes"], ["Kubernetes", "Kubernetes"])
     assert _citation_cap(detail) == 3
+
+
+def test_linkify_is_registered_under_the_name_the_template_uses() -> None:
+    rendered = _env.from_string("{{ text|linkify(1) }}").render(
+        text="See https://github.com/a/b now."
+    )
+    assert '<a href="https://github.com/a/b"' in rendered
+
+
+def test_citation_cap_is_registered_under_the_name_the_template_uses() -> None:
+    rendered = _env.from_string("{{ detail|citation_cap }}").render(
+        detail=_detail(["Kubernetes"], ["Kubernetes"])
+    )
+    assert rendered == "3"
+
+
+def test_registered_linkify_output_is_not_double_escaped() -> None:
+    """Jinja autoescape must leave the filter's Markup alone — otherwise the
+    anchors would render as visible tags."""
+    rendered = _env.from_string("{{ text|linkify(1) }}").render(
+        text="Beware <b>this</b> https://github.com/a/b"
+    )
+    assert "&lt;a href" not in rendered
+    assert "&lt;b&gt;" in rendered

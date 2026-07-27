@@ -192,6 +192,8 @@ def _get_env() -> Environment:
     env.filters["band_css"] = _band_css
     env.filters["format_salary"] = _format_salary
     env.filters["markdown"] = _render_markdown
+    env.filters["linkify"] = _linkify
+    env.filters["citation_cap"] = _citation_cap
     return env
 
 

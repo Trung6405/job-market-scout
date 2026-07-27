@@ -31,7 +31,7 @@ itself, with no templated generic advice anywhere on the page.
 - [ ] The per-gap cap is `max(1, 3 // tipped_gaps)` counted in **distinct**
       URLs: one tipped gap gets 3, two get 1 each, three get 1 each, five get
       1 each; a tip naming one resource twice spends one unit of budget.
-- [ ] URL spans match what `scout/sub_agents/coach/grounding.py` finds, so
+- [x] URL spans match what `scout/sub_agents/coach/grounding.py` finds, so
       every URL P3 stored is one P4 can linkify.
 - [ ] Markup in tip text is escaped, and a non-`http(s)` scheme
       (`javascript:`, `data:`) is never turned into an anchor.
@@ -79,7 +79,7 @@ itself, with no templated generic advice anywhere on the page.
 
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
-| 1 | Renderer filters | [phase-1-renderer-filters.md](phase-1-renderer-filters.md) | In progress |
+| 1 | Renderer filters | [phase-1-renderer-filters.md](phase-1-renderer-filters.md) | Complete |
 | 2 | Tips in gap blocks | [phase-2-tips-in-gap-blocks.md](phase-2-tips-in-gap-blocks.md) | Not started |
 | 3 | Retire the static section | [phase-3-retire-static-section.md](phase-3-retire-static-section.md) | Not started |
 
