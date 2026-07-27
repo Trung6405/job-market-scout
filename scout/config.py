@@ -170,6 +170,18 @@ class Settings:
             "https://github.com/kristofferandreasen/awesome-azure",
         )
     )
+    # How many resources the retriever returns per gap. The PRS specifies
+    # "top 2-3"; 3 gives the grounded-tip stage the widest choice, and it can
+    # present fewer.
+    coach_top_k: int = field(default_factory=partial(_env_int, "COACH_TOP_K", 3))
+    # A resource stops being retrievable once its last successful link check
+    # is this old. `last_verified` is NULL until the P5 link-health checker
+    # exists, and NULL counts as live, so this cannot bite before P5 ships —
+    # at which point a URL that fails re-verification simply stops receiving a
+    # fresh stamp and ages out on its own (FR-CC-10).
+    coach_resource_max_age_days: int = field(
+        default_factory=partial(_env_int, "COACH_RESOURCE_MAX_AGE_DAYS", 90)
+    )
     profile: Profile = field(init=False)
 
     def __post_init__(self) -> None:

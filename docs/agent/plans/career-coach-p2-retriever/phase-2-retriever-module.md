@@ -1,7 +1,7 @@
 # Phase 2: Retriever Module and Config
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** In progress
 > **Depends on:** Phase 1 complete — `get_resources_for_skills` and
 > `RetrievedResource` exist and are tested
 
@@ -36,14 +36,14 @@ passed in.
 - **Files:** `scout/config.py`, `tests/test_coach_config.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: `Settings()` exposes `coach_top_k == 3` and
+  - [x] Write failing test: `Settings()` exposes `coach_top_k == 3` and
         `coach_resource_max_age_days == 90` by default, and both read from
         `COACH_TOP_K` / `COACH_RESOURCE_MAX_AGE_DAYS` when set
-  - [ ] Verify it fails (`pytest tests/test_coach_config.py -q`)
-  - [ ] Add both fields with `partial(_env_int, ...)` default factories,
+  - [x] Verify it fails (`pytest tests/test_coach_config.py -q`)
+  - [x] Add both fields with `partial(_env_int, ...)` default factories,
         alongside the existing `coach_*` settings
-  - [ ] Verify it passes (`pytest tests/test_coach_config.py -q`)
-  - [ ] Commit: `feat(coach): add retriever top-k and staleness settings`
+  - [x] Verify it passes (`pytest tests/test_coach_config.py -q`)
+  - [x] Commit: `feat(coach): add retriever top-k and staleness settings`
 
 ### Task 2: Normalization and dedupe of incoming skills
 
