@@ -196,7 +196,11 @@ in Phase 3 to avoid emitting it.
   - [ ] Write failing test: allowed URLs survive untouched; a fabricated URL is
         removed from the text and reported as stripped; a URL from a *different*
         gap's resources is stripped even though it is real; the leftover prose
-        reads cleanly; a tip citing nothing valid reports no citations.
+        reads cleanly; a tip citing nothing valid reports no citations; **and a
+        URL that `canonical_url` cannot parse is stripped rather than raising**
+        (e.g. a host containing `℀`, which `extract_urls` will hand
+        through and `urlsplit` rejects under NFKC — added after Task 2's
+        review found the unguarded call).
 
     ```python
     # append to tests/test_coach_grounding.py
@@ -301,6 +305,23 @@ in Phase 3 to avoid emitting it.
         return text.strip()
 
 
+    def _safe_canonical(url: str) -> str:
+        """`canonical_url`, but never raising on untrusted input.
+
+        `urlsplit` rejects some strings the extractor will genuinely hand us —
+        a host that fails NFKC normalization, for one — and this function's
+        whole job is absorbing model output, so a crash here would take down
+        the grounding pass instead of stripping one bad URL. Falling back to
+        the raw string is safe in the direction that matters: an unparseable
+        URL cannot equal a canonicalized allowlist entry, so it stays
+        un-matchable and gets stripped.
+        """
+        try:
+            return canonical_url(url)
+        except ValueError:
+            return url
+
+
     def validate_grounding(text: str, allowed_urls: list[str]) -> GroundingResult:
         """Strip every URL in `text` that is not in `allowed_urls`.
 
@@ -309,13 +330,13 @@ in Phase 3 to avoid emitting it.
         generation prompt also instructs the model to cite only these, but per
         D-CC-5 that instruction is not what makes it true.
         """
-        allowed = {canonical_url(url) for url in allowed_urls}
+        allowed = {_safe_canonical(url) for url in allowed_urls}
         cited: list[str] = []
         stripped: list[str] = []
         cleaned = text
 
         for url in extract_urls(text):
-            if canonical_url(url) in allowed:
+            if _safe_canonical(url) in allowed:
                 if url not in cited:
                     cited.append(url)
             elif url not in stripped:
