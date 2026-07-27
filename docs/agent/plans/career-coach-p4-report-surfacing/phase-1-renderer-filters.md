@@ -135,19 +135,19 @@ phase; the template is untouched.
   `tests/test_advisor_linkify.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: text containing three distinct URLs rendered with
+  - [x] Write failing test: text containing three distinct URLs rendered with
         `limit=1` yields exactly one `<a` and the other two URLs still present
         as escaped, unlinked text; with `limit=3` yields three anchors; with
         `limit=0` yields no anchors and no lost text. Plus the distinctness
         case: text citing **one** URL three times with `limit=3` yields three
         anchors but spends one unit of budget — i.e. a fourth, different URL in
         the same text is still linked.
-  - [ ] Verify it fails (`pytest tests/test_advisor_linkify.py -v`)
-  - [ ] Implement minimal change: track the set of URLs already linked; a
+  - [x] Verify it fails (`pytest tests/test_advisor_linkify.py -v`)
+  - [x] Implement minimal change: track the set of URLs already linked; a
         repeat of an already-linked URL is wrapped without consuming budget,
         and wrapping stops once `limit` **distinct** URLs have been linked.
-  - [ ] Verify it passes (`pytest tests/test_advisor_linkify.py -v`)
-  - [ ] Commit: `feat(advisor): cap the distinct links linkify emits per tip`
+  - [x] Verify it passes (`pytest tests/test_advisor_linkify.py -v`) — 32 passed
+  - [x] Commit: `feat(advisor): cap the distinct links linkify emits per tip`
 
 > Distinctness matters because P3 dedupes `cited_urls` but never touches the
 > prose — its own `test_repeated_allowed_url_is_cited_once` stores a tip naming

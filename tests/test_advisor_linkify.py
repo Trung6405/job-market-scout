@@ -123,6 +123,64 @@ def test_linkify_empty_markdown_label_falls_back_to_the_derived_one() -> None:
     assert "[" not in result
 
 
+_THREE_URLS = (
+    "Try https://github.com/a/b, then https://github.com/c/d, "
+    "then https://github.com/e/f."
+)
+
+
+def test_linkify_links_up_to_the_limit() -> None:
+    result = str(_linkify(_THREE_URLS, 1))
+    assert result.count("<a href=") == 1
+    # The unlinked ones stay visible rather than vanishing from the advice.
+    assert "https://github.com/c/d" in result
+    assert "https://github.com/e/f" in result
+
+
+def test_linkify_links_all_when_the_limit_allows() -> None:
+    assert str(_linkify(_THREE_URLS, 3)).count("<a href=") == 3
+
+
+def test_linkify_with_a_zero_limit_links_nothing_and_loses_nothing() -> None:
+    result = str(_linkify(_THREE_URLS, 0))
+    assert "<a href=" not in result
+    assert result == _THREE_URLS
+
+
+def test_linkify_counts_distinct_urls_against_the_limit() -> None:
+    """P3 dedupes cited_urls but never the prose, so one resource can appear
+    twice. Counting occurrences would let it consume the whole budget."""
+    text = (
+        "Clone https://github.com/a/b, read https://github.com/a/b again, "
+        "then try https://github.com/c/d."
+    )
+    result = str(_linkify(text, 2))
+    # Both mentions of the repeated URL link, and the second distinct URL
+    # still gets its link — three anchors from two units of budget.
+    assert result.count("<a href=") == 3
+    assert result.count('href="https://github.com/a/b"') == 2
+    assert 'href="https://github.com/c/d"' in result
+
+
+def test_linkify_repeat_beyond_the_limit_is_still_not_linked() -> None:
+    text = "Clone https://github.com/a/b, then try https://github.com/c/d twice: https://github.com/c/d."
+    result = str(_linkify(text, 1))
+    assert result.count("<a href=") == 1
+    assert result.count('href="https://github.com/a/b"') == 1
+    assert "<a href=\"https://github.com/c/d\"" not in result
+
+
+def test_linkify_over_limit_markdown_citation_stays_as_written() -> None:
+    """Over budget, the construct is left exactly as stored — the URL stays
+    visible rather than being deleted from advice written around it, and its
+    brackets come along, since rewriting unlinked prose is not this filter's
+    job."""
+    text = "Try https://github.com/a/b or [the guide](https://github.com/c/d)."
+    result = str(_linkify(text, 1))
+    assert result.count("<a href=") == 1
+    assert "[the guide](https://github.com/c/d)" in result
+
+
 def test_linkify_leaves_text_without_urls_alone() -> None:
     assert str(_linkify("Just practise more.", 3)) == "Just practise more."
 

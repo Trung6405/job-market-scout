@@ -113,7 +113,16 @@ def _linkify(text: str, limit: int) -> Markup:
 
     out: list[str] = []
     cursor = 0
+    linked: set[str] = set()
     for start, end, url in _iter_urls(text):
+        # The budget counts distinct resources, not mentions: the validator
+        # dedupes ``cited_urls`` but leaves the prose alone, so a tip naming one
+        # repo twice would otherwise spend two links looking like two
+        # recommendations. A repeat of something already linked is free.
+        if url not in linked and len(linked) >= limit:
+            continue
+        linked.add(url)
+
         markdown = _MARKDOWN_LABEL.search(text, cursor, start)
         if markdown is not None and text[end : end + 1] == ")":
             # Swallow the whole ``[label](url)`` construct, not just the URL,
