@@ -264,9 +264,8 @@ Rules:
 - Reference ONLY the resources listed under that same skill. Do not cite a
   resource listed under a different skill, and do not invent any URL,
   repository, book, or course that is not in the list.
-- Include the URL of at least one resource you reference, written out in
-  full and starting with "https://". Never refer to a resource by bare
-  domain or name alone (not "github.com/foo/bar", not "the foo/bar repo").
+- Every resource you mention must be written as a full URL beginning with
+  "https://" — never a bare domain, repo name, or title alone.
 - Write each URL as plain text, optionally wrapped in parentheses. Do not
   wrap it in asterisks, underscores, backticks, or angle brackets, and do
   not nest it inside another bracketed phrase.

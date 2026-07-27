@@ -218,6 +218,77 @@ async def test_tip_left_citing_nothing_is_dropped(
     assert result == [(match, [])]
 
 
+async def test_tip_citing_no_url_at_all_is_dropped(
+    stub_retriever, monkeypatch, match_factory, listing_factory
+):
+    """Distinct from the fabricated-URL case: nothing is stripped, there is
+    simply nothing to cite. Uncited prose is the static-template advice this
+    stage exists to replace, so it is not worth storing."""
+    monkeypatch.setattr(
+        tips_module,
+        "complete_json",
+        _reply(("Kubernetes", "Just practise more and read the docs.")),
+    )
+    match = match_factory(listing=listing_factory(external_id="a"))
+    gap = SkillGap(skill="Kubernetes", requirement_level="must_have", met=False)
+
+    result = await tips_module.run_grounded_tips(None, [(match, [gap])], Settings())
+
+    assert result == [(match, [])]
+
+
+async def test_duplicate_tips_for_one_gap_keep_only_the_first(
+    stub_retriever, monkeypatch, caplog, match_factory, listing_factory
+):
+    """One row per covered gap. `listing_tips` has no unique constraint to
+    lean on — `record_listing_tips` inserts with `executemany` and no
+    `ON CONFLICT`, so a constraint would fail the write instead of degrading,
+    and a duplicate would give P4 a doubled card."""
+    monkeypatch.setattr(
+        tips_module,
+        "complete_json",
+        _reply(
+            ("Kubernetes", "First: read https://github.com/k/examples."),
+            ("Kubernetes", "Second: also read https://github.com/k/examples."),
+        ),
+    )
+    match = match_factory(listing=listing_factory(external_id="a"))
+    gap = SkillGap(skill="Kubernetes", requirement_level="must_have", met=False)
+
+    with caplog.at_level(logging.WARNING):
+        result = await tips_module.run_grounded_tips(
+            None, [(match, [gap])], Settings()
+        )
+
+    tips = result[0][1]
+    assert len(tips) == 1
+    assert tips[0].tip.startswith("First:")
+    assert "duplicate tip" in caplog.text
+
+
+async def test_duplicate_is_measured_against_stored_tips_not_returned_ones(
+    stub_retriever, monkeypatch, match_factory, listing_factory
+):
+    """A lead tip dropped for citing nothing must not also cost the gap the
+    grounded tip that followed it — the cap is one *stored* row per gap."""
+    monkeypatch.setattr(
+        tips_module,
+        "complete_json",
+        _reply(
+            ("Kubernetes", "Just practise more."),
+            ("Kubernetes", "Read https://github.com/k/examples."),
+        ),
+    )
+    match = match_factory(listing=listing_factory(external_id="a"))
+    gap = SkillGap(skill="Kubernetes", requirement_level="must_have", met=False)
+
+    result = await tips_module.run_grounded_tips(None, [(match, [gap])], Settings())
+
+    tips = result[0][1]
+    assert len(tips) == 1
+    assert tips[0].cited_urls == ["https://github.com/k/examples"]
+
+
 async def test_tip_for_unrequested_skill_is_dropped(
     stub_retriever, monkeypatch, match_factory, listing_factory
 ):

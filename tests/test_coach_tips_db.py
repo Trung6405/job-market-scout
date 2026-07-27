@@ -216,3 +216,101 @@ async def test_get_run_details_returns_stored_tips(
             "https://github.com/k/examples"
         ]
         assert by_external_id["tips-2"].tips == []
+
+
+# --- The whole stage, end to end -------------------------------------------
+
+from scout.config import Settings
+from scout.shared.db import vector_text
+from scout.shared.schemas import GeneratedTip, GeneratedTips, SkillGap
+from scout.sub_agents.coach import retriever as retriever_module
+from scout.sub_agents.coach import tips as tips_module
+
+_DIMS = 384
+
+
+def _unit(index: int) -> list[float]:
+    vector = [0.0] * _DIMS
+    vector[index] = 1.0
+    return vector
+
+
+async def _seed_resource(conn, url: str, skill: str, vector: list[float]) -> None:
+    await conn.execute(
+        """
+        INSERT INTO resources
+            (url, title, resource_type, skills, summary, embedding, source)
+        VALUES ($1, $2, 'repo', $3, 'Worked examples.', $4::vector, 'test')
+        """,
+        url,
+        url.rsplit("/", 1)[-1],
+        [skill],
+        vector_text(vector),
+    )
+
+
+async def test_cross_gap_url_is_stripped_on_the_round_trip_through_the_database(
+    db_pool, monkeypatch, listing_factory, match_factory
+):
+    """The whole stage against seeded `resources` rows, with only the model
+    faked: real retrieval, real per-gap allowlists, real grounding, real
+    write, real read.
+
+    The cross-gap citation is the hallucination this seam exists to catch —
+    both gaps' resources share one prompt, so a *real* URL cited under the
+    wrong skill is the cheapest one available, and it is the case a
+    per-listing allowlist would wave through. Every other test covering it
+    stubs the retriever, so nothing until now proved the allowlist that
+    reaches `validate_grounding` is the one the database actually returned.
+
+    `embed_many` is stubbed for the same reason the retriever's own
+    end-to-end test stubs it: a deterministic query vector is what makes the
+    ranking exact, and downloading model weights is not part of this seam.
+    """
+    vectors = {"kubernetes": _unit(0), "terraform": _unit(1)}
+    monkeypatch.setattr(
+        retriever_module, "embed_many", lambda texts: [vectors[t] for t in texts]
+    )
+
+    async def _fake_complete_json(prompt, schema, settings, **kwargs):
+        return GeneratedTips(
+            tips=[
+                GeneratedTip(
+                    gap_skill="Kubernetes",
+                    tip=(
+                        "Start with https://github.com/t/modules and then "
+                        "https://github.com/k/examples."
+                    ),
+                )
+            ]
+        )
+
+    monkeypatch.setattr(tips_module, "complete_json", _fake_complete_json)
+
+    match = match_factory(listing=listing_factory(external_id="tips-e2e"))
+    gaps = [
+        SkillGap(skill="Kubernetes", requirement_level="must_have", met=False),
+        SkillGap(skill="Terraform", requirement_level="must_have", met=False),
+    ]
+
+    async with db_pool.acquire() as conn:
+        await _seed_resource(
+            conn, "https://github.com/k/examples", "kubernetes", _unit(0)
+        )
+        await _seed_resource(
+            conn, "https://github.com/t/modules", "terraform", _unit(1)
+        )
+        run_id = await _seed_run(conn, [match])
+
+        tips_by_match = await tips_module.run_grounded_tips(
+            conn, [(match, gaps)], Settings()
+        )
+        await record_listing_tips(conn, run_id, tips_by_match)
+
+        details = await get_run_details(conn, run_id)
+
+    stored = {d.listing.external_id: d for d in details}["tips-e2e"].tips
+    assert len(stored) == 1
+    assert stored[0].gap_skill == "Kubernetes"
+    assert stored[0].cited_urls == ["https://github.com/k/examples"]
+    assert "t/modules" not in stored[0].tip

@@ -129,13 +129,17 @@ def canonical_url(url: str) -> str:
     """Normalize only what is cosmetic, so comparison is neither too
     strict nor too loose.
 
-    Scheme and host are case-insensitive per RFC 3986 and a trailing
-    slash on a path names the same resource, so normalizing those stops a
-    real citation being stripped over formatting. Everything else is left
-    alone deliberately: path case is significant, and folding it would let
-    a fabricated near-miss path canonicalize onto a real one — which is
+    Surrounding whitespace is dropped, the scheme is lowercased, and the
+    whole authority is lowercased — host, and with it any port or userinfo,
+    since neither carries case that distinguishes two resources. A trailing
+    slash on a path names the same resource, so it goes too. Together these
+    stop a real citation being stripped over formatting. Everything else is
+    left alone deliberately: path case is significant, and folding it would
+    let a fabricated near-miss path canonicalize onto a real one — which is
     exactly the failure this validator exists to catch. The scheme is
-    compared, not normalized away, so http:// and https:// stay distinct.
+    compared, not normalized away, so http:// and https:// stay distinct,
+    and a port or userinfo is kept rather than folded away, so a lookalike
+    authority cannot canonicalize onto the bare host.
     """
     parts = urlsplit(url.strip())
     return urlunsplit(
@@ -168,6 +172,30 @@ class GroundingResult(BaseModel):
 _MARKDOWN_LINK_OPEN = re.compile(r"\[([^\]]*)\]\(\s*\Z")
 _PAREN_OPEN = re.compile(r"\s*\(\s*\Z")
 _WRAP_CLOSE = re.compile(r"/?\s*\)")
+# Markdown emphasis run: the only thing allowed to sit between a link's own
+# closing paren and the end of a widened token without being treated as
+# fabrication glued onto the URL.
+_EMPHASIS_RUN = re.compile(r"[*_`~]*\Z")
+
+
+def _link_close(text: str, start: int, end: int) -> int:
+    """Where a `[label](url)` construct ends inside a widened token.
+
+    `**[label](url)**` is one of the commonest shapes a model emits, and the
+    `*` after the closing paren makes `_is_truncated` widen the match to the
+    whole `url)**` token — so the link's own `)` sits *inside* [start, end)
+    and `_WRAP_CLOSE` finds nothing at `end`. Cutting all the way to `end`
+    would take the closing emphasis with it and leave the opening `**`
+    unbalanced, so the cut stops just past that paren instead.
+
+    Only when nothing but emphasis characters follows it: anything else after
+    the paren is fabrication glued onto the link, and that must go with the
+    URL rather than survive in the prose.
+    """
+    closer = text.rfind(")", start, end)
+    if closer == -1 or _EMPHASIS_RUN.match(text, closer + 1, end) is None:
+        return end
+    return closer + 1
 
 
 def _removal_span(text: str, start: int, end: int) -> tuple[int, int, str]:
@@ -177,13 +205,21 @@ def _removal_span(text: str, start: int, end: int) -> tuple[int, int, str]:
     left behind: `[label](url)` collapses to its label and a parenthesised
     citation goes with its parentheses. Otherwise only the URL's own
     characters are cut.
+
+    The Markdown-link opener is tried unconditionally rather than only when a
+    wrap-close matches at `end`, because an emphasis-wrapped link has already
+    had its closing paren swallowed by the widened token. Requiring the close
+    first left `[label](` stranded in the prose. The `\\Z` anchor on the opener
+    is what makes this safe: it only fires when `[label](` sits immediately
+    before this URL, never on some earlier link elsewhere in the tip.
     """
     close = _WRAP_CLOSE.match(text, end)
+    # [label](url) -> label: the sentence still reads, minus the link.
+    link = _MARKDOWN_LINK_OPEN.search(text, 0, start)
+    if link is not None:
+        cut_end = close.end() if close is not None else _link_close(text, start, end)
+        return link.start(), cut_end, link.group(1)
     if close is not None:
-        # [label](url) -> label: the sentence still reads, minus the link.
-        link = _MARKDOWN_LINK_OPEN.search(text, 0, start)
-        if link is not None:
-            return link.start(), close.end(), link.group(1)
         # " (url)" -> "": a parenthesised citation goes with its parentheses.
         paren = _PAREN_OPEN.search(text, 0, start)
         if paren is not None:
@@ -192,7 +228,19 @@ def _removal_span(text: str, start: int, end: int) -> tuple[int, int, str]:
 
 
 def _tidy(text: str) -> str:
-    text = re.sub(r"\(\s*\)", "", text)
+    # An emptied parenthetical. The optional short word covers the lead-in a
+    # model writes inside the parentheses — "(see url)", "(docs: url)",
+    # "(via url)" — which `_PAREN_OPEN` deliberately refuses to swallow
+    # because it does not sit flush against the URL. The trailing `\s+` is
+    # what keeps this off ordinary prose: the space is the hole the URL left,
+    # so "(now)" and "(v2)" are untouched while "(see )" is not.
+    text = re.sub(r"\(\s*\)|\(\s*[A-Za-z]{1,6}:?\s+\)", "", text)
+    # The other wrappers the extractor stops at. Unlike parentheses these are
+    # never taken with the URL by `_removal_span` — there is no close pattern
+    # for them — so stripping a wrapped citation always orphans the pair. P4
+    # renders `listing_tips.tip` verbatim, so '<>' or '""' left behind is
+    # user-visible debris.
+    text = re.sub(r"<\s*>|\[\s*\]|\"\s*\"|'\s*'", "", text)
     text = re.sub(r"[ \t]{2,}", " ", text)
     text = re.sub(r"\s+([.,;:!?])", r"\1", text)
     # A single space stranded at the end of a line: neither rule above fires
@@ -234,8 +282,20 @@ def validate_grounding(text: str, allowed_urls: list[str]) -> GroundingResult:
     point: the caller drops any tip whose `cited_urls` is empty, so a
     `cited_urls` that can name a URL the returned text no longer contains
     turns "uncited advice is worthless" into "uncited advice is stored".
+
+    `cited_urls` carries the **allowlist's** spelling of each surviving
+    citation, not the model's. Comparison is canonical, so the two can differ
+    by case or a trailing slash, and this is durable data: `listing_tips`
+    rows are joined back to `resources.url` by string equality, which a
+    model's "HTTPS://GitHub.com/k/examples/" would silently miss. The tip
+    *text* is left exactly as written — that is prose, not a key.
     """
-    allowed = {_safe_canonical(url) for url in allowed_urls}
+    # First spelling wins, so two allowlist entries differing only
+    # cosmetically resolve deterministically to the earlier one.
+    allowed_spelling: dict[str, str] = {}
+    for url in allowed_urls:
+        allowed_spelling.setdefault(_safe_canonical(url), url)
+    allowed = set(allowed_spelling)
     stripped: list[str] = []
     pieces: list[str] = []
     cursor = 0
@@ -258,8 +318,9 @@ def validate_grounding(text: str, allowed_urls: list[str]) -> GroundingResult:
     cleaned = _tidy("".join(pieces))
     cited: list[str] = []
     for url in extract_urls(cleaned):
-        if url not in cited and _safe_canonical(url) in allowed:
-            cited.append(url)
+        spelling = allowed_spelling.get(_safe_canonical(url))
+        if spelling is not None and spelling not in cited:
+            cited.append(spelling)
 
     return GroundingResult(
         text=cleaned, cited_urls=cited, stripped_urls=stripped

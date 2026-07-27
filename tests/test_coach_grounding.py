@@ -232,8 +232,22 @@ def test_allowed_url_survives_unchanged():
 def test_allowed_url_survives_a_trailing_slash_difference():
     text = "See https://github.com/k/examples/ for worked demos."
     result = validate_grounding(text, ALLOWED)
-    assert result.cited_urls == ["https://github.com/k/examples/"]
     assert result.stripped_urls == []
+    # The tip keeps the model's spelling — it is prose — but the citation
+    # recorded is the corpus's, so `listing_tips.cited_urls` joins back to
+    # `resources.url` by equality.
+    assert result.text == text
+    assert result.cited_urls == ["https://github.com/k/examples"]
+
+
+def test_cited_urls_records_the_allowlist_spelling_not_the_models():
+    """`cited_urls` is durable data joined back to `resources.url` by string
+    equality, so a model's casing or trailing slash must not become the key."""
+    text = "Work through HTTPS://GitHub.com/k/examples/ today."
+    result = validate_grounding(text, ALLOWED)
+    assert result.cited_urls == ["https://github.com/k/examples"]
+    assert result.stripped_urls == []
+    assert result.text == text  # prose is left exactly as written
 
 
 def test_fabricated_url_is_stripped_and_reported():
@@ -265,6 +279,65 @@ def test_markdown_link_to_fabricated_url_keeps_its_label():
     result = validate_grounding(text, ALLOWED)
     assert result.text == "Start with the handbook today."
     assert result.stripped_urls == ["https://example.com/handbook"]
+
+
+def test_emphasis_wrapped_markdown_link_collapses_to_its_label():
+    """`**[label](url)**` is among the commonest shapes a model emits, and the
+    prompt rule against it is best-effort — the same reasoning that says the
+    prompt cannot be the grounding enforcement says it cannot be the
+    formatting enforcement either. The `*` after the closing paren widens the
+    match to the whole `url)**` token, so the link's own `)` is already inside
+    the removal span and `_WRAP_CLOSE` finds nothing at its end."""
+    text = "See **[Examples](https://example.com/handbook)** for more."
+    result = validate_grounding(text, ALLOWED)
+    assert result.text == "See **Examples** for more."
+    assert result.stripped_urls == ["https://example.com/handbook)**"]
+    assert result.cited_urls == []
+
+
+def test_emphasis_wrapped_link_does_not_keep_fabrication_after_the_paren():
+    """Only emphasis characters may survive after the link's closing paren.
+    Anything else is fabrication glued onto the link and goes with the URL."""
+    text = "See **[Examples](https://example.com/handbook)fake/path** now."
+    result = validate_grounding(text, ALLOWED)
+    assert "fake" not in result.text
+    assert result.text == "See **Examples now."
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        # Non-"()" wrappers have no close pattern, so stripping the URL always
+        # orphans the pair. P4 renders the tip verbatim, so this debris would
+        # be user-visible.
+        ('Read "https://bad.test/a" now.', "Read now."),
+        ("Read <https://bad.test/a> now.", "Read now."),
+        ("Read 'https://bad.test/a' now.", "Read now."),
+        ("Read [https://bad.test/a] now.", "Read now."),
+        # A parenthetical whose lead-in word keeps `_PAREN_OPEN` from firing.
+        ("Read (see https://bad.test/a) now.", "Read now."),
+        ("Read (docs: https://bad.test/a) now.", "Read now."),
+        ("Read (via https://bad.test/a) now.", "Read now."),
+    ],
+)
+def test_orphaned_wrappers_are_cleared(text, expected):
+    result = validate_grounding(text, ALLOWED)
+    assert result.text == expected
+    assert result.cited_urls == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # The empty-paren tidy tolerates a short leading word, so it must not
+        # reach ordinary parentheticals that were never emptied.
+        "Do it (now) rather than later.",
+        "Pick the (v2) chart.",
+        "Use it (see the notes) carefully.",
+    ],
+)
+def test_tidy_leaves_intact_parentheticals_alone(text):
+    assert validate_grounding(text, ALLOWED).text == text
 
 
 def test_repeated_allowed_url_is_cited_once():

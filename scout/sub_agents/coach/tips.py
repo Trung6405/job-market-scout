@@ -41,13 +41,32 @@ def _to_grounded_tips(
 ) -> list[GroundedTip]:
     """Validate the model's reply into storable tips.
 
-    Three ways a tip dies here, all silent to the run: it names a skill
-    that was never asked about, every URL it cites is fabricated, or it
-    cites nothing at all. Uncited prose is exactly the static-template
-    advice this stage replaces, so it is not worth storing.
+    Four ways a tip dies here, all silent to the run: it names a skill
+    that was never asked about, every URL it cites is fabricated, it
+    cites nothing at all, or it is a second tip for a gap already tipped.
+    Uncited prose is exactly the static-template advice this stage
+    replaces, so it is not worth storing.
+
+    The contract is one row per covered gap, and ``listing_tips`` has no
+    unique constraint to lean on — ``record_listing_tips`` inserts with
+    ``executemany`` and no ``ON CONFLICT``, so a constraint would raise and
+    fail the write rather than degrade. Deduping here keeps the first tip
+    for a skill, which is the one the model led with — first *stored*, not
+    first returned, so a lead tip dropped for citing nothing does not also
+    cost the gap the grounded tip that followed it.
     """
     grounded: list[GroundedTip] = []
+    seen_skills: set[str] = set()
     for item in generated.tips:
+        if item.gap_skill in seen_skills:
+            logger.warning(
+                "coach tips: %s/%s returned a duplicate tip for skill %r, dropping",
+                match.listing.source,
+                match.listing.external_id,
+                item.gap_skill,
+            )
+            continue
+
         allowed = resources_by_skill.get(item.gap_skill)
         if allowed is None:
             logger.warning(
@@ -76,6 +95,7 @@ def _to_grounded_tips(
             )
             continue
 
+        seen_skills.add(item.gap_skill)
         grounded.append(
             GroundedTip(
                 gap_skill=item.gap_skill,
