@@ -203,7 +203,12 @@ the job-detail template still untouched.
     - Reference ONLY the resources listed under that same skill. Do not cite a
       resource listed under a different skill, and do not invent any URL,
       repository, book, or course that is not in the list.
-    - Include the URL of at least one resource you reference, written in full.
+    - Include the URL of at least one resource you reference, written out in
+      full and starting with "https://". Never refer to a resource by bare
+      domain or name alone (not "github.com/foo/bar", not "the foo/bar repo").
+    - Write each URL as plain text, optionally wrapped in parentheses. Do not
+      wrap it in asterisks, underscores, backticks, or angle brackets, and do
+      not nest it inside another bracketed phrase.
     - Copy each "skill" value exactly as given — it is how the tip is matched
       back to the gap.
     - Be concrete about what to do with the resource, not just that it exists.
@@ -933,4 +938,19 @@ data outside `listing_tips` is touched.
 
 ## Notes / Learnings
 
-<Filled in during execution.>
+- **Task 2's prompt gained two citation-format rules, mandated by Phase 2's
+  extraction spike.** The validator can only strip what the extractor can see,
+  so any citation shape the extractor mishandles is a hole the prompt has to
+  close instead:
+  - A **schemeless mention** (`github.com/foo/bar`) is not extracted at all, so
+    nothing downstream can strip it — the unsafe direction. The prompt now
+    requires every citation written out in full starting with `https://`, and
+    forbids bare-domain or name-only references.
+  - A URL wrapped in **Markdown emphasis or nested brackets** (`**[l](url)**`,
+    `(see [l](url))`) extracts with trailing delimiters attached, fails the
+    allowlist comparison, and costs a legitimate citation. Fails safe, but
+    needlessly. The prompt now asks for plain URLs, optionally parenthesised.
+
+  See phase-2's Notes for the full extraction record. If Task 2's prompt is
+  edited later, these two rules must survive — they are load-bearing, not
+  style preferences.
