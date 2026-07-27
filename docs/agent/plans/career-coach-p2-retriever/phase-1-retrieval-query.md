@@ -169,3 +169,36 @@ dict with `[]` for all requested skills before folding in the returned rows —
 chosen over `LEFT JOIN LATERAL ... ON true`, which would work but forces every
 consumer to filter null-URL placeholder rows back out. Task 4's
 `"rust" -> []` assertion is what pins this down.
+
+
+---
+
+## Post-review findings *(code review, 2026-07-27)*
+
+**The pre-filter predicate was not index-ready — and the spec analysed the
+wrong index.** `spec.md` argues carefully against an `ivfflat`/`hnsw` index and
+is right to, but the vector index was never the one that governs cost. The
+`skills[]` pre-filter runs *first and over every row*, and the original
+`q.skill = ANY(skills)` form cannot use a GIN index (`gin__array_ops` supports
+`@>`, `<@`, `&&` — not scalar `= ANY`). So the query scanned the whole
+`resources` table once per distinct gap skill. Rewritten to the equivalent
+`skills @> ARRAY[q.skill]`, which is index-ready. The index itself is
+**not** added here: creating one is a schema change, and `plan.md`'s Blast
+Radius excludes schema migrations. Follow-up for whoever needs it:
+`CREATE INDEX IF NOT EXISTS resources_skills_gin ON resources USING GIN (skills);`
+
+**Nothing tested the skills/vectors pairing.** The parallel-array
+`unnest($1::text[], $2::text[])` is the one novel thing this phase does, and
+an off-by-one in it would have passed every test written: the single-skill
+tests have nothing to misalign, the multi-skill test seeded one row per skill
+so the pre-filter alone determined the output, and the end-to-end test stubbed
+every query vector to the same value. Added
+`test_each_skill_is_ranked_by_its_own_query_vector` — two skills, two rows
+each, each skill's vector favouring a different position — and confirmed by
+mutation (reversing `vectors` against `skills`) that it fails when the pairing
+breaks.
+
+**Cleanups:** vector text formatting was duplicated in four places and is now
+`db.vector_text`; the cosine distance was computed twice per row and the full
+384-dim embedding hauled out of the `LATERAL` only to recompute it — the
+similarity is now computed once inside the subquery.

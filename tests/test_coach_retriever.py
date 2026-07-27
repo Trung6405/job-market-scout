@@ -4,6 +4,8 @@ import pytest
 
 from scout.config import Settings
 from scout.shared.schemas import RetrievedResource
+from scout.shared.db import vector_text
+from scout.shared.skills import normalize_skills
 from scout.sub_agents.coach import retriever
 
 _DIMS = 384
@@ -31,9 +33,9 @@ def _test_settings(**overrides) -> Settings:
     return Settings(database_url=test_db_url, **overrides)
 
 
-def test_distinct_normalized_skills_collapses_variants():
+def test_normalize_skills_collapses_variants():
     """Gap wording is raw as stored, so every variant has to fold to one token."""
-    assert retriever._distinct_normalized(
+    assert normalize_skills(
         ["K8s", "kubernetes", "React.js", "  Postgres ", "  "]
     ) == ["kubernetes", "react", "postgresql"]
 
@@ -45,7 +47,7 @@ async def test_returns_results_keyed_by_original_skill_strings(monkeypatch):
     "K8s" and "kubernetes" normalize to the same token, so both keys must map
     to that token's resources — the caller never has to know they collided.
     """
-    monkeypatch.setattr(retriever, "embed", lambda text: _unit(0))
+    monkeypatch.setattr(retriever, "embed_many", lambda texts: [_unit(0) for _ in texts])
 
     async def _fake_query(conn, skills, vectors, k, max_age_days):
         return {
@@ -68,23 +70,24 @@ async def test_returns_results_keyed_by_original_skill_strings(monkeypatch):
 @pytest.mark.asyncio
 async def test_embeds_once_per_distinct_normalized_skill(monkeypatch):
     """A skill that is a gap on many listings must not be re-embedded per listing."""
-    embedded: list[str] = []
+    embedded: list[list[str]] = []
 
-    def _fake_embed(text):
-        embedded.append(text)
-        return _unit(0)
+    def _fake_embed_many(texts):
+        embedded.append(list(texts))
+        return [_unit(0) for _ in texts]
 
     async def _fake_query(conn, skills, vectors, k, max_age_days):
         return {skill: [] for skill in skills}
 
-    monkeypatch.setattr(retriever, "embed", _fake_embed)
+    monkeypatch.setattr(retriever, "embed_many", _fake_embed_many)
     monkeypatch.setattr(retriever, "get_resources_for_skills", _fake_query)
 
     await retriever.retrieve_for_skills(
         None, ["K8s", "kubernetes", "React.js"], settings=_test_settings()
     )
 
-    assert embedded == ["kubernetes", "react"]
+    # One call, carrying every distinct skill -- not one call per skill.
+    assert embedded == [["kubernetes", "react"]]
 
 
 @pytest.mark.asyncio
@@ -92,7 +95,7 @@ async def test_empty_skill_list_touches_neither_embed_nor_database(monkeypatch):
     def _explode(*args, **kwargs):
         raise AssertionError("must not be called for an empty skill list")
 
-    monkeypatch.setattr(retriever, "embed", _explode)
+    monkeypatch.setattr(retriever, "embed_many", _explode)
     monkeypatch.setattr(retriever, "get_resources_for_skills", _explode)
 
     assert await retriever.retrieve_for_skills(None, [], settings=_test_settings()) == {}
@@ -100,7 +103,7 @@ async def test_empty_skill_list_touches_neither_embed_nor_database(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_skill_with_no_coverage_maps_to_empty_list(monkeypatch):
-    monkeypatch.setattr(retriever, "embed", lambda text: _unit(0))
+    monkeypatch.setattr(retriever, "embed_many", lambda texts: [_unit(0) for _ in texts])
 
     async def _fake_query(conn, skills, vectors, k, max_age_days):
         return {skill: [] for skill in skills}
@@ -123,7 +126,7 @@ async def test_passes_configured_k_and_staleness_window(monkeypatch):
         captured["max_age_days"] = max_age_days
         return {skill: [] for skill in skills}
 
-    monkeypatch.setattr(retriever, "embed", lambda text: _unit(0))
+    monkeypatch.setattr(retriever, "embed_many", lambda texts: [_unit(0) for _ in texts])
     monkeypatch.setattr(retriever, "get_resources_for_skills", _fake_query)
 
     settings = _test_settings(coach_top_k=2, coach_resource_max_age_days=30)
@@ -141,7 +144,7 @@ async def test_explicit_k_overrides_the_configured_default(monkeypatch):
         captured["k"] = k
         return {skill: [] for skill in skills}
 
-    monkeypatch.setattr(retriever, "embed", lambda text: _unit(0))
+    monkeypatch.setattr(retriever, "embed_many", lambda texts: [_unit(0) for _ in texts])
     monkeypatch.setattr(retriever, "get_resources_for_skills", _fake_query)
 
     await retriever.retrieve_for_skills(
@@ -155,12 +158,12 @@ async def test_explicit_k_overrides_the_configured_default(monkeypatch):
 async def test_end_to_end_against_seeded_rows(db_pool, monkeypatch):
     """The module and the SQL compose: real connection, real rows, real query.
 
-    Only `embed` is stubbed — a deterministic query vector is what makes the
-    ranking assertion exact. Everything else is the production path, so this
+    Only `embed_many` is stubbed — a deterministic query vector is what makes
+    the ranking assertion exact. Everything else is the production path, so this
     is what proves normalization on the read side actually reaches the
     pre-filter: the caller asks for "K8s" and gets rows tagged "kubernetes".
     """
-    monkeypatch.setattr(retriever, "embed", lambda text: _unit(0))
+    monkeypatch.setattr(retriever, "embed_many", lambda texts: [_unit(0) for _ in texts])
 
     async with db_pool.acquire() as conn:
         for url, skills, vector in [
@@ -177,7 +180,7 @@ async def test_end_to_end_against_seeded_rows(db_pool, monkeypatch):
                 url,
                 url.rsplit("/", 1)[-1],
                 skills,
-                "[" + ",".join(str(value) for value in vector) + "]",
+                vector_text(vector),
             )
 
         results = await retriever.retrieve_for_skills(
@@ -189,3 +192,68 @@ async def test_end_to_end_against_seeded_rows(db_pool, monkeypatch):
         "https://example.com/k8s-near",
         "https://example.com/k8s-far",
     ]
+
+
+@pytest.mark.asyncio
+async def test_unnormalizable_skill_still_gets_a_key(monkeypatch):
+    """Indexing the result by a gap's own skill string must never raise.
+
+    A skill that normalizes to nothing has no coverage by definition, so [] is
+    the correct answer rather than an absent key -- the db layer guarantees
+    every requested skill gets a key, and the public API must not weaken it.
+    """
+    monkeypatch.setattr(
+        retriever, "embed_many", lambda texts: [_unit(0) for _ in texts]
+    )
+
+    async def _fake_query(conn, skills, vectors, k, max_age_days):
+        return {skill: [] for skill in skills}
+
+    monkeypatch.setattr(retriever, "get_resources_for_skills", _fake_query)
+
+    results = await retriever.retrieve_for_skills(
+        None, ["kubernetes", "!!!", "   "], settings=_test_settings()
+    )
+
+    assert results == {"kubernetes": [], "!!!": [], "   ": []}
+
+
+@pytest.mark.asyncio
+async def test_all_skills_unnormalizable_still_returns_a_key_each(monkeypatch):
+    def _explode(*args, **kwargs):
+        raise AssertionError("nothing to embed or query")
+
+    monkeypatch.setattr(retriever, "embed_many", _explode)
+    monkeypatch.setattr(retriever, "get_resources_for_skills", _explode)
+
+    results = await retriever.retrieve_for_skills(
+        None, ["!!!", "  "], settings=_test_settings()
+    )
+
+    assert results == {"!!!": [], "  ": []}
+
+
+@pytest.mark.asyncio
+async def test_aliased_keys_do_not_share_a_list_object(monkeypatch):
+    """Two spellings of one skill map to equal but independent lists.
+
+    A caller trimming or sorting one key's results must not mutate the other's,
+    nor the helper's internal dict.
+    """
+    monkeypatch.setattr(
+        retriever, "embed_many", lambda texts: [_unit(0) for _ in texts]
+    )
+
+    async def _fake_query(conn, skills, vectors, k, max_age_days):
+        return {"kubernetes": [_retrieved("https://example.com/k8s")]}
+
+    monkeypatch.setattr(retriever, "get_resources_for_skills", _fake_query)
+
+    results = await retriever.retrieve_for_skills(
+        None, ["K8s", "kubernetes"], settings=_test_settings()
+    )
+
+    assert results["K8s"] == results["kubernetes"]
+    assert results["K8s"] is not results["kubernetes"]
+    results["K8s"].clear()
+    assert len(results["kubernetes"]) == 1

@@ -137,6 +137,13 @@ class RetrievedResource(BaseModel):
     optional: without it a caller cannot tell a strong match from a marginal
     one, which is the judgement the ranking exists to inform.
 
+    **Read `similarity` as a relative ordering, not an absolute quality.** The
+    corpus embeds a summary paragraph while the retriever embeds a bare skill
+    token, and the model is a symmetric sentence-similarity one, so scores sit
+    in a compressed low band — a perfectly good match can score around 0.3.
+    Comparing two resources for the *same* skill is meaningful; comparing
+    across skills, or gating on a fixed threshold, is not.
+
     Distinct from `Resource`, which is the *write* side's model — this one
     describes a stored row being read back, so it carries no `source` and
     never reaches `insert_resource`.

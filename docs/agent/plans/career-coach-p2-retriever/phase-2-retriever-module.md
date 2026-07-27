@@ -56,7 +56,8 @@ passed in.
   - [x] Verify it fails (`pytest tests/test_coach_retriever.py -q`)
   - [x] Implement the helper using `scout.shared.skills.normalize_skill`
   - [x] Verify it passes (`pytest tests/test_coach_retriever.py -q`)
-  - [x] Commit: `feat(coach): normalize and dedupe gap skills for retrieval`
+  - [~] Commit: `feat(coach): normalize and dedupe gap skills for retrieval`
+        — **no such commit exists**; folded into Task 3's commit, see Notes
 
 ### Task 3: `retrieve_for_skills` — embed once, query once, map back
 
@@ -141,3 +142,62 @@ reaches the pre-filter unnormalized and matches nothing. That is precisely
 the behaviour the test exists to pin, and precisely the bug that would have
 shipped had the P1 write-side fix not gone in first — the two halves only
 work as a pair.
+
+
+---
+
+## Post-review findings *(code review, 2026-07-27)*
+
+**A skill that normalized to nothing was silently dropped from the result.**
+The worst of the findings, because two adjacent layers disagreed about the
+same invariant: `db.get_resources_for_skills` goes out of its way to guarantee
+every requested skill gets a key, and the public function directly above it
+quietly violated that for degenerate input. `P3` indexing `results[gap.skill]`
+would have hit a `KeyError` on a gap whose extracted wording was punctuation.
+Fixed — every skill passed in now gets a key, `[]` when it normalizes to
+nothing, which is also semantically right: no normalized form means no
+coverage. Covered by two new tests, including the all-degenerate case that
+short-circuits before embedding.
+
+**Aliased keys shared one list object.** `results["K8s"] is
+results["kubernetes"]` was `True`, and both aliased the list inside the db
+helper's dict, so a consumer sorting or trimming one key would have mutated
+the other and the helper's internals. Now a fresh list per key.
+
+**`_distinct_normalized` was a verbatim copy of the aggregator's
+`_canonical_skills`.** These are not incidental duplicates — they are the read
+and write halves of the *same* guarantee, and if they ever drifted the exact
+pre-filter would silently stop matching, which is the one failure mode this
+whole phase exists to prevent. Both now call
+`scout.shared.skills.normalize_skills`, whose docstring records that order
+preservation is load-bearing (the retriever pairs names to vectors by index).
+
+**Embedding is now genuinely batched.** `spec.md` said "embed the distinct
+normalized names in **one batched call**"; the implementation was a list
+comprehension calling `embed()` per skill, and this phase doc had softened the
+wording to "a single pass" without flagging the drift. That softening was the
+one place these notes were not fully forthcoming. Added `embeddings.embed_many`
+(one `encode` over the whole list) and the retriever now uses it.
+
+### Known limitation — read/write embedding asymmetry
+
+Not fixed, deliberately, but it changes how P3 should read `similarity`.
+
+The write side embeds `tags.summary`, a paragraph of prose. The read side
+embeds a bare normalized token like `"kubernetes"`. `all-MiniLM-L6-v2` is a
+symmetric sentence-similarity model, not an asymmetric retrieval model, so
+token-vs-paragraph cosine scores land in a compressed, low band. Consequences:
+
+- The ranking half of "hybrid" carries less signal than the spec's "the 2–3
+  **most semantically relevant**" implies. Correctness is unaffected — that is
+  the pre-filter's job, and it is exact.
+- **Absolute `similarity` values are not meaningful; only the ordering within
+  one skill is.** A P3 author who gates on a threshold will be gating on a
+  number that does not mean what it appears to.
+
+`plan.md`'s risk table anticipated ranking being weak *because the corpus is
+thin*, which is real but different — that resolves as coverage grows, whereas
+this does not. If P3 finds the ordering unhelpful, the fix is to make the two
+sides symmetric: embed a templated query (`"resources for learning {skill}"`)
+on read, or `title + summary` on write. Deferred because it should be decided
+against real retrieval output, which does not exist until P3.

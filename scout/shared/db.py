@@ -525,10 +525,19 @@ async def get_run_details(conn: asyncpg.Connection, run_id: int) -> list[RunList
     return details
 
 
+def vector_text(values: list[float]) -> str:
+    """Render an embedding in pgvector's text input form.
+
+    Always passed as a bound parameter and cast with ``::vector`` in SQL, never
+    interpolated into a statement, so there is no injection surface here.
+    """
+    return "[" + ",".join(str(value) for value in values) + "]"
+
+
 async def insert_resource(
     conn: asyncpg.Connection, resource: Resource, embedding: list[float]
 ) -> Literal["new", "duplicate"]:
-    embedding_text = "[" + ",".join(str(x) for x in embedding) + "]"
+    embedding_text = vector_text(embedding)
     inserted_id = await conn.fetchval(
         """
         INSERT INTO resources (url, title, resource_type, skills, level, summary, embedding, source)
@@ -568,6 +577,12 @@ async def get_resources_for_skills(
     the pre-filter is what guarantees a "java" gap can't surface JavaScript
     resources, since similarity alone cannot separate them (D-CC-3).
 
+    The pre-filter is written as ``skills @> ARRAY[q.skill]`` rather than the
+    equivalent ``q.skill = ANY(skills)`` because only the containment form can
+    use a GIN index on ``skills``. No such index exists yet — the corpus is
+    small enough that a scan is fine — but the predicate is kept in the shape
+    that can use one, since this filter runs first and over every row.
+
     Every requested skill gets a key; one that matches nothing maps to an
     empty list. The dict is pre-seeded to guarantee that, because
     ``CROSS JOIN LATERAL`` emits no row at all for a skill with no matches
@@ -585,12 +600,13 @@ async def get_resources_for_skills(
                r.skills,
                r.level,
                r.summary,
-               1 - (r.embedding <=> q.vec::vector) AS similarity
+               r.similarity
         FROM unnest($1::text[], $2::text[]) AS q(skill, vec)
         CROSS JOIN LATERAL (
-            SELECT url, title, resource_type, skills, level, summary, embedding
+            SELECT url, title, resource_type, skills, level, summary,
+                   1 - (embedding <=> q.vec::vector) AS similarity
             FROM resources
-            WHERE q.skill = ANY(skills)
+            WHERE skills @> ARRAY[q.skill]
               AND embedding IS NOT NULL
               AND (last_verified IS NULL
                    OR last_verified > now() - make_interval(days => $3))
@@ -599,7 +615,7 @@ async def get_resources_for_skills(
         ) r
         """,
         skills,
-        ["[" + ",".join(str(value) for value in vector) + "]" for vector in vectors],
+        [vector_text(vector) for vector in vectors],
         max_age_days,
         k,
     )

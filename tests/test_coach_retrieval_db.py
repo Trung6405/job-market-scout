@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from scout.shared.db import get_resources_for_skills
+from scout.shared.db import get_resources_for_skills, vector_text
 
 # Distinct unit vectors make ranking assertions exact rather than approximate:
 # a query vector equal to one of them scores 1.0 against it and 0.0 against
@@ -16,10 +16,6 @@ def _unit(index: int) -> list[float]:
     vector = [0.0] * _DIMS
     vector[index] = 1.0
     return vector
-
-
-def _vec_text(values: list[float]) -> str:
-    return "[" + ",".join(str(value) for value in values) + "]"
 
 
 async def _seed_resource(
@@ -39,7 +35,7 @@ async def _seed_resource(
         url,
         title or url.rsplit("/", 1)[-1],
         skills,
-        None if embedding is None else _vec_text(embedding),
+        None if embedding is None else vector_text(embedding),
         last_verified,
     )
 
@@ -151,3 +147,36 @@ async def test_excludes_stale_and_unrankable_resources(db_pool):
         "https://example.com/never",
         "https://example.com/fresh",
     }
+
+
+@pytest.mark.asyncio
+async def test_each_skill_is_ranked_by_its_own_query_vector(db_pool):
+    """Pins the skills/vectors pairing in the parallel-array unnest.
+
+    Two skills, two rows each, with each skill's query vector favouring a
+    *different* position — so an off-by-one in the `q(skill, vec)` pairing
+    flips both orderings. Every other test in this file uses either one skill
+    or one row per skill, where a misalignment would go unnoticed.
+    """
+    async with db_pool.acquire() as conn:
+        await _seed_resource(conn, "https://example.com/a-first", ["alpha"], _unit(0))
+        await _seed_resource(conn, "https://example.com/a-second", ["alpha"], _unit(1))
+        await _seed_resource(conn, "https://example.com/b-first", ["beta"], _unit(2))
+        await _seed_resource(conn, "https://example.com/b-second", ["beta"], _unit(3))
+
+        results = await get_resources_for_skills(
+            conn,
+            ["alpha", "beta"],
+            [_unit(1), _unit(2)],  # alpha favours a-second, beta favours b-first
+            k=2,
+            max_age_days=90,
+        )
+
+    assert [str(r.url) for r in results["alpha"]] == [
+        "https://example.com/a-second",
+        "https://example.com/a-first",
+    ]
+    assert [str(r.url) for r in results["beta"]] == [
+        "https://example.com/b-first",
+        "https://example.com/b-second",
+    ]

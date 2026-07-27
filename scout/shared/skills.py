@@ -38,3 +38,26 @@ def normalize_skill(skill: str) -> str:
             break
     value = re.sub(r"[^a-z0-9]", "", value)
     return _SKILL_ALIASES.get(value, value)
+
+
+def normalize_skills(skills: list[str]) -> list[str]:
+    """Normalize a list of skill names, dropping empties and duplicates.
+
+    Order is preserved and is **load-bearing** for the retriever, which pairs
+    the returned names positionally with their query embeddings.
+
+    Shared rather than duplicated per caller on purpose: the Coach normalizes
+    `resources.skills` with this on write and the retriever normalizes gap
+    names with it on read. Those are the two halves of one guarantee — if the
+    two ever diverged, the exact `skills[]` pre-filter would silently stop
+    matching, which is the single failure mode the pre-filter exists to
+    prevent.
+    """
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for skill in skills:
+        value = normalize_skill(skill)
+        if value and value not in seen:
+            seen.add(value)
+            normalized.append(value)
+    return normalized
