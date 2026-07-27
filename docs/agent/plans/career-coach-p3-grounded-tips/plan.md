@@ -76,7 +76,7 @@ untouched, because displaying them is P4.
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
 | 1 | Persistence & schema | [phase-1-persistence.md](phase-1-persistence.md) | Complete |
-| 2 | Grounding validator | [phase-2-grounding-validator.md](phase-2-grounding-validator.md) | Not started |
+| 2 | Grounding validator | [phase-2-grounding-validator.md](phase-2-grounding-validator.md) | Complete |
 | 3 | Generation stage & wiring | [phase-3-generation-and-wiring.md](phase-3-generation-and-wiring.md) | Not started |
 
 > All phases are planned in advance — every row above has a written,

@@ -509,8 +509,18 @@ neither rule fired on the single space a line-final citation leaves behind —
 and a bullet list is the commonest tip layout, so line-final citations are the
 commonest strip.
 
-Deliberately left alone: a fabricated URL nested *inside* an allowed URL's
-widened token (only reachable via `https://a/b(https://c/d)` with the outer
-token allowlisted) is skipped rather than cut, so it survives. Cutting it would
-corrupt a citation the allowlist approved, and the shape requires an allowlist
-entry containing a bracket, which the corpus of GitHub repo roots does not have.
+Known edge, verified rather than assumed: a fabricated URL nested *inside* an
+allowed URL's widened token — only reachable via `https://a/b(https://c/d)`
+with the outer token allowlisted — **is cut, not skipped.** The rebuild cursor
+advances only on removals, so an allowlisted outer span leaves the inner match
+reachable. The fabrication therefore does not survive; instead the approved
+citation loses its bracket content and comes back as `cited_urls == []`, which
+makes the caller drop the tip.
+
+That is the safe direction, and it is bounded: the shape requires an allowlist
+entry containing a bracket, which a corpus of GitHub repo roots does not have,
+and the cost is one dropped tip rather than a fabricated link reaching the
+user. Recorded because Phase 3 reads this section for known survival paths —
+and this is not one. An earlier draft of this note claimed the opposite; it was
+written from the intended design rather than from the shipped behaviour, and
+the review probe disproved it.
