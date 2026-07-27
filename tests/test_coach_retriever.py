@@ -1,0 +1,151 @@
+from __future__ import annotations
+
+import pytest
+
+from scout.config import Settings
+from scout.shared.schemas import RetrievedResource
+from scout.sub_agents.coach import retriever
+
+_DIMS = 384
+
+
+def _unit(index: int) -> list[float]:
+    vector = [0.0] * _DIMS
+    vector[index] = 1.0
+    return vector
+
+
+def _retrieved(url: str) -> RetrievedResource:
+    return RetrievedResource(
+        url=url,
+        title=url.rsplit("/", 1)[-1],
+        resource_type="repo",
+        skills=["kubernetes"],
+        summary="Seeded test resource.",
+        similarity=0.9,
+    )
+
+
+def _test_settings(**overrides) -> Settings:
+    test_db_url = Settings().database_url.rsplit("/", 1)[0] + "/scout_test"
+    return Settings(database_url=test_db_url, **overrides)
+
+
+def test_distinct_normalized_skills_collapses_variants():
+    assert retriever._distinct_normalized(["K8s", "kubernetes", "React.js", "  "]) == [
+        "kubernetes",
+        "react",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_returns_results_keyed_by_original_skill_strings(monkeypatch):
+    """A caller holding a SkillGap looks its resources up without re-normalizing.
+
+    "K8s" and "kubernetes" normalize to the same token, so both keys must map
+    to that token's resources — the caller never has to know they collided.
+    """
+    monkeypatch.setattr(retriever, "embed", lambda text: _unit(0))
+
+    async def _fake_query(conn, skills, vectors, k, max_age_days):
+        return {
+            "kubernetes": [_retrieved("https://example.com/k8s")],
+            "react": [_retrieved("https://example.com/react")],
+        }
+
+    monkeypatch.setattr(retriever, "get_resources_for_skills", _fake_query)
+
+    results = await retriever.retrieve_for_skills(
+        None, ["K8s", "kubernetes", "React.js"], settings=_test_settings()
+    )
+
+    assert set(results) == {"K8s", "kubernetes", "React.js"}
+    assert [str(r.url) for r in results["K8s"]] == ["https://example.com/k8s"]
+    assert [str(r.url) for r in results["kubernetes"]] == ["https://example.com/k8s"]
+    assert [str(r.url) for r in results["React.js"]] == ["https://example.com/react"]
+
+
+@pytest.mark.asyncio
+async def test_embeds_once_per_distinct_normalized_skill(monkeypatch):
+    """A skill that is a gap on many listings must not be re-embedded per listing."""
+    embedded: list[str] = []
+
+    def _fake_embed(text):
+        embedded.append(text)
+        return _unit(0)
+
+    async def _fake_query(conn, skills, vectors, k, max_age_days):
+        return {skill: [] for skill in skills}
+
+    monkeypatch.setattr(retriever, "embed", _fake_embed)
+    monkeypatch.setattr(retriever, "get_resources_for_skills", _fake_query)
+
+    await retriever.retrieve_for_skills(
+        None, ["K8s", "kubernetes", "React.js"], settings=_test_settings()
+    )
+
+    assert embedded == ["kubernetes", "react"]
+
+
+@pytest.mark.asyncio
+async def test_empty_skill_list_touches_neither_embed_nor_database(monkeypatch):
+    def _explode(*args, **kwargs):
+        raise AssertionError("must not be called for an empty skill list")
+
+    monkeypatch.setattr(retriever, "embed", _explode)
+    monkeypatch.setattr(retriever, "get_resources_for_skills", _explode)
+
+    assert await retriever.retrieve_for_skills(None, [], settings=_test_settings()) == {}
+
+
+@pytest.mark.asyncio
+async def test_skill_with_no_coverage_maps_to_empty_list(monkeypatch):
+    monkeypatch.setattr(retriever, "embed", lambda text: _unit(0))
+
+    async def _fake_query(conn, skills, vectors, k, max_age_days):
+        return {skill: [] for skill in skills}
+
+    monkeypatch.setattr(retriever, "get_resources_for_skills", _fake_query)
+
+    results = await retriever.retrieve_for_skills(
+        None, ["Rust"], settings=_test_settings()
+    )
+
+    assert results == {"Rust": []}
+
+
+@pytest.mark.asyncio
+async def test_passes_configured_k_and_staleness_window(monkeypatch):
+    captured: dict[str, int] = {}
+
+    async def _fake_query(conn, skills, vectors, k, max_age_days):
+        captured["k"] = k
+        captured["max_age_days"] = max_age_days
+        return {skill: [] for skill in skills}
+
+    monkeypatch.setattr(retriever, "embed", lambda text: _unit(0))
+    monkeypatch.setattr(retriever, "get_resources_for_skills", _fake_query)
+
+    settings = _test_settings(coach_top_k=2, coach_resource_max_age_days=30)
+    await retriever.retrieve_for_skills(None, ["kubernetes"], settings=settings)
+
+    assert captured == {"k": 2, "max_age_days": 30}
+
+
+@pytest.mark.asyncio
+async def test_explicit_k_overrides_the_configured_default(monkeypatch):
+    """P3 may want fewer resources for one tip than the global default."""
+    captured: dict[str, int] = {}
+
+    async def _fake_query(conn, skills, vectors, k, max_age_days):
+        captured["k"] = k
+        return {skill: [] for skill in skills}
+
+    monkeypatch.setattr(retriever, "embed", lambda text: _unit(0))
+    monkeypatch.setattr(retriever, "get_resources_for_skills", _fake_query)
+
+    await retriever.retrieve_for_skills(
+        None, ["kubernetes"], settings=_test_settings(coach_top_k=3), k=1
+    )
+
+    assert captured["k"] == 1

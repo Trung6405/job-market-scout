@@ -50,32 +50,32 @@ passed in.
 - **Files:** `scout/sub_agents/coach/retriever.py`, `tests/test_coach_retriever.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: the module's skill-preparation helper turns
+  - [x] Write failing test: the module's skill-preparation helper turns
         `["K8s", "kubernetes", "React.js", "  "]` into the distinct normalized
         names `["kubernetes", "react"]`, preserving first-seen order
-  - [ ] Verify it fails (`pytest tests/test_coach_retriever.py -q`)
-  - [ ] Implement the helper using `scout.shared.skills.normalize_skill`
-  - [ ] Verify it passes (`pytest tests/test_coach_retriever.py -q`)
-  - [ ] Commit: `feat(coach): normalize and dedupe gap skills for retrieval`
+  - [x] Verify it fails (`pytest tests/test_coach_retriever.py -q`)
+  - [x] Implement the helper using `scout.shared.skills.normalize_skill`
+  - [x] Verify it passes (`pytest tests/test_coach_retriever.py -q`)
+  - [x] Commit: `feat(coach): normalize and dedupe gap skills for retrieval`
 
 ### Task 3: `retrieve_for_skills` — embed once, query once, map back
 
 - **Files:** `scout/sub_agents/coach/retriever.py`, `tests/test_coach_retriever.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test, with `embed` and `get_resources_for_skills` both
+  - [x] Write failing test, with `embed` and `get_resources_for_skills` both
         stubbed: calling with `["K8s", "kubernetes", "React.js"]` returns a
         dict keyed by all three *original* strings, where `"K8s"` and
         `"kubernetes"` both map to the same resource list
-  - [ ] Write failing test: `embed` is called once per *distinct normalized*
+  - [x] Write failing test: `embed` is called once per *distinct normalized*
         skill — twice for the input above, not three times
-  - [ ] Write failing test: an empty skill list returns `{}` without calling
+  - [x] Write failing test: an empty skill list returns `{}` without calling
         `embed` or touching the database at all
-  - [ ] Verify they fail (`pytest tests/test_coach_retriever.py -q`)
-  - [ ] Implement `retrieve_for_skills(conn, skills, settings=None, k=None)`,
+  - [x] Verify they fail (`pytest tests/test_coach_retriever.py -q`)
+  - [x] Implement `retrieve_for_skills(conn, skills, settings=None, k=None)`,
         defaulting `k` and the staleness window from `Settings`
-  - [ ] Verify they pass (`pytest tests/test_coach_retriever.py -q`)
-  - [ ] Commit: `feat(coach): add retrieve_for_skills public retriever API`
+  - [x] Verify they pass (`pytest tests/test_coach_retriever.py -q`)
+  - [x] Commit: `feat(coach): add retrieve_for_skills public retriever API`
 
 ### Task 4: End-to-end retrieval against real seeded rows
 
