@@ -1,40 +1,9 @@
 from __future__ import annotations
 
-import re
-
 from scout.shared.schemas import ListingRequirements, Profile, SkillGap
+from scout.shared.skills import normalize_skill
 
-# Known equivalences that a substring/punctuation strip alone can't collapse.
-# Keys and values are in normalized (lowercase, alphanumeric-only) form.
-_SKILL_ALIASES = {
-    "js": "javascript",
-    "ts": "typescript",
-    "postgres": "postgresql",
-    "postgre": "postgresql",
-    "k8s": "kubernetes",
-    "golang": "go",
-}
-
-# Framework version suffixes stripped before comparison ("React.js" -> "react").
-_VERSION_SUFFIXES = (".js", ".ts")
-
-
-def normalize_skill(skill: str) -> str:
-    """Canonicalize a skill name so common variants compare equal.
-
-    Lowercases, strips a framework version suffix (``.js``/``.ts``), removes
-    remaining punctuation/whitespace, then folds a small set of known aliases
-    (``postgres`` -> ``postgresql``). Deterministic and side-effect free — it
-    is the guarantee behind gap matching; the extraction prompt's canonical
-    naming is a best-effort improvement on top.
-    """
-    value = skill.strip().lower()
-    for suffix in _VERSION_SUFFIXES:
-        if value.endswith(suffix) and len(value) > len(suffix):
-            value = value[: -len(suffix)]
-            break
-    value = re.sub(r"[^a-z0-9]", "", value)
-    return _SKILL_ALIASES.get(value, value)
+__all__ = ["evaluate_requirements", "normalize_skill"]
 
 
 def evaluate_requirements(

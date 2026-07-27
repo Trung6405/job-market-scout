@@ -101,6 +101,26 @@ jobs:
             --account-name "$DASHBOARD_STORAGE_ACCOUNT" --auth-mode login \
             --destination '$web' --source dashboard-staging --overwrite
 
+      - name: Run coach aggregator (weekly)
+        # Runs once a week, piggybacking on the 01:00 UTC (11:00 Melbourne)
+        # cron slot only — the 19:00 UTC slot never triggers this step —
+        # then self-limits to Monday inside the script. Manual
+        # workflow_dispatch runs (github.event.schedule == '') always run
+        # it, for testing. continue-on-error so a coach failure (e.g.
+        # GITHUB_PAT not yet set on the VM) never blocks the dashboard
+        # deploy above or the deallocate step below.
+        if: github.event.schedule == '0 1 * * *' || github.event.schedule == ''
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ] && [ "$(date -u +%u)" != "1" ]; then
+            echo "Not Monday UTC — skipping coach aggregator this run."
+            exit 0
+          fi
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "$VM_USER@$VM_HOST" \
+            "cd $APP_DIR && docker compose -f docker-compose.yaml -f docker-compose.prod.yaml run --rm app python -m scout.coach_aggregator"
+
       - name: Deallocate VM
         # always(): stop billing even if the run, dashboard pull/deploy, or
         # SSH never came up. Deallocate (not stop) releases the compute so

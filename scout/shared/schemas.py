@@ -108,6 +108,36 @@ class SkillGap(BaseModel):
     kind: RequirementKind = "skill"
 
 
+ResourceType = Literal["doc", "course", "repo", "note"]
+ResourceLevel = Literal["beginner", "intermediate", "advanced"]
+
+
+class Resource(BaseModel):
+    """A caller-constructed candidate row for the `resources` table.
+
+    Excludes `id`, `embedding`, `last_verified`, and `created_at` — those
+    are set at insert time by `scout.shared.db.insert_resource`, not part
+    of what an aggregator builds before writing.
+    """
+
+    url: HttpUrl
+    title: str
+    resource_type: ResourceType
+    skills: list[str]
+    level: ResourceLevel | None = None
+    summary: str | None = None
+    source: str
+
+
+class ResourceTags(BaseModel):
+    """The LLM tagging pass's output for one README (P1's tagging.py)."""
+
+    skills: list[str]
+    resource_type: ResourceType
+    level: ResourceLevel | None = None
+    summary: str
+
+
 class BriefingTakeaway(BaseModel):
     source: str
     external_id: str
@@ -180,3 +210,11 @@ class Profile(BaseModel):
     domain_knowledge: list[DomainKnowledge]
     background: Background
     projects: list[Project]
+
+
+class CoachSummary(BaseModel):
+    """One aggregator pass's result — logged by coach_aggregator.py."""
+
+    candidates_seen: int
+    inserted: int
+    duplicates: int
