@@ -79,10 +79,11 @@ problem statement and success criteria.
 
 ### Run identity & idempotency
 
-`runs` is keyed by the **local** `run_date` (`UNIQUE (run_date)`), so both
-daily cron fires (05:00 and 11:00 Melbourne) map to the **same** run row —
-the later fire is a same-day *refresh*, not a new historical run. Intraday
-history is deliberately not kept (see the same-day-overwrite decision in
+`runs` is keyed by the **local** `run_date` (`UNIQUE (run_date)`), so any
+two fires on the same local date — the daily cron plus a manual
+`workflow_dispatch`, say — map to the **same** run row; the later fire is a
+same-day *refresh*, not a new historical run. Intraday history is
+deliberately not kept (see the same-day-overwrite decision in
 `docs/agent/specs/pipeline-hardening/spec.md`).
 
 A run persists all-or-nothing: after both LLM passes complete,
@@ -99,8 +100,8 @@ re-running a broken day is always safe and converges to a clean state.
 ## Scheduling & hosting
 
 GitHub Actions is the sole orchestrator — no Azure-native scheduler is
-used. `.github/workflows/scheduled-run.yml` cron-triggers twice daily
-(19:00 and 01:00 UTC = 05:00 and 11:00 Melbourne time), then:
+used. `.github/workflows/scheduled-run.yml` cron-triggers once daily
+(19:00 UTC = 05:00 Melbourne time the next morning), then:
 
 1. Starts the Azure VM `scout-vm` (`az vm start`, idempotent) and waits
    for SSH.

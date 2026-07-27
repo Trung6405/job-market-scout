@@ -83,7 +83,7 @@ GET https://api.github.com/search/repositories
 
 **4.2 Freshness and quality gate:**
 
-- Weekly aggregation cadence, decoupled from the twice-daily scout pipeline runs.
+- Weekly aggregation cadence, decoupled from the daily scout pipeline run.
 - A lightweight LLM pass (DeepSeek via LiteLLM) reads each repo's README and tags it with: skill(s) covered, resource type (`repo`), estimated level (beginner/intermediate/advanced), and a one-line summary. This distilled text — not the raw README — is what gets embedded (see Section 5) and stored in `resources.summary`, keeping the embedding focused on skill-relevant content rather than diluted by badges/install boilerplate.
 
 ### 4.1 Proposed schema (Postgres)

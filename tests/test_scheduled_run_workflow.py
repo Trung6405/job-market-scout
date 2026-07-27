@@ -9,9 +9,25 @@ _WORKFLOW_PATH = (
 )
 
 
+def _workflow() -> dict:
+    return yaml.safe_load(_WORKFLOW_PATH.read_text(encoding="utf-8"))
+
+
 def _steps() -> list[dict]:
-    workflow = yaml.safe_load(_WORKFLOW_PATH.read_text(encoding="utf-8"))
-    return workflow["jobs"]["run-job"]["steps"]
+    return _workflow()["jobs"]["run-job"]["steps"]
+
+
+def _crons() -> list[str]:
+    # YAML 1.1 (which PyYAML implements) resolves the bare key `on` to the
+    # boolean True, so the triggers block is not under the string "on".
+    triggers = _workflow()[True]
+    return [entry["cron"] for entry in triggers["schedule"]]
+
+
+def test_pipeline_is_scheduled_once_a_day():
+    """One cron fire per day: a second one only re-briefed listings the first
+    run had already claimed, so it near-always sent an empty Discord brief."""
+    assert _crons() == ["0 19 * * *"]
 
 
 def test_coach_aggregator_step_runs_between_dashboard_deploy_and_deallocate():
@@ -35,3 +51,13 @@ def test_coach_aggregator_step_invokes_the_module():
         s for s in _steps() if s["name"] == "Run coach aggregator (weekly)"
     )
     assert "python -m scout.coach_aggregator" in coach_step["run"]
+
+
+def test_coach_aggregator_is_gated_on_a_cron_that_actually_exists():
+    """The weekly coach piggybacks on a named cron slot. If that slot is ever
+    renamed or dropped, the `if:` silently stops matching and the aggregator
+    just never runs on schedule — so pin the gate to a live cron."""
+    coach_step = next(
+        s for s in _steps() if s["name"] == "Run coach aggregator (weekly)"
+    )
+    assert any(f"github.event.schedule == '{cron}'" in coach_step["if"] for cron in _crons())

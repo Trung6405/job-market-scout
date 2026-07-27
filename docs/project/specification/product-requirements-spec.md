@@ -139,7 +139,7 @@ four-stage flow; treat them as historical until refreshed.
 | Scout App code + Dockerfile (repo) | **Built** |
 | PostgreSQL | **Built** — provisioned via `docker-compose.yaml`, wired up in `scout/shared/db.py` |
 | End-to-end pipeline orchestration (all six stages wired together) | **Built** — `ScoutPipelineAgent` (`scout/agent.py`) runs Scraper → Tracker → Scorer → Advisor → Persistence/Report → Briefing in one pass; `scout/main.py` is the batch entrypoint the Dockerfile's `CMD` runs |
-| Scheduler (daily trigger) | **Built** — GitHub Actions `.github/workflows/scheduled-run.yml`, cron-triggered at 19:00 and 01:00 UTC (05:00 and 11:00 Melbourne time); also runnable manually via `workflow_dispatch` |
+| Scheduler (daily trigger) | **Built** — GitHub Actions `.github/workflows/scheduled-run.yml`, cron-triggered daily at 19:00 UTC (05:00 Melbourne time the next morning); also runnable manually via `workflow_dispatch` |
 | Cloud host | **Built** — Azure VM `scout-vm`, provisioned via `infra/main.bicep`; started and deallocated around each scheduled run to minimize cost (~1h/day billed) |
 | CI/CD | **Built** — `infra-provision.yml` applies Bicep infra changes, `deploy.yml` rsyncs app code to the VM, `scheduled-run.yml` starts the VM, runs the pipeline over SSH, publishes the dashboard, then deallocates the VM |
 | Reports dashboard hosting | **Built** — Azure Storage static website (`infra/dashboard.bicep`), published by `scheduled-run.yml` after each run; reachable at all times, independent of the VM's start/deallocate cycle (see `docs/agent/plans/static-dashboard-hosting/plan.md`) |
