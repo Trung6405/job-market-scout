@@ -34,14 +34,14 @@ wrong-skill, unranked, or stale ones.
 - **Files:** scratch only — no committed source change
 - **Gate:** none
 - **Steps:**
-  - [ ] Seed a handful of `resources` rows with distinct embeddings in the
+  - [x] Seed a handful of `resources` rows with distinct embeddings in the
         `scout_test` database
-  - [ ] Run the candidate statement directly against it, binding two parallel
+  - [x] Run the candidate statement directly against it, binding two parallel
         `text[]` arrays (skills, and vectors in `[a,b,c]` text form):
         `FROM unnest($1::text[], $2::text[]) AS q(skill, vec) CROSS JOIN LATERAL (SELECT ... ORDER BY embedding <=> q.vec::vector LIMIT $4) r`
-  - [ ] Record the outcome in this doc's Notes / Learnings — **set-based** if
+  - [x] Record the outcome in this doc's Notes / Learnings — **set-based** if
         the per-row cast and the array binding both work, **looped** otherwise
-  - [ ] No commit — this task produces a decision, not code
+  - [x] No commit — this task produces a decision, not code
 
 > Everything below is written against the set-based form. If the spike says
 > looped, Task 3 implements the same helper as a per-skill loop instead; the
@@ -52,13 +52,13 @@ wrong-skill, unranked, or stale ones.
 - **Files:** `scout/shared/schemas.py`, `tests/test_coach_schemas.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: `RetrievedResource` accepts a row's worth of
+  - [x] Write failing test: `RetrievedResource` accepts a row's worth of
         fields (`url`, `title`, `resource_type`, `skills`, `level`, `summary`,
         `similarity`) and rejects a missing `similarity`
-  - [ ] Verify it fails (`pytest tests/test_coach_schemas.py -q`)
-  - [ ] Add the model, mirroring `Resource`'s field types; `level` optional
-  - [ ] Verify it passes (`pytest tests/test_coach_schemas.py -q`)
-  - [ ] Commit: `feat(coach): add RetrievedResource model for retrieval results`
+  - [x] Verify it fails (`pytest tests/test_coach_schemas.py -q`)
+  - [x] Add the model, mirroring `Resource`'s field types; `level` optional
+  - [x] Verify it passes (`pytest tests/test_coach_schemas.py -q`)
+  - [x] Commit: `feat(coach): add RetrievedResource model for retrieval results`
 
 ### Task 3: `get_resources_for_skills` — pre-filter and ranking
 
@@ -126,6 +126,20 @@ reverting any subset is safe and touches no existing behaviour.
 
 ## Notes / Learnings
 
-<Filled in during execution. Task 1's spike outcome — set-based or looped —
-must be recorded here, since Phase 2 assumes the helper's signature but not
-its internals.>
+**Task 1 spike — verdict: set-based.** Run against real Postgres in
+`scout_test`. The per-row `q.vec::vector` cast inside `CROSS JOIN LATERAL`
+works, and two parallel `text[]` arrays bind without complaint. Ranking
+ordered correctly (similarity 1.0 then 0.0), and a `java` row carrying an
+embedding *identical* to the winning `kubernetes` row was correctly excluded —
+the pre-filter, not the vector distance, is what kept it out. Task 3
+implements the set-based form as written.
+
+**Unplanned finding — `CROSS JOIN LATERAL` drops skills with no matches.**
+Querying for `["kubernetes", "react"]` where nothing is tagged `react`
+returned rows for `kubernetes` only; `react` produced no row at all rather
+than a null-filled one. The helper's contract says *every* skill passed in
+gets a key, so that cannot come from the SQL alone. Task 3 seeds the result
+dict with `[]` for all requested skills before folding in the returned rows —
+chosen over `LEFT JOIN LATERAL ... ON true`, which would work but forces every
+consumer to filter null-URL placeholder rows back out. Task 4's
+`"rust" -> []` assertion is what pins this down.

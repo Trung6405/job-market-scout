@@ -129,6 +129,28 @@ class Resource(BaseModel):
     source: str
 
 
+class RetrievedResource(BaseModel):
+    """One resource returned by the retriever for a gap skill (P2).
+
+    Carries what a grounded tip needs in order to cite the resource, plus the
+    cosine `similarity` that ranked it. The score is required rather than
+    optional: without it a caller cannot tell a strong match from a marginal
+    one, which is the judgement the ranking exists to inform.
+
+    Distinct from `Resource`, which is the *write* side's model — this one
+    describes a stored row being read back, so it carries no `source` and
+    never reaches `insert_resource`.
+    """
+
+    url: HttpUrl
+    title: str
+    resource_type: ResourceType
+    skills: list[str]
+    level: ResourceLevel | None = None
+    summary: str | None = None
+    similarity: float
+
+
 class ResourceTags(BaseModel):
     """The LLM tagging pass's output for one README (P1's tagging.py)."""
 
