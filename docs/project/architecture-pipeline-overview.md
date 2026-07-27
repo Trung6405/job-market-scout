@@ -112,6 +112,16 @@ used. `.github/workflows/scheduled-run.yml` cron-triggers twice daily
 4. Deallocates the VM (`if: always()`, so a failed run still stops
    billing).
 
+`deploy.yml` drives the **same single VM** through the same
+start → SSH → deallocate cycle, so the two must never run at once: the
+first to finish deallocates the VM out from under the other, and the
+loser's SSH dies mid-step with `Connection closed by remote host`
+(exit 255). Both VM-touching jobs therefore share a job-level
+`concurrency: group: scout-vm` with `cancel-in-progress: false` —
+cancelling would skip the `if: always()` deallocate and leak a running
+VM. `tests/test_vm_workflow_concurrency.py` pins this, since the lock is
+only a matching string across two files.
+
 This decouples dashboard availability from the VM's start/deallocate
 cycle: the VM is deallocated ~23h/day to control cost, but the
 dashboard stays reachable at the storage account's static website
