@@ -498,6 +498,10 @@ async def record_listing_tips(
         if not records:
             return
 
+        # executemany rather than record_listing_gaps' set-based unnest INSERT:
+        # cited_urls is TEXT[], and an array-of-arrays doesn't pass through
+        # unnest the way flat text columns do, whereas asyncpg binds a Python
+        # list[str] straight to TEXT[] here.
         await conn.executemany(
             """
             INSERT INTO listing_tips (run_listing_id, gap_skill, tip, cited_urls)

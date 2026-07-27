@@ -137,3 +137,41 @@ async def test_record_listing_tips_replaces_previous_tips(
 
         rows = await conn.fetch("SELECT tip FROM listing_tips")
         assert [row["tip"] for row in rows] == ["new"]
+
+
+async def test_record_listing_tips_scoped_to_listings_supplied(
+    db_pool, listing_factory, match_factory
+):
+    async with db_pool.acquire() as conn:
+        match_a = match_factory(listing=listing_factory(external_id="tips-a"))
+        match_b = match_factory(listing=listing_factory(external_id="tips-b"))
+        run_id = await _seed_run(conn, [match_a, match_b])
+        run_listing_id_b = await _run_listing_id(conn, run_id, "tips-b")
+
+        tips_a = [
+            GroundedTip(gap_skill="Kubernetes", tip="old-a", cited_urls=["https://a/1"])
+        ]
+        tips_b = [
+            GroundedTip(gap_skill="Terraform", tip="tip-b", cited_urls=["https://b/1"])
+        ]
+        await record_listing_tips(conn, run_id, [(match_a, tips_a), (match_b, tips_b)])
+
+        new_tips_a = [
+            GroundedTip(gap_skill="Kubernetes", tip="new-a", cited_urls=["https://a/2"])
+        ]
+        await record_listing_tips(conn, run_id, [(match_a, new_tips_a)])
+
+        rows_a = await conn.fetch(
+            "SELECT tip FROM listing_tips WHERE run_listing_id = $1",
+            await _run_listing_id(conn, run_id, "tips-a"),
+        )
+        assert [row["tip"] for row in rows_a] == ["new-a"]
+
+        rows_b = await conn.fetch(
+            "SELECT gap_skill, tip, cited_urls FROM listing_tips WHERE run_listing_id = $1",
+            run_listing_id_b,
+        )
+        assert len(rows_b) == 1
+        assert rows_b[0]["gap_skill"] == "Terraform"
+        assert rows_b[0]["tip"] == "tip-b"
+        assert list(rows_b[0]["cited_urls"]) == ["https://b/1"]
