@@ -3,11 +3,12 @@ from __future__ import annotations
 import re
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import asyncpg
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markdown_it import MarkdownIt
-from markupsafe import Markup
+from markupsafe import Markup, escape
 
 from scout.config import Settings
 from scout.shared.db import (
@@ -77,6 +78,44 @@ def _iter_urls(text: str) -> list[tuple[int, int, str]]:
         if url:
             spans.append((match.start(), match.start() + len(url), url))
     return spans
+
+
+def _link_label(url: str) -> str:
+    """A citation's visible text: host and path, without the ceremony.
+
+    Readers scan for *what* is being recommended, not for its scheme or query
+    string, so ``https://www.example.com/x?tab=readme`` shows as
+    ``example.com/x``. The full URL stays in the ``href``.
+    """
+    parts = urlsplit(url)
+    host = parts.netloc.removeprefix("www.")
+    return f"{host}{parts.path.rstrip('/')}"
+
+
+def _linkify(text: str, limit: int) -> Markup:
+    """Render a tip's prose with its first ``limit`` distinct URLs linked.
+
+    Escaping is this function's own responsibility: returning ``Markup`` opts
+    the value out of Jinja's autoescape, so nothing downstream will do it. The
+    prose is escaped piecewise and the anchors are assembled last, which means
+    every character passes through ``escape`` exactly once and escaping cannot
+    destroy a link it has already inserted.
+    """
+    if not text:
+        return Markup("")
+
+    out: list[str] = []
+    cursor = 0
+    for start, end, url in _iter_urls(text):
+        out.append(str(escape(text[cursor:start])))
+        href = escape(url)
+        out.append(
+            f'<a href="{href}" target="_blank" rel="noopener noreferrer">'
+            f"{escape(_link_label(url))}</a>"
+        )
+        cursor = end
+    out.append(str(escape(text[cursor:])))
+    return Markup("".join(out))
 
 
 def _format_salary(listing: Listing) -> str:

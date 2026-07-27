@@ -77,22 +77,22 @@ phase; the template is untouched.
   `tests/test_advisor_linkify.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: `linkify` on `"Work through https://github.com/k/k
+  - [x] Write failing test: `linkify` on `"Work through https://github.com/k/k
         first."` returns markup containing
         `<a href="https://github.com/k/k" ...>github.com/k/k</a>` — full URL in
         the `href`, scheme-stripped label as the text; on
         `"See https://www.example.com/x"` the label drops `www.` too; and on
         text containing `<script>alert(1)</script>` the angle brackets come
         back escaped as `&lt;script&gt;`, with the tag not present as markup.
-  - [ ] Verify it fails (`pytest tests/test_advisor_linkify.py -v`)
-  - [ ] Implement minimal change: `_linkify(text, limit)` — walk the spans
+  - [x] Verify it fails (`pytest tests/test_advisor_linkify.py -v`)
+  - [x] Implement minimal change: `_linkify(text, limit)` — walk the spans
         `_iter_urls` finds in the **raw** text, and build the output piecewise:
         `escape(prose_before)`, then the anchor with `escape(url)` in its
         `href` and the escaped label as its text, then on to the next span,
         finishing with `escape(prose_after)`. Join and wrap in `Markup`.
         Anchors get `rel="noopener noreferrer"` and `target="_blank"`.
-  - [ ] Verify it passes (`pytest tests/test_advisor_linkify.py -v`)
-  - [ ] Commit: `feat(advisor): add linkify filter escaping before wrapping`
+  - [x] Verify it passes (`pytest tests/test_advisor_linkify.py -v`) — 22 passed
+  - [x] Commit: `feat(advisor): add linkify filter escaping before wrapping`
 
 > **Lex raw, escape per piece.** Every character of output goes through
 > `escape` exactly once, so nothing renders as live markup, and escaping
