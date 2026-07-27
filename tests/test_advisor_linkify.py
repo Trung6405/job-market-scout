@@ -181,6 +181,30 @@ def test_linkify_over_limit_markdown_citation_stays_as_written() -> None:
     assert "[the guide](https://github.com/c/d)" in result
 
 
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        "javascript:alert(1)",
+        "data:text/html,<script>alert(1)</script>",
+        "file:///etc/passwd",
+        "vbscript:msgbox(1)",
+    ],
+)
+def test_linkify_never_links_a_non_http_scheme(hostile: str) -> None:
+    """The corpus should never contain these, but tip text arrives from an LLM
+    and the filter is the last thing between it and the page."""
+    result = str(_linkify(f"Open {hostile} now.", 3))
+    assert "<a " not in result
+    assert "href=" not in result
+    assert "<script>" not in result
+
+
+def test_linkify_never_links_a_markdown_wrapped_hostile_scheme() -> None:
+    result = str(_linkify("Read [the guide](javascript:alert(1)) now.", 3))
+    assert "<a " not in result
+    assert "href=" not in result
+
+
 def test_linkify_leaves_text_without_urls_alone() -> None:
     assert str(_linkify("Just practise more.", 3)) == "Just practise more."
 

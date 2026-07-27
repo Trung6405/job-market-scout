@@ -160,17 +160,17 @@ phase; the template is untouched.
   `tests/test_advisor_linkify.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: `javascript:alert(1)`, `data:text/html,x`, and
+  - [x] Write failing test: `javascript:alert(1)`, `data:text/html,x`, and
         `file:///etc/passwd` in tip text produce no `<a` and no `href` at all,
         and the text renders escaped and visible.
-  - [ ] Verify it fails (`pytest tests/test_advisor_linkify.py -v`) — expected
+  - [x] Verify it fails (`pytest tests/test_advisor_linkify.py -v`) — expected
         to already pass if Task 1's pattern is anchored to `https?://`; if so,
         keep the test as the regression guard and note it in Notes rather than
         weakening the pattern to manufacture a failure.
-  - [ ] Implement minimal change: none needed if the pattern is already
+  - [x] Implement minimal change: none needed if the pattern is already
         scheme-anchored; otherwise anchor it.
-  - [ ] Verify it passes (`pytest tests/test_advisor_linkify.py -v`)
-  - [ ] Commit: `test(advisor): guard linkify against non-http schemes`
+  - [x] Verify it passes (`pytest tests/test_advisor_linkify.py -v`) — 37 passed
+  - [x] Commit: `test(advisor): guard linkify against non-http schemes`
 
 ### Task 6: The citation cap
 
@@ -227,4 +227,17 @@ them changes no rendered output.
 
 ## Notes / Learnings
 
-<Filled in during execution.>
+- **Task 5 passed on write, as predicted.** The pattern copied from the
+  validator is anchored to `https?://`, so no other scheme was ever eligible
+  to become an anchor. The tests were kept as regression guards rather than
+  the pattern being weakened to manufacture a failure — they are what stops a
+  future "let's also linkify bare hostnames" change from quietly admitting
+  `javascript:`.
+- **An over-budget Markdown citation renders with its brackets.** Once the
+  link budget is spent, the whole `[label](url)` construct is left exactly as
+  stored. Deleting the URL would break advice written around it, and rewriting
+  prose it is not linking is outside what this filter should do. Pinned by
+  `test_linkify_over_limit_markdown_citation_stays_as_written` so the
+  behaviour is deliberate rather than incidental. Worth revisiting if real
+  tips turn out to cite in Markdown often *and* exceed the budget often —
+  neither is observable until P3's phases 2–3 land.
