@@ -160,3 +160,113 @@ async def test_failed_call_skips_only_its_listing(
     by_id = {m.listing.external_id: tips for m, tips in result}
     assert len(by_id["a"]) == 1
     assert by_id["b"] == []
+
+
+import logging
+
+
+def _reply(*pairs):
+    async def _complete_json(prompt, schema, settings, **kwargs):
+        return GeneratedTips(
+            tips=[GeneratedTip(gap_skill=skill, tip=tip) for skill, tip in pairs]
+        )
+
+    return _complete_json
+
+
+async def test_fabricated_url_is_stripped_and_logged(
+    stub_retriever, monkeypatch, caplog, match_factory, listing_factory
+):
+    monkeypatch.setattr(
+        tips_module,
+        "complete_json",
+        _reply(
+            (
+                "Kubernetes",
+                "Read https://kubernetes.io/invented and "
+                "https://github.com/k/examples.",
+            )
+        ),
+    )
+    match = match_factory(listing=listing_factory(external_id="a"))
+    gap = SkillGap(skill="Kubernetes", requirement_level="must_have", met=False)
+
+    with caplog.at_level(logging.WARNING):
+        result = await tips_module.run_grounded_tips(
+            None, [(match, [gap])], Settings()
+        )
+
+    tip = result[0][1][0]
+    assert "invented" not in tip.tip
+    assert tip.cited_urls == ["https://github.com/k/examples"]
+    assert "https://kubernetes.io/invented" in caplog.text
+
+
+async def test_tip_left_citing_nothing_is_dropped(
+    stub_retriever, monkeypatch, match_factory, listing_factory
+):
+    monkeypatch.setattr(
+        tips_module,
+        "complete_json",
+        _reply(("Kubernetes", "Just read https://kubernetes.io/invented.")),
+    )
+    match = match_factory(listing=listing_factory(external_id="a"))
+    gap = SkillGap(skill="Kubernetes", requirement_level="must_have", met=False)
+
+    result = await tips_module.run_grounded_tips(None, [(match, [gap])], Settings())
+
+    assert result == [(match, [])]
+
+
+async def test_tip_for_unrequested_skill_is_dropped(
+    stub_retriever, monkeypatch, match_factory, listing_factory
+):
+    monkeypatch.setattr(
+        tips_module,
+        "complete_json",
+        _reply(("Rust", "Learn Rust at https://github.com/k/examples.")),
+    )
+    match = match_factory(listing=listing_factory(external_id="a"))
+    gap = SkillGap(skill="Kubernetes", requirement_level="must_have", met=False)
+
+    result = await tips_module.run_grounded_tips(None, [(match, [gap])], Settings())
+
+    assert result == [(match, [])]
+
+
+async def test_cross_gap_url_is_stripped(
+    monkeypatch, match_factory, listing_factory
+):
+    """Both gaps' resources share one prompt, so a real URL cited under the
+    wrong skill is the cheapest hallucination available — and the one a
+    per-listing allowlist would miss."""
+
+    async def _retrieve(conn, skills, settings=None, k=None):
+        return {
+            "Kubernetes": [_resource("https://github.com/k/examples")],
+            "Terraform": [_resource("https://github.com/t/modules")],
+        }
+
+    monkeypatch.setattr(tips_module, "retrieve_for_skills", _retrieve)
+    monkeypatch.setattr(
+        tips_module,
+        "complete_json",
+        _reply(
+            (
+                "Kubernetes",
+                "Start with https://github.com/t/modules and "
+                "https://github.com/k/examples.",
+            )
+        ),
+    )
+    match = match_factory(listing=listing_factory(external_id="a"))
+    gaps = [
+        SkillGap(skill="Kubernetes", requirement_level="must_have", met=False),
+        SkillGap(skill="Terraform", requirement_level="must_have", met=False),
+    ]
+
+    result = await tips_module.run_grounded_tips(None, [(match, gaps)], Settings())
+
+    tip = result[0][1][0]
+    assert tip.cited_urls == ["https://github.com/k/examples"]
+    assert "t/modules" not in tip.tip

@@ -570,7 +570,7 @@ the job-detail template still untouched.
 - **Files:** `scout/sub_agents/coach/tips.py`, `tests/test_coach_tips.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: a fabricated URL is stripped and logged; a URL
+  - [x] Write failing test: a fabricated URL is stripped and logged; a URL
         retrieved for a *different* gap on the same listing is stripped; a tip
         left citing nothing is dropped; a tip for a skill that was never
         requested is dropped.
@@ -687,10 +687,10 @@ the job-detail template still untouched.
         assert "t/modules" not in tip.tip
     ```
 
-  - [ ] Verify it fails (`pytest tests/test_coach_tips.py -v`) — expected:
+  - [x] Verify it fails (`pytest tests/test_coach_tips.py -v`) — expected:
         `AssertionError` on `tip.cited_urls` (the Task 3 pass-through returns
         `cited_urls=[]` and never strips)
-  - [ ] Implement: replace `_to_grounded_tips` in `tips.py` and import the
+  - [x] Implement: replace `_to_grounded_tips` in `tips.py` and import the
         validator.
 
     ```python
@@ -750,8 +750,8 @@ the job-detail template still untouched.
         return grounded
     ```
 
-  - [ ] Verify it passes (`pytest tests/test_coach_tips.py -v`)
-  - [ ] Commit: `feat(coach): enforce grounding before storing tips`
+  - [x] Verify it passes (`pytest tests/test_coach_tips.py -v`)
+  - [x] Commit: `feat(coach): enforce grounding before storing tips`
 
 ### Task 5: Wire the stage into the pipeline
 

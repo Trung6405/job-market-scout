@@ -16,6 +16,7 @@ from scout.shared.schemas import (
     RetrievedResource,
     SkillGap,
 )
+from scout.sub_agents.coach.grounding import validate_grounding
 from scout.sub_agents.coach.retriever import retrieve_for_skills
 
 logger = logging.getLogger(__name__)
@@ -38,11 +39,51 @@ def _to_grounded_tips(
     resources_by_skill: dict[str, list[RetrievedResource]],
     generated: GeneratedTips,
 ) -> list[GroundedTip]:
-    # Replaced by the validating implementation in Task 4.
-    return [
-        GroundedTip(gap_skill=item.gap_skill, tip=item.tip, cited_urls=[])
-        for item in generated.tips
-    ]
+    """Validate the model's reply into storable tips.
+
+    Three ways a tip dies here, all silent to the run: it names a skill
+    that was never asked about, every URL it cites is fabricated, or it
+    cites nothing at all. Uncited prose is exactly the static-template
+    advice this stage replaces, so it is not worth storing.
+    """
+    grounded: list[GroundedTip] = []
+    for item in generated.tips:
+        allowed = resources_by_skill.get(item.gap_skill)
+        if allowed is None:
+            logger.warning(
+                "coach tips: %s/%s returned a tip for unrequested skill %r, dropping",
+                match.listing.source,
+                match.listing.external_id,
+                item.gap_skill,
+            )
+            continue
+
+        result = validate_grounding(item.tip, [str(r.url) for r in allowed])
+        for url in result.stripped_urls:
+            logger.warning(
+                "coach tips: grounding violation on %s/%s skill=%r url=%s",
+                match.listing.source,
+                match.listing.external_id,
+                item.gap_skill,
+                url,
+            )
+        if not result.cited_urls:
+            logger.info(
+                "coach tips: dropping uncited tip for %s/%s skill=%r",
+                match.listing.source,
+                match.listing.external_id,
+                item.gap_skill,
+            )
+            continue
+
+        grounded.append(
+            GroundedTip(
+                gap_skill=item.gap_skill,
+                tip=result.text,
+                cited_urls=result.cited_urls,
+            )
+        )
+    return grounded
 
 
 async def run_grounded_tips(
