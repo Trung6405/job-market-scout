@@ -1,7 +1,7 @@
 # Phase 2: Retriever Module and Config
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** In progress
+> **Status:** Complete
 > **Depends on:** Phase 1 complete — `get_resources_for_skills` and
 > `RetrievedResource` exist and are tested
 
@@ -82,26 +82,26 @@ passed in.
 - **Files:** `tests/test_coach_retriever.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: seed `kubernetes` and `java` resources in the
+  - [x] Write failing test: seed `kubernetes` and `java` resources in the
         `scout_test` database, then call the public `retrieve_for_skills` with
         a real connection, a stubbed `embed`, and the gap wording `"K8s"`;
         assert the kubernetes resources come back under the `"K8s"` key and no
         java resource appears
-  - [ ] Verify it fails (`pytest tests/test_coach_retriever.py -q`)
-  - [ ] Fix whatever the seam between module and SQL exposes (a correct Task 3
+  - [x] Verify it fails (`pytest tests/test_coach_retriever.py -q`)
+  - [x] Fix whatever the seam between module and SQL exposes (a correct Task 3
         may already satisfy this — record which in Notes / Learnings)
-  - [ ] Verify it passes (`pytest tests/test_coach_retriever.py -q`)
-  - [ ] Commit: `test(coach): cover retriever end-to-end against seeded rows`
+  - [x] Verify it passes (`pytest tests/test_coach_retriever.py -q`)
+  - [x] Commit: `test(coach): cover retriever end-to-end against seeded rows`
 
 ---
 
 ## Verification
 
-- [ ] All phase tests pass:
+- [x] All phase tests pass:
       `pytest tests/test_coach_retriever.py tests/test_coach_config.py -q`
-- [ ] Full regression: `pytest -q` — in particular confirms the two new
+- [x] Full regression: `pytest -q` — in particular confirms the two new
       `Settings` fields break no existing construction site
-- [ ] Plan acceptance criteria re-read against the finished code, and
+- [x] Plan acceptance criteria re-read against the finished code, and
       `plan.md`'s Definition of Done ticked in this phase's final commit
 
 ## Observability
@@ -123,4 +123,21 @@ removal restores the previous state exactly.
 
 ## Notes / Learnings
 
-<Filled in during execution.>
+**Tasks 2 and 3 landed in one commit.** `_distinct_normalized` has no meaning
+apart from the function that calls it; committing it alone would have left a
+private helper with no caller and a test reaching past the module's public API
+for no reason.
+
+**The `k` override was dropped, then restored.** The first implementation took
+`k` only from `Settings`, contradicting both the spec's interface sketch and
+this phase's Task 3 wording. Restored with its own test rather than amending
+the plan to match the code — P3 is the reason it exists, since a single tip
+may want fewer resources than the global default.
+
+**Task 4 passed on first run**, like Phase 1's Task 4. Verified by mutation
+instead of a red-green cycle: replacing `normalize_skill(skill)` with a bare
+`.strip()` in `_distinct_normalized` makes it fail, because `"K8s"` then
+reaches the pre-filter unnormalized and matches nothing. That is precisely
+the behaviour the test exists to pin, and precisely the bug that would have
+shipped had the P1 write-side fix not gone in first — the two halves only
+work as a pair.

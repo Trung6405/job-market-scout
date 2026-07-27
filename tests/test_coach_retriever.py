@@ -32,10 +32,10 @@ def _test_settings(**overrides) -> Settings:
 
 
 def test_distinct_normalized_skills_collapses_variants():
-    assert retriever._distinct_normalized(["K8s", "kubernetes", "React.js", "  "]) == [
-        "kubernetes",
-        "react",
-    ]
+    """Gap wording is raw as stored, so every variant has to fold to one token."""
+    assert retriever._distinct_normalized(
+        ["K8s", "kubernetes", "React.js", "  Postgres ", "  "]
+    ) == ["kubernetes", "react", "postgresql"]
 
 
 @pytest.mark.asyncio
@@ -149,3 +149,43 @@ async def test_explicit_k_overrides_the_configured_default(monkeypatch):
     )
 
     assert captured["k"] == 1
+
+
+@pytest.mark.asyncio
+async def test_end_to_end_against_seeded_rows(db_pool, monkeypatch):
+    """The module and the SQL compose: real connection, real rows, real query.
+
+    Only `embed` is stubbed — a deterministic query vector is what makes the
+    ranking assertion exact. Everything else is the production path, so this
+    is what proves normalization on the read side actually reaches the
+    pre-filter: the caller asks for "K8s" and gets rows tagged "kubernetes".
+    """
+    monkeypatch.setattr(retriever, "embed", lambda text: _unit(0))
+
+    async with db_pool.acquire() as conn:
+        for url, skills, vector in [
+            ("https://example.com/k8s-near", ["kubernetes"], _unit(0)),
+            ("https://example.com/k8s-far", ["kubernetes"], _unit(7)),
+            ("https://example.com/java", ["java"], _unit(0)),
+        ]:
+            await conn.execute(
+                """
+                INSERT INTO resources
+                    (url, title, resource_type, skills, summary, embedding, source)
+                VALUES ($1, $2, 'repo', $3, 'Seeded.', $4::vector, 'test')
+                """,
+                url,
+                url.rsplit("/", 1)[-1],
+                skills,
+                "[" + ",".join(str(value) for value in vector) + "]",
+            )
+
+        results = await retriever.retrieve_for_skills(
+            conn, ["K8s"], settings=_test_settings()
+        )
+
+    assert list(results) == ["K8s"]
+    assert [str(r.url) for r in results["K8s"]] == [
+        "https://example.com/k8s-near",
+        "https://example.com/k8s-far",
+    ]

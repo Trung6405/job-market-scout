@@ -1,6 +1,6 @@
 # Plan: Career Coach P2 — Retriever
 
-> **Status:** In progress
+> **Status:** Complete
 > **Created:** 2026-07-27 · **Last updated:** 2026-07-27
 > **Spec:** [spec.md](../../specs/career-coach-p2-retriever/spec.md)
 
@@ -18,20 +18,20 @@ nothing consumes it yet.
 
 ## Acceptance Criteria
 
-- [ ] `retrieve_for_skills(conn, skills, k)` returns, per skill, the top-`k`
+- [x] `retrieve_for_skills(conn, skills, k)` returns, per skill, the top-`k`
       resources whose `skills[]` contains that skill, ordered by cosine
       similarity to the skill's embedding.
-- [ ] A skill whose pre-filter matches nothing maps to `[]` — never to a
+- [x] A skill whose pre-filter matches nothing maps to `[]` — never to a
       resource tagged only with a different skill.
-- [ ] Gap wording variants (`"K8s"`, `"React.js"`, `"  Postgres "`) retrieve
+- [x] Gap wording variants (`"K8s"`, `"React.js"`, `"  Postgres "`) retrieve
       the resources tagged `kubernetes` / `react` / `postgresql`.
-- [ ] Results are keyed by the caller's original skill string, so a caller
+- [x] Results are keyed by the caller's original skill string, so a caller
       holding a `SkillGap` looks up its resources without re-normalizing.
-- [ ] A skill repeated across many listings is embedded once and queried once.
-- [ ] Rows with a `NULL` embedding, and rows whose `last_verified` predates the
+- [x] A skill repeated across many listings is embedded once and queried once.
+- [x] Rows with a `NULL` embedding, and rows whose `last_verified` predates the
       staleness window, are never returned; `NULL` `last_verified` is returned.
-- [ ] Each result carries a `similarity` score.
-- [ ] `pytest` passes with no regression to the existing suite.
+- [x] Each result carries a `similarity` score.
+- [x] `pytest` passes with no regression to the existing suite.
 
 ---
 
@@ -63,7 +63,7 @@ nothing consumes it yet.
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
 | 1 | Retrieval query in the shared data layer | [phase-1-retrieval-query.md](phase-1-retrieval-query.md) | Complete |
-| 2 | Retriever module and config | [phase-2-retriever-module.md](phase-2-retriever-module.md) | Not started |
+| 2 | Retriever module and config | [phase-2-retriever-module.md](phase-2-retriever-module.md) | Complete |
 
 > All phases are planned in advance — every row above has a written,
 > human-approved phase doc before phase 1 execution starts. If executing
@@ -130,14 +130,18 @@ nothing consumes it yet.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All phase verification steps pass
+- [x] All acceptance criteria met
+- [x] All phase verification steps pass
 - [ ] ~~Feature verified manually in a running environment~~ — N/A, see
       Testing Strategy → Manual: this phase has no user-facing surface and no
       pipeline caller. The real-Postgres tests are the verification.
-- [ ] Docs / README updated where behaviour changed — expected to be none;
-      confirm no user-facing behaviour description became stale
-- [ ] No new lint or type-check warnings
+- [x] Docs / README updated where behaviour changed — none needed; the
+      retriever has no user-facing surface and no pipeline caller, so no
+      existing behaviour description became stale
+- [x] No new lint or type-check warnings — vacuous here: the project
+      configures no linter or type checker (no ruff/flake8/mypy in
+      `requirements.txt` or the CI workflows), so there is no check to run
+      and none was invented for this phase
 
 ## Update Rules
 
