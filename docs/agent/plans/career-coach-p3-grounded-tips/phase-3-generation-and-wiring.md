@@ -37,7 +37,7 @@ the job-detail template still untouched.
 - **Files:** `scout/config.py`, `scout/.env.example`, `tests/test_coach_config.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: both settings default, and both read their env var.
+  - [x] Write failing test: both settings default, and both read their env var.
 
     ```python
     # append to tests/test_coach_config.py
@@ -55,9 +55,9 @@ the job-detail template still untouched.
         assert settings.coach_tips_max_gaps_per_listing == 8
     ```
 
-  - [ ] Verify it fails (`pytest tests/test_coach_config.py -v`) — expected:
+  - [x] Verify it fails (`pytest tests/test_coach_config.py -v`) — expected:
         `AttributeError: 'Settings' object has no attribute 'coach_tips_resources_per_gap'`
-  - [ ] Implement: add both fields to `Settings` in `scout/config.py`, next to
+  - [x] Implement: add both fields to `Settings` in `scout/config.py`, next to
         the existing `coach_top_k` / `coach_resource_max_age_days` fields.
 
     ```python
@@ -74,10 +74,10 @@ the job-detail template still untouched.
     )
     ```
 
-  - [ ] Add both to `scout/.env.example` with their defaults, following the
+  - [x] Add both to `scout/.env.example` with their defaults, following the
         format of the existing `COACH_TOP_K` entry.
-  - [ ] Verify it passes (`pytest tests/test_coach_config.py -v`)
-  - [ ] Commit: `feat(coach): add tip-generation settings`
+  - [x] Verify it passes (`pytest tests/test_coach_config.py -v`)
+  - [x] Commit: `feat(coach): add tip-generation settings`
 
 ### Task 2: Generated-tip schemas and the prompt
 
