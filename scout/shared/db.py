@@ -568,6 +568,25 @@ async def get_run_details(conn: asyncpg.Connection, run_id: int) -> list[RunList
             )
         )
 
+    tip_rows = await conn.fetch(
+        """
+        SELECT run_listing_id, gap_skill, tip, cited_urls
+        FROM listing_tips
+        WHERE run_listing_id = ANY($1::bigint[])
+        ORDER BY id
+        """,
+        run_listing_ids,
+    )
+    tips_by_id: dict[int, list[GroundedTip]] = {}
+    for tip_row in tip_rows:
+        tips_by_id.setdefault(tip_row["run_listing_id"], []).append(
+            GroundedTip(
+                gap_skill=tip_row["gap_skill"],
+                tip=tip_row["tip"],
+                cited_urls=list(tip_row["cited_urls"]),
+            )
+        )
+
     details: list[RunListingDetail] = []
     for row in rows:
         data = dict(row)
@@ -592,6 +611,7 @@ async def get_run_details(conn: asyncpg.Connection, run_id: int) -> list[RunList
                     if check.kind == "skill" and not check.met
                 ],
                 requirements=requirements,
+                tips=tips_by_id.get(run_listing_id, []),
                 seniority=seniority,
                 work_type=work_type,
                 team=team,

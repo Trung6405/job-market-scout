@@ -175,3 +175,44 @@ async def test_record_listing_tips_scoped_to_listings_supplied(
         assert rows_b[0]["gap_skill"] == "Terraform"
         assert rows_b[0]["tip"] == "tip-b"
         assert list(rows_b[0]["cited_urls"]) == ["https://b/1"]
+
+
+from scout.shared.db import get_run_details
+
+
+async def test_get_run_details_returns_stored_tips(
+    db_pool, listing_factory, match_factory
+):
+    async with db_pool.acquire() as conn:
+        tipped = match_factory(
+            listing=listing_factory(external_id="tips-1"), score=90
+        )
+        untipped = match_factory(
+            listing=listing_factory(external_id="tips-2"), score=70
+        )
+        run_id = await _seed_run(conn, [tipped, untipped])
+
+        await record_listing_tips(
+            conn,
+            run_id,
+            [
+                (
+                    tipped,
+                    [
+                        GroundedTip(
+                            gap_skill="Kubernetes",
+                            tip="Start with kubernetes/examples.",
+                            cited_urls=["https://github.com/k/examples"],
+                        )
+                    ],
+                )
+            ],
+        )
+
+        details = await get_run_details(conn, run_id)
+        by_external_id = {d.listing.external_id: d for d in details}
+        assert by_external_id["tips-1"].tips[0].gap_skill == "Kubernetes"
+        assert by_external_id["tips-1"].tips[0].cited_urls == [
+            "https://github.com/k/examples"
+        ]
+        assert by_external_id["tips-2"].tips == []

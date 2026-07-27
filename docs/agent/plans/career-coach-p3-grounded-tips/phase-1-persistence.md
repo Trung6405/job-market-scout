@@ -381,7 +381,7 @@ generating tips yet.
 - **Files:** `scout/shared/db.py:460-525`, `tests/test_coach_tips_db.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: tips written for a run listing come back on that
+  - [x] Write failing test: tips written for a run listing come back on that
         listing's `RunListingDetail`, and a listing with no tips gets `[]`.
 
     ```python
@@ -427,9 +427,9 @@ generating tips yet.
             assert by_external_id["tips-2"].tips == []
     ```
 
-  - [ ] Verify it fails (`pytest tests/test_coach_tips_db.py::test_get_run_details_returns_stored_tips -v`)
+  - [x] Verify it fails (`pytest tests/test_coach_tips_db.py::test_get_run_details_returns_stored_tips -v`)
         — expected: `IndexError: list index out of range` on `.tips[0]`
-  - [ ] Implement: in `get_run_details`, after the existing `gap_rows` fetch
+  - [x] Implement: in `get_run_details`, after the existing `gap_rows` fetch
         and its `requirements_by_id` loop, add the tips fetch, then pass
         `tips=` into the `RunListingDetail(...)` construction.
 
@@ -460,18 +460,18 @@ generating tips yet.
                 seniority=seniority,
     ```
 
-  - [ ] Verify it passes (`pytest tests/test_coach_tips_db.py -v`)
-  - [ ] Commit: `feat(coach): read stored tips back in get_run_details`
+  - [x] Verify it passes (`pytest tests/test_coach_tips_db.py -v`)
+  - [x] Commit: `feat(coach): read stored tips back in get_run_details`
 
 ---
 
 ## Verification
 
-- [ ] All phase tests pass: `pytest tests/test_coach_tips_db.py tests/test_coach_tips_schemas.py -v`
-- [ ] No regression in the reporting path (which now constructs
+- [x] All phase tests pass: `pytest tests/test_coach_tips_db.py tests/test_coach_tips_schemas.py -v`
+- [x] No regression in the reporting path (which now constructs
       `RunListingDetail` with a new field):
       `pytest tests/test_db.py tests/test_advisor_report.py -v`
-- [ ] Manual: none — nothing writes tips until Phase 3.
+- [x] Manual: none — nothing writes tips until Phase 3.
 
 ## Rollback
 
