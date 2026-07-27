@@ -69,6 +69,32 @@ def test_normalize_skill_does_not_collapse_unrelated_skills():
     assert normalize_skill("Java") != normalize_skill("JavaScript")
 
 
+def test_normalize_skill_keeps_c_family_languages_distinct():
+    """Punctuation is the whole name in these, so the strip must not reach it.
+
+    Stripping punctuation is right for "React.js" and wrong here: it collapsed
+    C, C++ and C# onto ``c``, which both marked a C++ requirement met against a
+    profile listing plain C, and pooled all three languages' resources into one
+    retrieval bucket.
+    """
+    assert len({normalize_skill(s) for s in ("C", "C++", "C#")}) == 3
+    assert normalize_skill("F#") != normalize_skill("F")
+    assert normalize_skill("C++") == normalize_skill("c ++ ")
+    assert normalize_skill("C#") == normalize_skill(" c# ")
+
+
+def test_normalize_skill_keeps_dotnet_distinct_from_net():
+    assert normalize_skill(".NET") == normalize_skill("dotnet")
+    assert normalize_skill("ASP.NET") != normalize_skill(".NET")
+
+
+def test_normalize_skill_still_strips_framework_suffixes():
+    """Regression guard: the C-family fix must not disturb the common case."""
+    assert normalize_skill("React.js") == normalize_skill("React")
+    assert normalize_skill("Node.js") == normalize_skill("node")
+    assert normalize_skill("Vue.js") == normalize_skill("vue")
+
+
 def test_evaluate_requirements_returns_no_gaps_when_fully_covered():
     requirements = _make_requirements(["Python", "SQL"], ["Docker"])
     profile = _make_profile(["Python", "SQL", "Docker"])
