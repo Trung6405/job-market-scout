@@ -44,7 +44,6 @@ untouched, because displaying them is P4.
 
 | Risk / unknown | Impact if wrong | Resolution |
 |----------------|-----------------|------------|
-| P2 is branched but unmerged; P3 branches off its tip and calls `retrieve_for_skills`. If P2's API changes before merge, P3's call site is wrong. | One call site in `tips.py` needs updating; nothing structural. | Accepted risk, bounded. The signature and return shape are already built and tested on P2's branch. P3 cannot merge to `main` before P2 does — noted in Rollout. |
 | A regex URL extractor may mis-handle trailing punctuation (`…see https://x/y.`) or Markdown link syntax, either stripping a legitimate URL or leaving a fabricated one. | Either a real citation is lost (visible, annoying) or a hallucinated URL survives (silent, and the exact failure FR-CC-9 exists to prevent). | **Spike — Phase 2, Task 1.** Pin the extractor's behaviour against a fixture list of the real shapes an LLM emits before any stripping logic is written. Tests are the deliverable either way. |
 | The model may return tips for skills that were not in the prompt, or omit gaps that were. | Tips get stored against a gap the listing does not have, or coverage is silently incomplete. | Handled in Phase 3, Task 4: tips whose `gap_skill` is not one of the listing's requested gaps are dropped before validation. Missing gaps are simply not tipped — no error. |
 | The retriever loads the sentence-transformers model into the **pipeline** container to embed gap queries, adding cold-start time to the nightly run. | Slower runs on the ~1h/day-booted VM. | Accepted risk, already decided upstream — D-CC-4 accepts torch in the pipeline image explicitly, and P2 introduced the dependency. P3 adds no new load. |
@@ -116,8 +115,9 @@ untouched, because displaying them is P4.
   tips with it — every input (gaps, resources) is still stored, so a later
   re-run reproduces them. Nothing outside this feature reads `listing_tips`
   until P4.
-- **Merge order:** P3 must not merge to `main` before P2 — it calls
-  `retrieve_for_skills`, which exists only on P2's branch.
+- **Merge order:** no constraint. P1 and P2 are merged to `main` (#28, #30)
+  and this branch is built on that `main`, so `retrieve_for_skills` is a
+  merged dependency.
 
 ---
 

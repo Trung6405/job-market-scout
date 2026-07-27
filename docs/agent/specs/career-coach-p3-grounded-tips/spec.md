@@ -4,9 +4,9 @@
 > **Created:** 2026-07-27 · **Approved:** —
 > **Implementation plan:** [plan.md](../../plans/career-coach-p3-grounded-tips/plan.md) *(created after approval)*
 > **Umbrella PRS:** `docs/project/specification/career-coach-agent-prs.md` (v1.1) — this is phase **P3** of Stage 1.
-> **Depends on:** P0 (`resources` table + pgvector, merged), P1 (corpus aggregator, merged),
-> P2 (`retrieve_for_skills`, in progress — this phase is branched off its tip and
-> consumes its public API unchanged).
+> **Depends on:** P0 (`resources` table + pgvector, merged), P1 (corpus
+> aggregator, merged as #28), P2 (`retrieve_for_skills`, merged as #30 — this
+> phase consumes its public API unchanged).
 
 ---
 
@@ -188,7 +188,6 @@ checks_by_match ──► unmet skill gaps
 
 | Question | Who decides | Blocks planning? |
 |----------|-------------|------------------|
-| P2 is branched but its plan is not yet signed off; P3 is branched off its tip. If P2's API changes before merge, P3's generation code follows it. | human | No — `retrieve_for_skills`'s signature and return shape are already built and tested; a change would be a rename at one call site, not a redesign. |
 | Whether a listing should get a tip for a gap the corpus does not cover, once P4 can show a mixed state (some gaps cited, some not). | human (P4) | No — this phase stores nothing for uncovered gaps, which is the strictly smaller behaviour; P4 can choose what absence renders as without a schema change. |
 
 > No question blocks planning.
@@ -197,4 +196,10 @@ checks_by_match ──► unmet skill gaps
 
 ## Amendments *(only after approval — never silently edit approved content)*
 
-- —
+- **2026-07-27 — P2 merged; dependency and open question updated.** The spec
+  was written while P2 was an unmerged branch, so it recorded P3 as branched
+  off P2's tip and carried an open question about P2's API changing before
+  merge. P1 and P2 have since squash-merged to `main` (#28, #30), and the P3
+  branch was rebuilt on the updated `main` — `retrieve_for_skills` is now a
+  merged, stable API. The dependency line and that open question are updated
+  accordingly. No scope or requirement changed.
