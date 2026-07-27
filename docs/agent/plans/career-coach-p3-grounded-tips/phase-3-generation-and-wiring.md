@@ -248,7 +248,7 @@ the job-detail template still untouched.
 - **Files:** `scout/sub_agents/coach/tips.py`, `tests/test_coach_tips.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: retrieval happens once for the union of gap skills;
+  - [x] Write failing test: retrieval happens once for the union of gap skills;
         a listing whose gaps retrieve nothing is never sent to the model; only
         unmet skill-kind gaps are tipped; must-haves win the per-listing cap;
         every supplied match comes back, tipped or not.
@@ -419,9 +419,9 @@ the job-detail template still untouched.
         assert by_id["b"] == []
     ```
 
-  - [ ] Verify it fails (`pytest tests/test_coach_tips.py -v`) — expected:
+  - [x] Verify it fails (`pytest tests/test_coach_tips.py -v`) — expected:
         `ModuleNotFoundError: No module named 'scout.sub_agents.coach.tips'`
-  - [ ] Implement `scout/sub_agents/coach/tips.py`. This task leaves
+  - [x] Implement `scout/sub_agents/coach/tips.py`. This task leaves
         `_to_grounded_tips` a thin pass-through; Task 4 replaces it with the
         validating version.
 
@@ -562,8 +562,8 @@ the job-detail template still untouched.
         ]
     ```
 
-  - [ ] Verify it passes (`pytest tests/test_coach_tips.py -v`)
-  - [ ] Commit: `feat(coach): generate coaching tips per listing`
+  - [x] Verify it passes (`pytest tests/test_coach_tips.py -v`)
+  - [x] Commit: `feat(coach): generate coaching tips per listing`
 
 ### Task 4: Validate every tip before it becomes a `GroundedTip`
 
