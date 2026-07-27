@@ -1,6 +1,6 @@
 # Plan: Career Coach P3 — Grounded Tip Stage & URL Validator
 
-> **Status:** Not started
+> **Status:** Complete
 > **Created:** 2026-07-27 · **Last updated:** 2026-07-27
 > **Spec:** [spec.md](../../specs/career-coach-p3-grounded-tips/spec.md)
 
@@ -18,25 +18,25 @@ untouched, because displaying them is P4.
 
 ## Acceptance Criteria
 
-- [ ] A run with gaps that have corpus coverage stores one `listing_tips` row
+- [x] A run with gaps that have corpus coverage stores one `listing_tips` row
       per covered gap, each with a non-empty tip and at least one cited URL.
-- [ ] Every stored `cited_urls` entry appears in the resources retrieved for
+- [x] Every stored `cited_urls` entry appears in the resources retrieved for
       **that gap** — a URL retrieved for a different gap on the same listing is
       stripped, not stored.
-- [ ] A tip whose URLs are all stripped is not stored at all.
-- [ ] Each strip is logged with the listing, the gap skill, and the offending
+- [x] A tip whose URLs are all stripped is not stored at all.
+- [x] Each strip is logged with the listing, the gap skill, and the offending
       URL.
-- [ ] A listing whose gaps retrieve no resources produces no LLM call and no
+- [x] A listing whose gaps retrieve no resources produces no LLM call and no
       rows.
-- [ ] A listing whose LLM call fails or returns unparseable JSON is logged and
+- [x] A listing whose LLM call fails or returns unparseable JSON is logged and
       skipped; every other listing in the run still gets its tips.
-- [ ] Retrieval runs once per run over the union of gap skills, not once per
+- [x] Retrieval runs once per run over the union of gap skills, not once per
       listing.
-- [ ] `get_run_details` returns each listing's stored tips, so `rerender.py`
+- [x] `get_run_details` returns each listing's stored tips, so `rerender.py`
       loads them with no LLM call.
-- [ ] Tips are written inside the existing run transaction — a failure after
+- [x] Tips are written inside the existing run transaction — a failure after
       generation leaves no partially-tipped run.
-- [ ] `pytest` passes with no regression to the existing suite.
+- [x] `pytest` passes with no regression to the existing suite.
 
 ---
 
@@ -46,8 +46,32 @@ untouched, because displaying them is P4.
 |----------------|-----------------|------------|
 | A regex URL extractor may mis-handle trailing punctuation (`…see https://x/y.`) or Markdown link syntax, either stripping a legitimate URL or leaving a fabricated one. | Either a real citation is lost (visible, annoying) or a hallucinated URL survives (silent, and the exact failure FR-CC-9 exists to prevent). | **Spike — Phase 2, Task 1.** Pin the extractor's behaviour against a fixture list of the real shapes an LLM emits before any stripping logic is written. Tests are the deliverable either way. |
 | The model may return tips for skills that were not in the prompt, or omit gaps that were. | Tips get stored against a gap the listing does not have, or coverage is silently incomplete. | Handled in Phase 3, Task 4: tips whose `gap_skill` is not one of the listing's requested gaps are dropped before validation. Missing gaps are simply not tipped — no error. |
-| The retriever loads the sentence-transformers model into the **pipeline** container to embed gap queries, adding cold-start time to the nightly run. | Slower runs on the ~1h/day-booted VM. | Accepted risk, already decided upstream — D-CC-4 accepts torch in the pipeline image explicitly, and P2 introduced the dependency. P3 adds no new load. |
+| ~~The retriever loads the sentence-transformers model into the **pipeline** container to embed gap queries, adding cold-start time to the nightly run.~~ **This row was wrong — see the correction below.** | Slower runs on the ~1h/day-booted VM. | ~~Accepted risk, already decided upstream — D-CC-4 accepts torch in the pipeline image explicitly, and P2 introduced the dependency. P3 adds no new load.~~ |
 | Tips are generated but nothing displays them until P4. | LLM spend on invisible output for the window between P3 and P4 merging. | Accepted, explicit in the spec's Won't-have. Bounded by keeping P4 next. |
+
+### Post-execution corrections
+
+- **"P3 adds no new load" was wrong, and it cost us the branch's one Critical
+  finding.** P2 shipped `retriever.py`, but nothing in `ScoutPipelineAgent`
+  called it — so P3 is what first pulls sentence-transformers onto the *daily
+  run's critical path*, adding both cold-start latency and a runtime network
+  dependency (weight fetch on a cold container). Because the risk was written
+  off, no task was ever given the Blast Radius requirement immediately below it
+  — "a failure in the new stage must not fail the run" — and the stage shipped
+  unguarded through eleven task reviews. A Coach failure would have taken the
+  whole nightly run with it: scores, gaps, meta, report, and briefing. Caught by
+  the whole-branch review and fixed in `a04cc2f`.
+
+  The lesson is about the *shape* of the miss, not the guard: a stated
+  Blast-Radius requirement with no task attached to it is invisible to per-task
+  review, because each reviewer only ever sees one brief.
+
+- **Residual, accepted:** a legitimate citation wrapped in Markdown emphasis
+  (`**[label](url)**`, `` `url` ``) is still stripped and its tip dropped. Fails
+  safe — a real tip is lost, never a fabricated URL kept — and the prompt asks
+  the model not to emit that shape. The only symptom is an INFO log, so if it
+  turns out models do this often, the Coach silently produces fewer tips than it
+  should. Worth a P4 ticket, not a P3 blocker.
 
 ## Blast Radius
 
@@ -77,7 +101,7 @@ untouched, because displaying them is P4.
 |---|-------|----------|--------|
 | 1 | Persistence & schema | [phase-1-persistence.md](phase-1-persistence.md) | Complete |
 | 2 | Grounding validator | [phase-2-grounding-validator.md](phase-2-grounding-validator.md) | Complete |
-| 3 | Generation stage & wiring | [phase-3-generation-and-wiring.md](phase-3-generation-and-wiring.md) | Not started |
+| 3 | Generation stage & wiring | [phase-3-generation-and-wiring.md](phase-3-generation-and-wiring.md) | Complete |
 
 > All phases are planned in advance — every row above has a written,
 > human-approved phase doc before phase 1 execution starts. If executing
@@ -154,14 +178,14 @@ untouched, because displaying them is P4.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All phase verification steps pass
+- [x] All acceptance criteria met
+- [x] All phase verification steps pass
 - [ ] Feature verified manually in a running environment (one real pipeline run
       writes `listing_tips`; a `rerender.py` re-render spends no LLM call)
-- [ ] `docs/project/architecture-pipeline-overview.md` updated with the new
+- [x] `docs/project/architecture-pipeline-overview.md` updated with the new
       stage and table
-- [ ] `scout/.env.example` updated with the new `COACH_TIPS_*` variables
-- [ ] No new lint or type-check warnings
+- [x] `scout/.env.example` updated with the new `COACH_TIPS_*` variables
+- [x] No new lint or type-check warnings
 
 ## Update Rules
 
