@@ -158,6 +158,24 @@ class RetrievedResource(BaseModel):
     similarity: float
 
 
+class GroundedTip(BaseModel):
+    """One validated coaching tip for a single gap skill (P3).
+
+    `cited_urls` is the post-validation survivor set, not what the model
+    emitted: any URL absent from the gap's retrieved resources has already
+    been stripped from `tip` and from this list. Storing it rather than
+    only logging it is what makes a grounding violation auditable after
+    the run.
+
+    `gap_skill` holds the gap's raw stored wording, as `listing_gaps.skill`
+    does, so a tip joins back to the gap it answers without renormalizing.
+    """
+
+    gap_skill: str
+    tip: str
+    cited_urls: list[str] = []
+
+
 class ResourceTags(BaseModel):
     """The LLM tagging pass's output for one README (P1's tagging.py)."""
 
@@ -226,6 +244,7 @@ class RunListingDetail(BaseModel):
     band: Band
     gaps: list[SkillGap]
     requirements: list[SkillGap] = []
+    tips: list[GroundedTip] = []
     seniority: str | None = None
     work_type: str | None = None
     team: str | None = None
