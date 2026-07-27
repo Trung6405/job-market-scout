@@ -6,9 +6,14 @@ name: Scheduled run
 on:
   schedule:
     # 19:00 UTC (prior day) = 05:00 Melbourne time (AEST, UTC+10; no DST in winter).
+    # One fire a day, deliberately. A second 01:00 UTC slot used to run here,
+    # but by then the morning run had already claimed the day's new listings,
+    # so the tracker saw them as unchanged and the afternoon brief was almost
+    # always "no strong matches today" — a duplicate Discord ping for a full
+    # extra VM boot and LLM cycle. Note GitHub cron drift is real and large
+    # (this slot lands ~1h late; the retired 01:00 slot ran 3–4h late), so
+    # don't read the nominal time as a delivery guarantee.
     - cron: "0 19 * * *"
-    # 01:00 UTC = 11:00 Melbourne time (AEST, UTC+10; no DST in winter).
-    - cron: "0 1 * * *"
   workflow_dispatch:
 
 # Needed for azure/login's OIDC federated-credential flow (no stored cloud secret).
@@ -108,19 +113,21 @@ jobs:
             --destination '$web' --source dashboard-staging --overwrite
 
       - name: Run coach aggregator (weekly)
-        # Runs once a week, piggybacking on the 01:00 UTC (11:00 Melbourne)
-        # cron slot only — the 19:00 UTC slot never triggers this step —
-        # then self-limits to Monday inside the script. Manual
-        # workflow_dispatch runs (github.event.schedule == '') always run
-        # it, for testing. continue-on-error so a coach failure (e.g.
-        # GITHUB_PAT not yet set on the VM) never blocks the dashboard
-        # deploy above or the deallocate step below.
-        if: github.event.schedule == '0 1 * * *' || github.event.schedule == ''
+        # Runs once a week, piggybacking on the daily cron slot, then
+        # self-limits to one weekday inside the script. That weekday is
+        # Sunday *UTC* (date -u +%u = 7), because the 19:00 UTC fire lands at
+        # 05:00 Melbourne the following morning — so Sunday UTC is Monday
+        # local, which is the intended cadence. Manual workflow_dispatch runs
+        # (github.event.schedule == '') always run it, for testing.
+        # continue-on-error so a coach failure (e.g. GITHUB_PAT not yet set on
+        # the VM) never blocks the dashboard deploy above or the deallocate
+        # step below.
+        if: github.event.schedule == '0 19 * * *' || github.event.schedule == ''
         continue-on-error: true
         run: |
           set -euo pipefail
-          if [ "${GITHUB_EVENT_NAME}" = "schedule" ] && [ "$(date -u +%u)" != "1" ]; then
-            echo "Not Monday UTC — skipping coach aggregator this run."
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ] && [ "$(date -u +%u)" != "7" ]; then
+            echo "Not Sunday UTC (= Monday Melbourne) — skipping coach aggregator this run."
             exit 0
           fi
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
