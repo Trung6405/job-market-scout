@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from urllib.parse import urlsplit, urlunsplit
 
+from pydantic import BaseModel
+
 # LLM prose wraps URLs in parentheses, Markdown link syntax, angle brackets
 # and quotes, and ends sentences with them, so the pattern stops at whitespace
 # and at the bracket and quote characters — <, >, ", ', (, ), [, ] — that are
@@ -123,4 +125,76 @@ def canonical_url(url: str) -> str:
             parts.query,
             parts.fragment,
         )
+    )
+
+
+class GroundingResult(BaseModel):
+    """The outcome of validating one tip against one gap's allowlist.
+
+    `stripped_urls` is returned rather than only logged so the caller can
+    count violations per run and store the surviving citations.
+    """
+
+    text: str
+    cited_urls: list[str] = []
+    stripped_urls: list[str] = []
+
+
+def _remove_url(text: str, url: str) -> str:
+    """Take one URL out of the prose without leaving debris behind."""
+    escaped = re.escape(url)
+    # [label](url) -> label: the sentence still reads, minus the link.
+    text = re.sub(rf"\[([^\]]*)\]\(\s*{escaped}/?\s*\)", r"\1", text)
+    # " (url)" -> "": a parenthesised citation goes with its parentheses.
+    text = re.sub(rf"\s*\(\s*{escaped}/?\s*\)", "", text)
+    return text.replace(url, "")
+
+
+def _tidy(text: str) -> str:
+    text = re.sub(r"\(\s*\)", "", text)
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    text = re.sub(r"\s+([.,;:!?])", r"\1", text)
+    return text.strip()
+
+
+def _safe_canonical(url: str) -> str:
+    """`canonical_url`, but never raising on untrusted input.
+
+    `urlsplit` rejects some strings the extractor will genuinely hand us —
+    a host that fails NFKC normalization, for one — and this function's
+    whole job is absorbing model output, so a crash here would take down
+    the grounding pass instead of stripping one bad URL. Falling back to
+    the raw string is safe in the direction that matters: an unparseable
+    URL cannot equal a canonicalized allowlist entry, so it stays
+    un-matchable and gets stripped.
+    """
+    try:
+        return canonical_url(url)
+    except ValueError:
+        return url
+
+
+def validate_grounding(text: str, allowed_urls: list[str]) -> GroundingResult:
+    """Strip every URL in `text` that is not in `allowed_urls`.
+
+    `allowed_urls` is the resource set retrieved for **one gap**, not for
+    the whole listing. Enforcement is deterministic on purpose: the
+    generation prompt also instructs the model to cite only these, but per
+    D-CC-5 that instruction is not what makes it true.
+    """
+    allowed = {_safe_canonical(url) for url in allowed_urls}
+    cited: list[str] = []
+    stripped: list[str] = []
+    cleaned = text
+
+    for url in extract_urls(text):
+        if _safe_canonical(url) in allowed:
+            if url not in cited:
+                cited.append(url)
+        elif url not in stripped:
+            stripped.append(url)
+            cleaned = _remove_url(cleaned, url)
+
+    return GroundingResult(
+        text=_tidy(cleaned), cited_urls=cited, stripped_urls=stripped
     )

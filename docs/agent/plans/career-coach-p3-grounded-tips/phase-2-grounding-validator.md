@@ -1,7 +1,7 @@
 # Phase 2: Grounding Validator
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** In progress (Task 1 done)
+> **Status:** Complete
 > **Depends on:** nothing — this phase is pure string logic and shares no code
 > with Phase 1. Sequenced second only because Phase 3 consumes it.
 
@@ -193,7 +193,7 @@ in Phase 3 to avoid emitting it.
 - **Files:** `scout/sub_agents/coach/grounding.py`, `tests/test_coach_grounding.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: allowed URLs survive untouched; a fabricated URL is
+  - [x] Write failing test: allowed URLs survive untouched; a fabricated URL is
         removed from the text and reported as stripped; a URL from a *different*
         gap's resources is stripped even though it is real; the leftover prose
         reads cleanly; a tip citing nothing valid reports no citations; **and a
@@ -271,9 +271,9 @@ in Phase 3 to avoid emitting it.
         assert result.text == "Just practise more."
     ```
 
-  - [ ] Verify it fails (`pytest tests/test_coach_grounding.py -v`) — expected:
+  - [x] Verify it fails (`pytest tests/test_coach_grounding.py -v`) — expected:
         `ImportError: cannot import name 'validate_grounding'`
-  - [ ] Implement in `grounding.py`.
+  - [x] Implement in `grounding.py`.
 
     ```python
     class GroundingResult(BaseModel):
@@ -348,20 +348,20 @@ in Phase 3 to avoid emitting it.
         )
     ```
 
-  - [ ] Verify it passes (`pytest tests/test_coach_grounding.py -v`)
-  - [ ] Commit: `feat(coach): add deterministic grounding validator`
+  - [x] Verify it passes (`pytest tests/test_coach_grounding.py -v`)
+  - [x] Commit: `feat(coach): add deterministic grounding validator`
 
 ---
 
 ## Verification
 
-- [ ] All phase tests pass: `pytest tests/test_coach_grounding.py -v`
-- [ ] The module imports nothing from `asyncpg`, `litellm`, or `requests` —
+- [x] All phase tests pass: `pytest tests/test_coach_grounding.py -v`
+- [x] The module imports nothing from `asyncpg`, `litellm`, or `requests` —
       confirm with
       `grep -nE "asyncpg|litellm|requests|httpx" scout/sub_agents/coach/grounding.py`
       returning nothing. This is the integrity boundary; it must stay testable
       without a database or a model.
-- [ ] Manual: none — nothing calls this until Phase 3.
+- [x] Manual: none — nothing calls this until Phase 3.
 
 ## Rollback
 

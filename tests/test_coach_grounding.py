@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from scout.sub_agents.coach.grounding import canonical_url, extract_urls
+from scout.sub_agents.coach.grounding import (
+    canonical_url,
+    extract_urls,
+    validate_grounding,
+)
 
 
 @pytest.mark.parametrize(
@@ -212,3 +216,114 @@ def test_canonical_url_preserves_meaningful_differences(a, b):
 )
 def test_canonical_url_preserves_further_near_miss_differences(a, b):
     assert canonical_url(a) != canonical_url(b)
+
+
+ALLOWED = ["https://github.com/k/examples"]
+
+
+def test_allowed_url_survives_unchanged():
+    text = "Work through kubernetes/examples (https://github.com/k/examples)."
+    result = validate_grounding(text, ALLOWED)
+    assert result.text == text
+    assert result.cited_urls == ["https://github.com/k/examples"]
+    assert result.stripped_urls == []
+
+
+def test_allowed_url_survives_a_trailing_slash_difference():
+    text = "See https://github.com/k/examples/ for worked demos."
+    result = validate_grounding(text, ALLOWED)
+    assert result.cited_urls == ["https://github.com/k/examples/"]
+    assert result.stripped_urls == []
+
+
+def test_fabricated_url_is_stripped_and_reported():
+    text = (
+        "Read the guide (https://kubernetes.io/invented-guide) and then "
+        "kubernetes/examples (https://github.com/k/examples)."
+    )
+    result = validate_grounding(text, ALLOWED)
+    assert "invented-guide" not in result.text
+    assert result.stripped_urls == ["https://kubernetes.io/invented-guide"]
+    assert result.cited_urls == ["https://github.com/k/examples"]
+    # The prose left behind reads cleanly — no orphaned "()" or double space.
+    assert "()" not in result.text
+    assert "  " not in result.text
+
+
+def test_url_from_another_gap_is_stripped():
+    """The whole point of a per-gap allowlist: every gap's resources share
+    one prompt, so citing a real URL under the wrong skill is the cheapest
+    hallucination available."""
+    text = "Try terraform/modules (https://github.com/t/modules)."
+    result = validate_grounding(text, ALLOWED)
+    assert result.stripped_urls == ["https://github.com/t/modules"]
+    assert result.cited_urls == []
+
+
+def test_markdown_link_to_fabricated_url_keeps_its_label():
+    text = "Start with [the handbook](https://example.com/handbook) today."
+    result = validate_grounding(text, ALLOWED)
+    assert result.text == "Start with the handbook today."
+    assert result.stripped_urls == ["https://example.com/handbook"]
+
+
+def test_repeated_allowed_url_is_cited_once():
+    text = (
+        "Clone https://github.com/k/examples, then read "
+        "https://github.com/k/examples again."
+    )
+    result = validate_grounding(text, ALLOWED)
+    assert result.cited_urls == ["https://github.com/k/examples"]
+
+
+def test_tip_with_no_urls_reports_no_citations():
+    result = validate_grounding("Just practise more.", ALLOWED)
+    assert result.cited_urls == []
+    assert result.stripped_urls == []
+    assert result.text == "Just practise more."
+
+
+def test_unparseable_url_is_stripped_rather_than_raising():
+    """`canonical_url` calls `urlsplit`, which rejects a host that fails NFKC
+    normalization — and `extract_urls` will genuinely hand one through. One
+    hallucinated URL must not crash the whole grounding pass, so the failure
+    resolves in the safe direction: unparseable means un-matchable, therefore
+    stripped."""
+    text = "Read the guide (https://git℀hub.com/k/examples) first."
+    result = validate_grounding(text, ALLOWED)
+    assert result.stripped_urls == ["https://git℀hub.com/k/examples"]
+    assert result.cited_urls == []
+    assert result.text == "Read the guide first."
+
+
+def test_unparseable_allowlist_entry_does_not_raise():
+    """The allowlist is canonicalized too, and it comes from a scraped corpus
+    rather than a trusted constant, so the same guard has to hold on that side."""
+    result = validate_grounding(
+        "See https://github.com/k/examples now.",
+        ["https://git℀hub.com/k/examples", "https://github.com/k/examples"],
+    )
+    assert result.cited_urls == ["https://github.com/k/examples"]
+    assert result.stripped_urls == []
+
+
+def test_truncated_token_keeping_an_allowlisted_prefix_is_stripped_whole():
+    """The prefix attack Task 1's truncation guard exists to stop, checked end
+    to end: `extract_urls` hands back the whole bracketed token, so it cannot
+    match the allowlist, and removal takes the fabricated path out with it
+    rather than leaving `(fake/path)` dangling in the tip."""
+    text = "See https://github.com/k/examples(fake/path) now."
+    result = validate_grounding(text, ALLOWED)
+    assert result.stripped_urls == ["https://github.com/k/examples(fake/path)"]
+    assert result.cited_urls == []
+    assert "fake" not in result.text
+    assert result.text == "See now."
+
+
+def test_bare_fabricated_url_ending_a_sentence_leaves_clean_prose():
+    """The most common shape after the parenthetical: no brackets to tidy, so
+    the risk is a stranded space before the full stop."""
+    text = "Then read https://example.com/handbook."
+    result = validate_grounding(text, ALLOWED)
+    assert result.stripped_urls == ["https://example.com/handbook"]
+    assert result.text == "Then read."
