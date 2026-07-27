@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import date
 from pathlib import Path
 
@@ -45,6 +46,37 @@ def _render_markdown(text: str | None) -> Markup:
     if not text:
         return Markup("")
     return Markup(_MARKDOWN.render(text))
+
+
+# Deliberately identical to the pattern in ``scout/sub_agents/coach/grounding.py``.
+# That module decides which URLs may be *stored*; this one decides which are
+# *clickable*, and the two stay independent in policy — but they must agree on
+# where a URL starts and ends. If this found a different span, a URL the
+# validator approved and stored could fail to render as a link, or render as a
+# fragment of itself. Excluding brackets from the class rather than balancing
+# them afterwards is also what makes ``[label](url)`` yield a clean URL.
+_URL_PATTERN = re.compile(r"https?://[^\s<>\"'()\[\]]+")
+
+# Trailing sentence punctuation is prose, never part of the URL — same
+# reasoning, and same set, as the validator's.
+_TRAILING_PUNCTUATION = ".,;:!?"
+
+
+def _iter_urls(text: str) -> list[tuple[int, int, str]]:
+    """Every URL in a tip as an ``(start, end, url)`` span of ``text``.
+
+    Spans index the *raw* string so ``_linkify`` can splice on them and escape
+    each piece itself. Locating URLs before escaping also keeps the spans
+    identical to the validator's: matching escaped text would shift them, and a
+    URL ending in ``&`` would escape to ``&amp;``, whose trailing ``;`` the
+    punctuation trim would then eat.
+    """
+    spans: list[tuple[int, int, str]] = []
+    for match in _URL_PATTERN.finditer(text):
+        url = match.group(0).rstrip(_TRAILING_PUNCTUATION)
+        if url:
+            spans.append((match.start(), match.start() + len(url), url))
+    return spans
 
 
 def _format_salary(listing: Listing) -> str:

@@ -1,7 +1,7 @@
 # Phase 1: Renderer Filters
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** In progress
 > **Depends on:** nothing
 
 ---
@@ -41,7 +41,7 @@ phase; the template is untouched.
 - **Files:** `tests/test_advisor_linkify.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: a parametrised test over the shapes tip prose
+  - [x] Write failing test: a parametrised test over the shapes tip prose
         actually contains, asserting the exact substring the extractor should
         treat as a URL for each — `see https://github.com/a/b.` (trailing full
         stop excluded), `(https://github.com/a/b)` (closing paren excluded),
@@ -52,15 +52,16 @@ phase; the template is untouched.
         `github.com/a/b` with no scheme (not a URL — not linkified),
         `http://example.org/docs/` (plain http is a URL), and two URLs in one
         sentence (both found, in order).
-  - [ ] Verify it fails (`pytest tests/test_advisor_linkify.py -v`) — expected:
-        `ImportError` / `AttributeError`, no extractor exists.
-  - [ ] Implement minimal change: `_iter_urls(text)` in
+  - [x] Verify it fails (`pytest tests/test_advisor_linkify.py -v`) — expected:
+        `ImportError` / `AttributeError`, no extractor exists. Got
+        `ImportError: cannot import name '_iter_urls'`.
+  - [x] Implement minimal change: `_iter_urls(text)` in
         `scout/sub_agents/advisor/report.py` yielding `(start, end, url)` spans,
         using P3's pattern verbatim —
         `re.compile(r"https?://[^\s<>\"'()\[\]]+")` with trailing `.,;:!?`
         trimmed — and a comment pointing at `grounding.py` as its source.
-  - [ ] Verify it passes (`pytest tests/test_advisor_linkify.py -v`)
-  - [ ] Commit: `test(advisor): pin URL extraction against real tip shapes`
+  - [x] Verify it passes (`pytest tests/test_advisor_linkify.py -v`) — 14 passed
+  - [x] Commit: `test(advisor): pin URL extraction against real tip shapes`
 
 > **Why copy rather than reinvent.** P3's validator and this filter stay
 > separate in *policy* — P3 decides what may be stored, this decides what is

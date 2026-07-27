@@ -1,6 +1,6 @@
 # Plan: Career Coach P4 — Report Surfacing of Grounded Tips
 
-> **Status:** Not started
+> **Status:** In progress
 > **Created:** 2026-07-27 · **Last updated:** 2026-07-27
 > **Spec:** [spec.md](../../specs/career-coach-p4-report-surfacing/spec.md)
 
@@ -79,7 +79,7 @@ itself, with no templated generic advice anywhere on the page.
 
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
-| 1 | Renderer filters | [phase-1-renderer-filters.md](phase-1-renderer-filters.md) | Not started |
+| 1 | Renderer filters | [phase-1-renderer-filters.md](phase-1-renderer-filters.md) | In progress |
 | 2 | Tips in gap blocks | [phase-2-tips-in-gap-blocks.md](phase-2-tips-in-gap-blocks.md) | Not started |
 | 3 | Retire the static section | [phase-3-retire-static-section.md](phase-3-retire-static-section.md) | Not started |
 
