@@ -1,7 +1,7 @@
 # Phase 2: Grounding Validator
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** In progress (Task 1 done)
 > **Depends on:** nothing — this phase is pure string logic and shares no code
 > with Phase 1. Sequenced second only because Phase 3 consumes it.
 
@@ -40,7 +40,7 @@ in Phase 3 to avoid emitting it.
 - **Files:** `scout/sub_agents/coach/grounding.py`, `tests/test_coach_grounding.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: one parametrized case per URL shape, covering bare
+  - [x] Write failing test: one parametrized case per URL shape, covering bare
         URLs, sentence-final URLs, parenthesised URLs, Markdown links, two
         URLs in one sentence, and text with no URL at all.
 
@@ -75,9 +75,9 @@ in Phase 3 to avoid emitting it.
         assert extract_urls(text) == expected
     ```
 
-  - [ ] Verify it fails (`pytest tests/test_coach_grounding.py -v`) — expected:
+  - [x] Verify it fails (`pytest tests/test_coach_grounding.py -v`) — expected:
         `ModuleNotFoundError: No module named 'scout.sub_agents.coach.grounding'`
-  - [ ] Implement `extract_urls` in a new
+  - [x] Implement `extract_urls` in a new
         `scout/sub_agents/coach/grounding.py`.
 
     ```python
@@ -110,10 +110,10 @@ in Phase 3 to avoid emitting it.
         ]
     ```
 
-  - [ ] Verify it passes (`pytest tests/test_coach_grounding.py -v`)
-  - [ ] Record in Notes / Learnings: any shape that could not be handled, and
+  - [x] Verify it passes (`pytest tests/test_coach_grounding.py -v`)
+  - [x] Record in Notes / Learnings: any shape that could not be handled, and
         whether Phase 3's prompt must avoid it.
-  - [ ] Commit: `feat(coach): add URL extraction for grounding validation`
+  - [x] Commit: `feat(coach): add URL extraction for grounding validation`
 
 ### Task 2: URL canonicalization for comparison
 
@@ -351,6 +351,40 @@ consumers until Phase 3; deleting it affects nothing else.
 
 ## Notes / Learnings
 
-<Filled in during execution — in particular, record the Task 1 spike's outcome:
-any URL shape the extractor cannot handle, and whether Phase 3's prompt must be
-constrained to avoid emitting it.>
+### Task 1 spike outcome — the regex extractor is sufficient
+
+The named risk (some real LLM output shape is unparseable by regex) did **not**
+materialise for the shapes the corpus and prompt will produce. A single pattern
+plus a trailing-punctuation trim covers every shape in the task's table and
+several more, all pinned in `tests/test_coach_grounding.py`:
+
+- bare URL, sentence-final URL (`.`, `!`, `...`), comma-followed URL
+- parenthesised citation `(url).`
+- Markdown link `[label](url)`, and autolink `<url>`
+- two URLs in one sentence; URLs at end of bullet lines (newline-delimited)
+- quoted URL `"url"`
+- query string and fragment retained (`?tab=readme#setup`)
+- duplicates returned in order, as the docstring promises
+- text with no URL, and the empty string
+
+**Two shapes are deliberately not handled.** Both are pinned as tests so they
+stay visible, and both constrain Phase 3:
+
+1. **A URL whose path genuinely contains parentheses or brackets** (e.g.
+   `https://en.wikipedia.org/wiki/Deployment_(computing)`) is truncated at the
+   first bracket. This is the accepted cost of excluding bracket characters:
+   the alternative is swallowing the closing paren of *every* parenthesised
+   citation, which would fail the allowlist comparison for every legitimate
+   citation. Consequence: such a URL would be truncated, fail comparison, and
+   be stripped — the safe direction of error (a real link lost, never a
+   fabricated one kept). The corpus stores GitHub repo roots, which never
+   contain brackets, so this should not fire in practice.
+2. **A schemeless mention** (`github.com/k/examples`) is not extracted, so
+   nothing downstream can strip it. This *is* the unsafe direction: a
+   fabricated schemeless reference would survive untouched. Phase 3's
+   generation prompt must therefore require citations as full `https://` URLs
+   and forbid bare-domain references; the prompt cannot be trusted for
+   correctness (D-CC-5), but it can be used to keep output inside the shape
+   the deterministic validator can police.
+
+No fragile pattern was added to chase either case.
