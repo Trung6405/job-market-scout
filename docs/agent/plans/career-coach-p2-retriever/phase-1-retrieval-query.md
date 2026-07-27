@@ -81,16 +81,16 @@ wrong-skill, unranked, or stale ones.
 - **Files:** `tests/test_coach_retrieval_db.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: seed four `kubernetes` resources, query with
+  - [x] Write failing test: seed four `kubernetes` resources, query with
         `k=3`, assert exactly the three nearest come back
-  - [ ] Write failing test: query for `["kubernetes", "react", "rust"]` in one
+  - [x] Write failing test: query for `["kubernetes", "react", "rust"]` in one
         call where only the first two have rows; assert each key holds only
         its own skill's resources and `"rust"` maps to `[]`
-  - [ ] Verify they fail (`pytest tests/test_coach_retrieval_db.py -q`)
-  - [ ] Fix the helper if either exposes a defect (a correct Task 3 may
+  - [x] Verify they fail (`pytest tests/test_coach_retrieval_db.py -q`)
+  - [x] Fix the helper if either exposes a defect (a correct Task 3 may
         already satisfy both — record which in Notes / Learnings)
-  - [ ] Verify they pass (`pytest tests/test_coach_retrieval_db.py -q`)
-  - [ ] Commit: `test(coach): cover top-k limit and per-skill result mapping`
+  - [x] Verify they pass (`pytest tests/test_coach_retrieval_db.py -q`)
+  - [x] Commit: `test(coach): cover top-k limit and per-skill result mapping`
 
 ### Task 5: Liveness and unrankable-row exclusion
 
@@ -133,6 +133,19 @@ ordered correctly (similarity 1.0 then 0.0), and a `java` row carrying an
 embedding *identical* to the winning `kubernetes` row was correctly excluded —
 the pre-filter, not the vector distance, is what kept it out. Task 3
 implements the set-based form as written.
+
+**Task 4 — no defect found; both tests passed on first run.** Neither the
+`k` limit nor the per-skill mapping needed a change: Task 3's `LIMIT $4`
+already bounded each skill's ranking, and its pre-seeded result dict already
+produced `"rust" -> []`. These are guard tests rather than the product of a
+red-green cycle, and worth keeping regardless — the `[]` behaviour in
+particular is a contract no consumer should have to rediscover, and the SQL
+alone does not provide it.
+
+A third test beyond the two the plan listed covers the `skills=[]` early
+return, which short-circuits before any query is issued. Added because Phase 2
+depends on that behaviour: `retrieve_for_skills` must touch neither `embed`
+nor the database when a run has no gaps.
 
 **Unplanned finding — `CROSS JOIN LATERAL` drops skills with no matches.**
 Querying for `["kubernetes", "react"]` where nothing is tagged `react`

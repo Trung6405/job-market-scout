@@ -64,3 +64,49 @@ async def test_prefilter_excludes_other_skills_and_ranks_by_similarity(db_pool):
     urls = [str(resource.url) for resource in results["kubernetes"]]
     assert urls == ["https://example.com/k8s-near", "https://example.com/k8s-far"]
     assert results["kubernetes"][0].similarity > results["kubernetes"][1].similarity
+
+
+@pytest.mark.asyncio
+async def test_returns_at_most_k_nearest(db_pool):
+    async with db_pool.acquire() as conn:
+        for index in range(4):
+            await _seed_resource(
+                conn, f"https://example.com/k8s-{index}", ["kubernetes"], _unit(index)
+            )
+
+        results = await get_resources_for_skills(
+            conn, ["kubernetes"], [_unit(0)], k=3, max_age_days=90
+        )
+
+    assert len(results["kubernetes"]) == 3
+    # unit(0) is the query, so k8s-0 scores 1.0 and the rest tie at 0.0 —
+    # only the exact match's position is deterministic, which is all that
+    # "the nearest survives the limit" needs.
+    assert str(results["kubernetes"][0].url) == "https://example.com/k8s-0"
+
+
+@pytest.mark.asyncio
+async def test_maps_each_skill_to_its_own_resources(db_pool):
+    """A skill with no coverage maps to [] — never to another skill's rows."""
+    async with db_pool.acquire() as conn:
+        await _seed_resource(conn, "https://example.com/k8s", ["kubernetes"], _unit(0))
+        await _seed_resource(conn, "https://example.com/react", ["react"], _unit(1))
+
+        results = await get_resources_for_skills(
+            conn,
+            ["kubernetes", "react", "rust"],
+            [_unit(0), _unit(1), _unit(2)],
+            k=3,
+            max_age_days=90,
+        )
+
+    assert set(results) == {"kubernetes", "react", "rust"}
+    assert [str(r.url) for r in results["kubernetes"]] == ["https://example.com/k8s"]
+    assert [str(r.url) for r in results["react"]] == ["https://example.com/react"]
+    assert results["rust"] == []
+
+
+@pytest.mark.asyncio
+async def test_empty_skill_list_returns_empty_mapping(db_pool):
+    async with db_pool.acquire() as conn:
+        assert await get_resources_for_skills(conn, [], [], k=3, max_age_days=90) == {}
