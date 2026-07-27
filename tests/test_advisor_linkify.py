@@ -1,8 +1,39 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 
-from scout.sub_agents.advisor.report import _iter_urls, _linkify
+from scout.shared.schemas import GroundedTip, Listing, RunListingDetail, SkillGap
+from scout.sub_agents.advisor.report import _citation_cap, _iter_urls, _linkify
+
+
+def _detail(gap_skills: list[str], tip_skills: list[str]) -> RunListingDetail:
+    """A detail carrying the given gaps, and tips answering the given skills."""
+    return RunListingDetail(
+        run_listing_id=1,
+        listing=Listing(
+            source="linkedin",
+            external_id="job-1",
+            title="Graduate Software Engineer",
+            company="Atlassian",
+            location="Sydney",
+            is_remote=False,
+            url="https://example.com/jobs/1",
+            description="Build things.",
+            scraped_at=datetime(2026, 7, 21, tzinfo=timezone.utc),
+        ),
+        score=70,
+        reasoning="Solid overlap.",
+        band="competitive",
+        gaps=[
+            SkillGap(skill=skill, requirement_level="must_have") for skill in gap_skills
+        ],
+        tips=[
+            GroundedTip(gap_skill=skill, tip=f"Learn {skill}.", cited_urls=[])
+            for skill in tip_skills
+        ],
+    )
 
 
 def _urls(text: str) -> list[str]:
@@ -211,3 +242,45 @@ def test_linkify_leaves_text_without_urls_alone() -> None:
 
 def test_linkify_handles_empty_text() -> None:
     assert str(_linkify("", 3)) == ""
+
+
+@pytest.mark.parametrize(
+    "tipped_gaps,expected",
+    [
+        (1, 3),
+        (2, 1),
+        (3, 1),
+        (5, 1),
+    ],
+)
+def test_citation_cap_divides_the_budget_across_tipped_gaps(
+    tipped_gaps: int, expected: int
+) -> None:
+    """One gap with advice may show the full budget; several share it, and the
+    cap floors at one so no tip cites a resource the reader cannot open."""
+    skills = [f"skill-{i}" for i in range(tipped_gaps)]
+    assert _citation_cap(_detail(skills, skills)) == expected
+
+
+def test_citation_cap_is_zero_without_tips() -> None:
+    assert _citation_cap(_detail(["Kubernetes", "Terraform"], [])) == 0
+
+
+def test_citation_cap_counts_only_gaps_that_have_a_tip() -> None:
+    """Four gaps but one tip is still one gap's worth of budget."""
+    detail = _detail(["Kubernetes", "Terraform", "Go", "Rust"], ["Kubernetes"])
+    assert _citation_cap(detail) == 3
+
+
+def test_citation_cap_ignores_tips_matching_no_gap() -> None:
+    """An orphan tip renders nowhere, so it must not shrink the budget of the
+    gaps that do have advice."""
+    detail = _detail(["Kubernetes"], ["Kubernetes", "Rust", "Go", "Elixir", "Nix"])
+    assert _citation_cap(detail) == 3
+
+
+def test_citation_cap_counts_a_duplicated_tip_once() -> None:
+    """Two tips stored for one gap is one gap's worth of advice — only the
+    first renders — so it must not halve the budget."""
+    detail = _detail(["Kubernetes"], ["Kubernetes", "Kubernetes"])
+    assert _citation_cap(detail) == 3

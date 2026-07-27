@@ -143,6 +143,36 @@ def _linkify(text: str, limit: int) -> Markup:
     return Markup("".join(out))
 
 
+# How many citations one job-detail page may show in total. A gap's advice can
+# name at most COACH_TOP_K resources, which defaults to 3, so this is exactly
+# one gap's worth: a single tipped gap may cite everything it was given, while
+# several gaps share the allowance rather than stacking a dozen links no reader
+# will treat as a recommendation. A layout judgement, not a deployment knob.
+_CITATION_BUDGET = 3
+
+
+def _citation_cap(detail: RunListingDetail) -> int:
+    """How many links each of this listing's tipped gaps may show.
+
+    Divided evenly, and deliberately without spending the remainder: handing a
+    spare link to whichever gap happens to sort first would make two otherwise
+    equal gap blocks visibly unequal for a reason the reader cannot see.
+
+    The floor of one is a ceiling on stacking, not on coverage — with more
+    tipped gaps than budget the page carries more than ``_CITATION_BUDGET``
+    links, because advice naming a resource the reader cannot open reads as a
+    broken page, which costs more trust than an extra link costs attention.
+    """
+    tipped = sum(
+        1
+        for gap in detail.gaps
+        if any(tip.gap_skill == gap.skill for tip in detail.tips)
+    )
+    if not tipped:
+        return 0
+    return max(1, _CITATION_BUDGET // tipped)
+
+
 def _format_salary(listing: Listing) -> str:
     if listing.salary_min and listing.salary_max:
         return f"${listing.salary_min:,.0f}–{listing.salary_max:,.0f}"

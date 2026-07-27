@@ -178,19 +178,19 @@ phase; the template is untouched.
   `tests/test_advisor_linkify.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: `citation_cap` over a `RunListingDetail` returns
+  - [x] Write failing test: `citation_cap` over a `RunListingDetail` returns
         3 for one gap with a tip, 1 for two, 1 for three, 1 for five, and 0
         for a detail with no tips. A detail whose tips include one matching no
         gap counts only the gaps that actually have a tip — five tips against
         one real gap still yields 3.
-  - [ ] Verify it fails (`pytest tests/test_advisor_linkify.py -v`)
-  - [ ] Implement minimal change: `_CITATION_BUDGET = 3` as a module constant,
+  - [x] Verify it fails (`pytest tests/test_advisor_linkify.py -v`)
+  - [x] Implement minimal change: `_CITATION_BUDGET = 3` as a module constant,
         and `_citation_cap(detail)` returning `0` when no gap has a tip, else
         `max(1, _CITATION_BUDGET // tipped)` where `tipped` counts gaps in
         `detail.gaps` having at least one tip whose `gap_skill` equals
         `gap.skill`.
-  - [ ] Verify it passes (`pytest tests/test_advisor_linkify.py -v`)
-  - [ ] Commit: `feat(advisor): compute the per-gap citation cap`
+  - [x] Verify it passes (`pytest tests/test_advisor_linkify.py -v`) — 45 passed
+  - [x] Commit: `feat(advisor): compute the per-gap citation cap`
 
 ### Task 7: Register both filters
 
