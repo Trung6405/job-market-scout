@@ -109,19 +109,19 @@ phase; the template is untouched.
   `tests/test_advisor_linkify.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: `"Try [kubernetes/examples](https://github.com/k/k)
+  - [x] Write failing test: `"Try [kubernetes/examples](https://github.com/k/k)
         first."` renders as a single anchor with `href="https://github.com/k/k"`
         whose visible text is `kubernetes/examples` — and the page contains no
         literal `[`, `]`, or `](` debris around it. A bare URL in the same text
         still gets the derived host+path label, so both forms coexist.
-  - [ ] Verify it fails (`pytest tests/test_advisor_linkify.py -v`) — expected:
+  - [x] Verify it fails (`pytest tests/test_advisor_linkify.py -v`) — expected:
         the URL is linked but the brackets and parentheses render literally.
-  - [ ] Implement minimal change: before emitting an anchor, check whether the
+  - [x] Implement minimal change: before emitting an anchor, check whether the
         span is immediately preceded by `](` and preceded before that by a
         `[…]` label; if so, consume the whole `[label](url)` construct and use
         `label` as the anchor text.
-  - [ ] Verify it passes (`pytest tests/test_advisor_linkify.py -v`)
-  - [ ] Commit: `feat(advisor): render Markdown citations as single anchors`
+  - [x] Verify it passes (`pytest tests/test_advisor_linkify.py -v`) — 26 passed
+  - [x] Commit: `feat(advisor): render Markdown citations as single anchors`
 
 > This shape is not hypothetical. P3's prompt asks only that the URL be
 > "written in full" and never forbids Markdown, and P3's validator has a

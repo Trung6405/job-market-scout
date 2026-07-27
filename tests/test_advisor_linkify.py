@@ -89,6 +89,40 @@ def test_linkify_anchors_are_safe_to_follow() -> None:
     assert 'target="_blank"' in result
 
 
+def test_linkify_renders_a_markdown_citation_as_one_anchor() -> None:
+    """P3 leaves this syntax intact for URLs it does not strip, so it arrives
+    here as stored text and must not render as literal brackets."""
+    result = str(_linkify("Try [kubernetes/examples](https://github.com/k/k) first.", 3))
+    assert '<a href="https://github.com/k/k"' in result
+    assert ">kubernetes/examples</a>" in result
+    assert "[" not in result
+    assert "]" not in result
+    assert "](" not in result
+    assert result.startswith("Try ")
+    assert result.endswith(" first.")
+
+
+def test_linkify_markdown_and_bare_urls_coexist() -> None:
+    text = "Read [the guide](https://github.com/a/b), then https://github.com/c/d."
+    result = str(_linkify(text, 3))
+    assert ">the guide</a>" in result
+    assert ">github.com/c/d</a>" in result
+    assert result.count("<a href=") == 2
+    assert "[" not in result
+
+
+def test_linkify_escapes_a_markdown_label() -> None:
+    result = str(_linkify("See [<b>bold</b>](https://github.com/a/b).", 3))
+    assert "<b>" not in result
+    assert "&lt;b&gt;bold&lt;/b&gt;" in result
+
+
+def test_linkify_empty_markdown_label_falls_back_to_the_derived_one() -> None:
+    result = str(_linkify("See [](https://github.com/a/b).", 3))
+    assert ">github.com/a/b</a>" in result
+    assert "[" not in result
+
+
 def test_linkify_leaves_text_without_urls_alone() -> None:
     assert str(_linkify("Just practise more.", 3)) == "Just practise more."
 

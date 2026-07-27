@@ -80,6 +80,13 @@ def _iter_urls(text: str) -> list[tuple[int, int, str]]:
     return spans
 
 
+# A Markdown citation's ``[label](`` opener, anchored so it must sit flush
+# against the URL that follows. The coach's validator rewrites this syntax only
+# for URLs it *strips*, so a surviving citation keeps its brackets verbatim in
+# ``listing_tips.tip`` and arrives here intact.
+_MARKDOWN_LABEL = re.compile(r"\[([^\[\]]*)\]\($")
+
+
 def _link_label(url: str) -> str:
     """A citation's visible text: host and path, without the ceremony.
 
@@ -107,11 +114,20 @@ def _linkify(text: str, limit: int) -> Markup:
     out: list[str] = []
     cursor = 0
     for start, end, url in _iter_urls(text):
+        markdown = _MARKDOWN_LABEL.search(text, cursor, start)
+        if markdown is not None and text[end : end + 1] == ")":
+            # Swallow the whole ``[label](url)`` construct, not just the URL,
+            # so no bracket debris is left around the anchor.
+            start = markdown.start()
+            end += 1
+            label = markdown.group(1) or _link_label(url)
+        else:
+            label = _link_label(url)
+
         out.append(str(escape(text[cursor:start])))
-        href = escape(url)
         out.append(
-            f'<a href="{href}" target="_blank" rel="noopener noreferrer">'
-            f"{escape(_link_label(url))}</a>"
+            f'<a href="{escape(url)}" target="_blank" rel="noopener noreferrer">'
+            f"{escape(label)}</a>"
         )
         cursor = end
     out.append(str(escape(text[cursor:])))
