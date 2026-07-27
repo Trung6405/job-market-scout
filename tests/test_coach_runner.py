@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+import requests
 
 from scout.config import Settings
 from scout.shared.db import (
@@ -121,3 +122,52 @@ async def test_run_coach_aggregator_second_run_inserts_nothing_new(
 async def test_run_coach_aggregator_skips_when_github_pat_unset(db_pool):
     summary = await runner.run_coach_aggregator(_test_settings(github_pat=""))
     assert summary == type(summary)(candidates_seen=0, inserted=0, duplicates=0)
+
+
+def test_gather_candidate_urls_throttles_between_skill_searches(monkeypatch):
+    sleep_calls: list[float] = []
+    monkeypatch.setattr(runner.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.search_candidates",
+        lambda skill, settings: [f"https://github.com/org/{skill}"],
+    )
+
+    candidates = runner._gather_candidate_urls(
+        _test_settings(), ["kubernetes", "helm", "docker"]
+    )
+
+    assert candidates == [
+        "https://github.com/org/kubernetes",
+        "https://github.com/org/helm",
+        "https://github.com/org/docker",
+    ]
+    # One skill needs no throttle before its own (first) call; every
+    # subsequent search call is preceded by a sleep to stay under GitHub's
+    # 30 requests/minute search API limit.
+    assert sleep_calls == [runner._SEARCH_THROTTLE_SECONDS] * 2
+
+
+def test_gather_candidate_urls_skips_skill_on_rate_limit_and_continues(monkeypatch):
+    monkeypatch.setattr(runner.time, "sleep", lambda seconds: None)
+
+    def _fake_search_candidates(skill, settings):
+        if skill == "rate-limited-skill":
+            response = requests.Response()
+            response.status_code = 403
+            raise requests.HTTPError("403 rate limited", response=response)
+        return [f"https://github.com/org/{skill}"]
+
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.search_candidates", _fake_search_candidates
+    )
+
+    candidates = runner._gather_candidate_urls(
+        _test_settings(), ["kubernetes", "rate-limited-skill", "docker"]
+    )
+
+    # The rate-limited skill is skipped, not fatal — candidates from every
+    # other skill are still gathered and the run doesn't abort.
+    assert candidates == [
+        "https://github.com/org/kubernetes",
+        "https://github.com/org/docker",
+    ]

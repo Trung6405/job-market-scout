@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import logging
+import time
+
+import requests
 
 from scout.config import Settings
 from scout.config import settings as default_settings
@@ -18,6 +21,12 @@ from scout.sub_agents.coach.tagging import tag_readme
 
 logger = logging.getLogger("scout.coach.runner")
 
+# GitHub's Search API caps authenticated requests at 30/minute — far
+# stricter than the 5000/hr core REST limit. A weekly run's skill list can
+# run into the hundreds, so calls are throttled to stay under that cap
+# rather than bursting through it (see plan.md's Risks & Unknowns).
+_SEARCH_THROTTLE_SECONDS = 2.5
+
 
 def _title_from_url(url: str) -> str:
     return url.removeprefix("https://github.com/").rstrip("/")
@@ -31,8 +40,18 @@ def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:
             if url not in seen:
                 seen.add(url)
                 candidates.append(url)
-    for skill in skills:
-        for url in search_candidates(skill, settings):
+    for index, skill in enumerate(skills):
+        if index > 0:
+            time.sleep(_SEARCH_THROTTLE_SECONDS)
+        try:
+            skill_urls = search_candidates(skill, settings)
+        except requests.HTTPError as exc:
+            # A single skill hitting the search rate limit (or any other
+            # HTTP error) must not lose candidates already gathered for
+            # every other skill — log and move on.
+            logger.warning("GitHub search failed for skill %r — skipping: %s", skill, exc)
+            continue
+        for url in skill_urls:
             if url not in seen:
                 seen.add(url)
                 candidates.append(url)
