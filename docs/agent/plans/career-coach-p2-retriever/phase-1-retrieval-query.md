@@ -1,7 +1,7 @@
 # Phase 1: Retrieval Query in the Shared Data Layer
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** In progress
 > **Depends on:** nothing (P0 schema and P1's normalized `resources.skills[]`
 > are already on this branch)
 
@@ -65,16 +65,16 @@ wrong-skill, unranked, or stale ones.
 - **Files:** `scout/shared/db.py`, `tests/test_coach_retrieval_db.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: seed two resources tagged `kubernetes` with
+  - [x] Write failing test: seed two resources tagged `kubernetes` with
         different embeddings plus one tagged `java`; query for `kubernetes`
         with a vector nearer the second; assert both kubernetes rows come
         back, nearest first, and the java row does not appear at all
-  - [ ] Verify it fails (`pytest tests/test_coach_retrieval_db.py -q`)
-  - [ ] Implement `get_resources_for_skills(conn, skills, vectors, k, max_age_days) -> dict[str, list[RetrievedResource]]`
+  - [x] Verify it fails (`pytest tests/test_coach_retrieval_db.py -q`)
+  - [x] Implement `get_resources_for_skills(conn, skills, vectors, k, max_age_days) -> dict[str, list[RetrievedResource]]`
         using the form Task 1 chose; every skill passed in gets a key, `[]` if
         it matched nothing
-  - [ ] Verify it passes (`pytest tests/test_coach_retrieval_db.py -q`)
-  - [ ] Commit: `feat(coach): add skills-prefiltered pgvector retrieval query`
+  - [x] Verify it passes (`pytest tests/test_coach_retrieval_db.py -q`)
+  - [x] Commit: `feat(coach): add skills-prefiltered pgvector retrieval query`
 
 ### Task 4: `k` limit and per-skill result mapping
 

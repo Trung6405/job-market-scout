@@ -14,6 +14,7 @@ from scout.shared.schemas import (
     ListingRequirements,
     MatchResult,
     Resource,
+    RetrievedResource,
     Run,
     RunListing,
     RunListingDetail,
@@ -550,6 +551,64 @@ async def insert_resource(
 async def get_resource_urls(conn: asyncpg.Connection) -> set[str]:
     rows = await conn.fetch("SELECT url FROM resources")
     return {row["url"] for row in rows}
+
+
+async def get_resources_for_skills(
+    conn: asyncpg.Connection,
+    skills: list[str],
+    vectors: list[list[float]],
+    k: int,
+    max_age_days: int,
+) -> dict[str, list[RetrievedResource]]:
+    """Retrieve the top-`k` resources for each skill, hybrid-ranked.
+
+    ``skills`` must already be normalized, and ``vectors`` holds each one's
+    query embedding at the same index. For every skill the exact ``skills[]``
+    pre-filter runs first and cosine ranking only orders what survives it —
+    the pre-filter is what guarantees a "java" gap can't surface JavaScript
+    resources, since similarity alone cannot separate them (D-CC-3).
+
+    Every requested skill gets a key; one that matches nothing maps to an
+    empty list. The dict is pre-seeded to guarantee that, because
+    ``CROSS JOIN LATERAL`` emits no row at all for a skill with no matches
+    rather than a null-filled one.
+    """
+    if not skills:
+        return {}
+
+    rows = await conn.fetch(
+        """
+        SELECT q.skill AS query_skill,
+               r.url,
+               r.title,
+               r.resource_type,
+               r.skills,
+               r.level,
+               r.summary,
+               1 - (r.embedding <=> q.vec::vector) AS similarity
+        FROM unnest($1::text[], $2::text[]) AS q(skill, vec)
+        CROSS JOIN LATERAL (
+            SELECT url, title, resource_type, skills, level, summary, embedding
+            FROM resources
+            WHERE q.skill = ANY(skills)
+              AND embedding IS NOT NULL
+              AND (last_verified IS NULL
+                   OR last_verified > now() - make_interval(days => $3))
+            ORDER BY embedding <=> q.vec::vector
+            LIMIT $4
+        ) r
+        """,
+        skills,
+        ["[" + ",".join(str(value) for value in vector) + "]" for vector in vectors],
+        max_age_days,
+        k,
+    )
+
+    results: dict[str, list[RetrievedResource]] = {skill: [] for skill in skills}
+    for row in rows:
+        data = dict(row)
+        results[data.pop("query_skill")].append(RetrievedResource(**data))
+    return results
 
 
 async def get_distinct_gap_skills(conn: asyncpg.Connection) -> list[str]:
