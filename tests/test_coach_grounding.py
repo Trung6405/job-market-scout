@@ -97,6 +97,12 @@ def test_extract_urls_handles_additional_llm_shapes(text, expected):
         # wrap either — it is a truncation.
         ("Read https://github.com/a/b)fake now.", ["https://github.com/a/b)fake"]),
         ("Read https://github.com/a/b]fake now.", ["https://github.com/a/b]fake"]),
+        # Junk appended directly after a closer is a truncation, not a wrap,
+        # so the whole token is returned and the fabrication is stripped.
+        (
+            "See (https://github.com/a/b)fake/path) now.",
+            ["https://github.com/a/b)fake/path)"],
+        ),
     ],
 )
 def test_extract_urls_returns_the_whole_token_when_truncated(text, expected):
@@ -106,13 +112,46 @@ def test_extract_urls_returns_the_whole_token_when_truncated(text, expected):
 @pytest.mark.parametrize(
     "text,expected",
     [
-        # The legitimate wrapped forms must keep working: the character before
-        # the URL opens the pair the character after it closes.
+        # The legitimate wrapped forms must keep working: the closer is
+        # followed by whitespace, sentence punctuation, or end of string.
         ("Start here (https://github.com/k/examples).", ["https://github.com/k/examples"]),
         ("[kubernetes/examples](https://github.com/k/examples)", ["https://github.com/k/examples"]),
         ("Read <https://github.com/k/examples> first.", ["https://github.com/k/examples"]),
         ('Open "https://github.com/a/b" now.', ["https://github.com/a/b"]),
         ("Open 'https://github.com/a/b' now.", ["https://github.com/a/b"]),
+        # The wrap test asks what follows the closer, never what precedes the
+        # URL, because a parenthetical or quotation almost always contains more
+        # than the URL itself. Testing the preceding character instead read
+        # each of these as a truncation, and the trailing ")" or '"' guaranteed
+        # the string could not equal an allowlist entry — so a correctly-cited
+        # real URL was stripped out of a tip that was fine.
+        (
+            "Start here (see https://github.com/k/examples).",
+            ["https://github.com/k/examples"],
+        ),
+        ("(docs: https://github.com/a/b)", ["https://github.com/a/b"]),
+        (
+            'She said "start with https://github.com/a/b" and left.',
+            ["https://github.com/a/b"],
+        ),
+        (
+            "Use (https://github.com/a/b) and (see https://github.com/c/d).",
+            ["https://github.com/a/b", "https://github.com/c/d"],
+        ),
+        # A URL that opens the string has no preceding character at all; the
+        # rule must not index off the front of it.
+        ("https://github.com/a/b is the one.", ["https://github.com/a/b"]),
+        ("https://github.com/a/b", ["https://github.com/a/b"]),
+        # Known limit of the wrap guard, pinned so it stays visible: sentence
+        # punctuation after the closer reads as prose, so a fabrication glued
+        # on behind it survives — the clean allowlisted URL is extracted and
+        # ".fake/path" is left in the tip as text. Far weaker than the prefix
+        # attack: the remainder sits outside the closing delimiter, so it is
+        # not part of the link and no reader can follow it.
+        (
+            "See (https://github.com/a/b).fake/path now.",
+            ["https://github.com/a/b"],
+        ),
     ],
 )
 def test_extract_urls_keeps_legitimate_wraps_intact(text, expected):

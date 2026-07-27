@@ -5,13 +5,14 @@ import re
 # LLM prose wraps URLs in parentheses, Markdown link syntax, angle brackets
 # and quotes, and ends sentences with them, so the pattern stops at whitespace
 # and at the bracket and quote characters — <, >, ", ', (, ), [, ] — that are
-# prose in practice. The cost is a URL that genuinely contains one of them
-# (rare outside wiki links) being truncated — accepted, because the
-# alternative is swallowing the closing paren of every parenthesised citation
-# into the URL and failing every comparison. The scheme is matched
-# case-insensitively: an un-extracted string is invisible to the allowlist
-# comparison and so can never be stripped, and HTTPS:// is a real thing models
-# write, so it must not be the one shape that slips past unseen.
+# prose in practice. The alternative is swallowing the closing paren of every
+# parenthesised citation into the URL and failing every comparison. The cost is
+# a URL that genuinely contains one of them (rare outside wiki links): the
+# truncation guard below returns it whole, so it fails comparison and is
+# stripped — a real link lost, never a fabricated one kept. The scheme is
+# matched case-insensitively: an un-extracted string is invisible to the
+# allowlist comparison and so can never be stripped, and HTTPS:// is a real
+# thing models write, so it must not be the one shape that slips past unseen.
 _URL_PATTERN = re.compile(r"https?://[^\s<>\"'()\[\]]+", re.IGNORECASE)
 
 # Trailing sentence punctuation is prose, never part of the URL. A path
@@ -19,12 +20,13 @@ _URL_PATTERN = re.compile(r"https?://[^\s<>\"'()\[\]]+", re.IGNORECASE)
 # in the corpus, which stores GitHub repo roots.
 _TRAILING_PUNCTUATION = ".,;:!?"
 
-# The characters the pattern stops at, and — for the closing half of a pair —
-# the opener that makes stopping there a legitimate wrap rather than a
-# truncation. A URL is genuinely wrapped only when the character before it
-# opens the pair the character after it closes: "(url)", "[label](url)",
-# "<url>", '"url"'. Anything else that stops a match is truncation.
-_CLOSER_TO_OPENER = {")": "(", "]": "[", ">": "<", '"': '"', "'": "'"}
+# The characters the pattern stops at, and the half of them that can *close*
+# something the prose opened. Whether stopping at a closer is a legitimate wrap
+# or a truncation is decided by what follows the closer, not by what precedes
+# the URL: requiring the opener to touch the URL would misread every ordinary
+# parenthetical — "(see url)", "(docs: url)", 'said "start with url"' — as a
+# truncation and strip a correctly-cited real link.
+_CLOSERS = frozenset(")]>\"'")
 _STOP_CHARACTERS = frozenset("<>\"'()[]")
 
 
@@ -37,6 +39,16 @@ def _is_truncated(text: str, match: re.Match[str]) -> bool:
     the allowlisted `https://github.com/a/b`, compares equal, and the whole
     fabricated string — parenthesised part included — survives in the tip.
     Same mechanism for any other stop character, e.g. `https://a/b'sfake`.
+
+    The rule, in two halves, each guarding one failure direction:
+
+    - An *opening* bracket right after the URL (`url(fake/path)`) is always
+      truncation — nothing it could close came before it. This half guards
+      against a fabricated link keeping an allowlisted prefix.
+    - A *closer* is a wrap when whitespace, sentence punctuation or the end of
+      the string follows it, and a truncation when more non-whitespace does
+      (`url)fake`). This half guards against a real citation being stripped
+      because the prose around it said more than the URL.
     """
     end = match.end()
     if end >= len(text):
@@ -44,12 +56,13 @@ def _is_truncated(text: str, match: re.Match[str]) -> bool:
     following = text[end]
     if following not in _STOP_CHARACTERS:
         return False
-    opener = _CLOSER_TO_OPENER.get(following)
-    if opener is None:
+    if following not in _CLOSERS:
         # An *opening* bracket immediately after a URL never wraps it.
         return True
-    start = match.start()
-    return start == 0 or text[start - 1] != opener
+    after_closer = text[end + 1 : end + 2]
+    if after_closer == "" or after_closer.isspace():
+        return False
+    return after_closer not in _TRAILING_PUNCTUATION
 
 
 def _full_token(text: str, start: int) -> str:
@@ -69,6 +82,13 @@ def extract_urls(text: str) -> list[str]:
     entry, so it is always stripped — the safe direction of error — and the
     removal step takes the fabricated string out whole rather than leaving a
     dangling `(fake/path)` behind.
+
+    Known limit: when a wrap *is* recognised, anything after the closer stays
+    in the prose. `(https://github.com/a/b).fake/path` extracts the clean
+    allowlisted URL — the "." after the ")" reads as prose — and leaves
+    `.fake/path` behind as text. That is far weaker than the prefix attack: the
+    fabricated remainder sits outside the closing delimiter, so it is not part
+    of the link and no reader can follow it. But it is not removed either.
     """
     urls: list[str] = []
     for match in _URL_PATTERN.finditer(text):

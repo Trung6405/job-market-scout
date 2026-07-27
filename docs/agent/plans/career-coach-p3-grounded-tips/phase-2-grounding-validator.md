@@ -354,9 +354,12 @@ consumers until Phase 3; deleting it affects nothing else.
 ### Task 1 spike outcome — the regex extractor is sufficient
 
 The named risk (some real LLM output shape is unparseable by regex) did **not**
-materialise for the shapes the corpus and prompt will produce. A single pattern
-plus a trailing-punctuation trim covers every shape in the task's table and
-several more, all pinned in `tests/test_coach_grounding.py`:
+materialise for the shapes the corpus and prompt will produce. What it takes is
+a pattern, a trailing-punctuation trim, **and the truncation guard described
+below** — the guard is load-bearing, not a refinement: without it a fabricated
+deep link truncates onto an allowlisted prefix and survives. Together they
+cover every shape in the task's table and several more, all pinned in
+`tests/test_coach_grounding.py`:
 
 - bare URL, sentence-final URL (`.`, `!`, `...`), comma-followed URL
 - parenthesised citation `(url).`
@@ -379,14 +382,38 @@ holds for any stop character, e.g. `https://github.com/a/b'sfake`.
 non-whitespace token** instead of the prefix. A token containing a bracket or
 quote can never equal an allowlist entry, so it is always stripped — the safe
 direction — and Task 3's removal step takes the whole fabricated string out
-rather than leaving a dangling `(fake/path)`. The rule: a match that stops at
-one of `<>"'()[]` is a *legitimate wrap* only when the character before the
-match opens the pair the character after it closes (`(url)`, `[label](url)`,
-`<url>`, `"url"`, `'url'`); everything else — an opening bracket right after
-the URL, or a closer with no matching opener — is truncation. Consequence for
-a URL whose path genuinely contains brackets (e.g.
+rather than leaving a dangling `(fake/path)`. The rule, for a match that stops
+at one of `<>"'()[]`, is two halves, each guarding one failure direction:
+
+- An **opening** bracket right after the URL (`url(fake/path)`) is always
+  truncation — nothing it could close came before it. Guards against a
+  fabricated link keeping an allowlisted prefix.
+- A **closer** (`)]>"'`) is a wrap when whitespace, sentence punctuation or the
+  end of the string follows it, and a truncation when more non-whitespace does
+  (`url)fake`). Guards against a real citation being stripped because the prose
+  said more than the URL.
+
+The wrap half deliberately asks what *follows the closer*, never what precedes
+the URL. An earlier version required the opener to touch the URL, which read
+every ordinary parenthetical or quotation containing more than the bare URL —
+`(see url)`, `(docs: url)`, `said "start with url"` — as a truncation and
+stripped a correctly-cited real link out of a fine tip.
+
+Consequence for a URL whose path genuinely contains brackets (e.g.
 `…/Deployment_(computing)`): it is extracted whole, fails comparison, and is
-stripped. A real link is lost; a fabricated one is never kept.
+stripped. A real link is lost; a fabricated one is never kept. Note also that
+`_full_token` swallows a wrapper's own closer, so
+`[label](https://en.wikipedia.org/wiki/Deployment_(computing))` yields a token
+with one paren too many; the outcome is safe (stripped), but Task 3's removal
+step will leave a dangling `[label](` in the prose.
+
+**Limit of the wrap guard**, pinned as a test: once a wrap is recognised,
+anything after the closer stays in the prose. `(https://github.com/a/b).fake/path`
+extracts the clean allowlisted URL — the `.` after the `)` reads as prose — and
+leaves `.fake/path` behind as text. This is far weaker than the prefix attack:
+the fabricated remainder sits outside the closing delimiter, so it is not part
+of the link and no reader can follow it. Junk glued directly to the closer
+(`(url)fake/path`) *is* caught, as truncation.
 
 **One shape remains deliberately not handled**, pinned as a test so it stays
 visible, and it constrains Phase 3:
