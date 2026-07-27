@@ -1,0 +1,356 @@
+# Phase 2: Grounding Validator
+
+> **Parent plan:** [plan.md](plan.md)
+> **Status:** Not started
+> **Depends on:** nothing — this phase is pure string logic and shares no code
+> with Phase 1. Sequenced second only because Phase 3 consumes it.
+
+---
+
+## Goal
+
+Build the deterministic enforcement FR-CC-9 and NFR-CC-3 require: given a tip's
+text and the URLs retrieved for that gap, return the text with every
+un-allowlisted URL removed, plus the lists of what survived and what was
+stripped. Done when the module is exhaustively tested on plain strings, with no
+LLM, no database, and no network anywhere in it.
+
+## Safety Checklist
+
+- **Touches user input, auth, secrets, or external calls?**
+  Yes, indirectly — this module's input is untrusted LLM output, and it *is*
+  the validation boundary for it. It performs no network call of its own; it
+  never fetches a URL, only compares it against the allowlist.
+- **Contains a one-way door (schema, public API shape, new dependency)?**
+  No. New module, no dependency (`re` and `urllib.parse` are stdlib).
+
+---
+
+## Tasks
+
+### Task 1: URL extraction *(spike — resolves the extractor risk in plan.md)*
+
+The risk this settles: an extractor that mis-handles trailing punctuation or
+Markdown syntax either loses a legitimate citation or lets a fabricated URL
+through. Pin the behaviour against the real shapes an LLM emits **before** any
+stripping logic exists. Both possible outcomes are complete answers — if a
+shape proves unparseable by regex, record it in Notes and constrain the prompt
+in Phase 3 to avoid emitting it.
+
+- **Files:** `scout/sub_agents/coach/grounding.py`, `tests/test_coach_grounding.py`
+- **Gate:** none
+- **Steps:**
+  - [ ] Write failing test: one parametrized case per URL shape, covering bare
+        URLs, sentence-final URLs, parenthesised URLs, Markdown links, two
+        URLs in one sentence, and text with no URL at all.
+
+    ```python
+    # tests/test_coach_grounding.py
+    from __future__ import annotations
+
+    import pytest
+
+    from scout.sub_agents.coach.grounding import extract_urls
+
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("See https://github.com/k/examples", ["https://github.com/k/examples"]),
+            # Sentence-final: the period is prose, not part of the URL.
+            ("See https://github.com/k/examples.", ["https://github.com/k/examples"]),
+            ("See https://github.com/k/examples, then start.", ["https://github.com/k/examples"]),
+            ("Start here (https://github.com/k/examples).", ["https://github.com/k/examples"]),
+            ("[kubernetes/examples](https://github.com/k/examples)", ["https://github.com/k/examples"]),
+            (
+                "Compare https://github.com/a/b and https://github.com/c/d.",
+                ["https://github.com/a/b", "https://github.com/c/d"],
+            ),
+            ("http://example.org/docs/", ["http://example.org/docs/"]),
+            ("No links here at all.", []),
+            ("", []),
+        ],
+    )
+    def test_extract_urls_handles_llm_prose_shapes(text, expected):
+        assert extract_urls(text) == expected
+    ```
+
+  - [ ] Verify it fails (`pytest tests/test_coach_grounding.py -v`) — expected:
+        `ModuleNotFoundError: No module named 'scout.sub_agents.coach.grounding'`
+  - [ ] Implement `extract_urls` in a new
+        `scout/sub_agents/coach/grounding.py`.
+
+    ```python
+    from __future__ import annotations
+
+    import re
+    from urllib.parse import urlsplit, urlunsplit
+
+    from pydantic import BaseModel
+
+    # LLM prose wraps URLs in parentheses and Markdown link syntax and ends
+    # sentences with them, so the pattern stops at whitespace and at the
+    # bracket characters that are prose in practice. The cost is a URL that
+    # genuinely contains a bracket (rare outside wiki links) being truncated —
+    # accepted, because the alternative is swallowing the closing paren of
+    # every parenthesised citation into the URL and failing every comparison.
+    _URL_PATTERN = re.compile(r"https?://[^\s<>\"'()\[\]]+")
+
+    # Trailing sentence punctuation is prose, never part of the URL. A path
+    # genuinely ending in one of these would be mis-trimmed; no such URL exists
+    # in the corpus, which stores GitHub repo roots.
+    _TRAILING_PUNCTUATION = ".,;:!?"
+
+
+    def extract_urls(text: str) -> list[str]:
+        """Every URL appearing in a tip, in order, duplicates included."""
+        return [
+            match.group(0).rstrip(_TRAILING_PUNCTUATION)
+            for match in _URL_PATTERN.finditer(text)
+        ]
+    ```
+
+  - [ ] Verify it passes (`pytest tests/test_coach_grounding.py -v`)
+  - [ ] Record in Notes / Learnings: any shape that could not be handled, and
+        whether Phase 3's prompt must avoid it.
+  - [ ] Commit: `feat(coach): add URL extraction for grounding validation`
+
+### Task 2: URL canonicalization for comparison
+
+- **Files:** `scout/sub_agents/coach/grounding.py`, `tests/test_coach_grounding.py`
+- **Gate:** none
+- **Steps:**
+  - [ ] Write failing test: cosmetic differences compare equal, meaningful
+        differences do not.
+
+    ```python
+    # append to tests/test_coach_grounding.py
+    from scout.sub_agents.coach.grounding import canonical_url
+
+
+    @pytest.mark.parametrize(
+        "a,b",
+        [
+            ("https://github.com/k/examples", "https://github.com/k/examples/"),
+            ("https://GitHub.com/k/examples", "https://github.com/k/examples"),
+            ("HTTPS://github.com/k/examples", "https://github.com/k/examples"),
+            ("  https://github.com/k/examples  ", "https://github.com/k/examples"),
+        ],
+    )
+    def test_canonical_url_ignores_cosmetic_differences(a, b):
+        assert canonical_url(a) == canonical_url(b)
+
+
+    @pytest.mark.parametrize(
+        "a,b",
+        [
+            # Path case is meaningful on GitHub and everywhere else.
+            ("https://github.com/k/Examples", "https://github.com/k/examples"),
+            # A fabricated sibling path must never canonicalize onto a real one.
+            ("https://github.com/k/examples-v2", "https://github.com/k/examples"),
+            ("https://github.com/k/examples", "https://gitlab.com/k/examples"),
+            ("http://github.com/k/examples", "https://github.com/k/examples"),
+        ],
+    )
+    def test_canonical_url_preserves_meaningful_differences(a, b):
+        assert canonical_url(a) != canonical_url(b)
+    ```
+
+  - [ ] Verify it fails (`pytest tests/test_coach_grounding.py -v`) — expected:
+        `ImportError: cannot import name 'canonical_url'`
+  - [ ] Implement in `grounding.py`.
+
+    ```python
+    def canonical_url(url: str) -> str:
+        """Normalize only what is cosmetic, so comparison is neither too
+        strict nor too loose.
+
+        Scheme and host are case-insensitive per RFC 3986 and a trailing
+        slash on a path names the same resource, so normalizing those stops a
+        real citation being stripped over formatting. Everything else is left
+        alone deliberately: path case is significant, and folding it would let
+        a fabricated near-miss path canonicalize onto a real one — which is
+        exactly the failure this validator exists to catch. The scheme is
+        compared, not normalized away, so http:// and https:// stay distinct.
+        """
+        parts = urlsplit(url.strip())
+        return urlunsplit(
+            (
+                parts.scheme.lower(),
+                parts.netloc.lower(),
+                parts.path.rstrip("/"),
+                parts.query,
+                parts.fragment,
+            )
+        )
+    ```
+
+  - [ ] Verify it passes (`pytest tests/test_coach_grounding.py -v`)
+  - [ ] Commit: `feat(coach): add URL canonicalization for allowlist comparison`
+
+### Task 3: `validate_grounding`
+
+- **Files:** `scout/sub_agents/coach/grounding.py`, `tests/test_coach_grounding.py`
+- **Gate:** none
+- **Steps:**
+  - [ ] Write failing test: allowed URLs survive untouched; a fabricated URL is
+        removed from the text and reported as stripped; a URL from a *different*
+        gap's resources is stripped even though it is real; the leftover prose
+        reads cleanly; a tip citing nothing valid reports no citations.
+
+    ```python
+    # append to tests/test_coach_grounding.py
+    from scout.sub_agents.coach.grounding import validate_grounding
+
+    ALLOWED = ["https://github.com/k/examples"]
+
+
+    def test_allowed_url_survives_unchanged():
+        text = "Work through kubernetes/examples (https://github.com/k/examples)."
+        result = validate_grounding(text, ALLOWED)
+        assert result.text == text
+        assert result.cited_urls == ["https://github.com/k/examples"]
+        assert result.stripped_urls == []
+
+
+    def test_allowed_url_survives_a_trailing_slash_difference():
+        text = "See https://github.com/k/examples/ for worked demos."
+        result = validate_grounding(text, ALLOWED)
+        assert result.cited_urls == ["https://github.com/k/examples/"]
+        assert result.stripped_urls == []
+
+
+    def test_fabricated_url_is_stripped_and_reported():
+        text = (
+            "Read the guide (https://kubernetes.io/invented-guide) and then "
+            "kubernetes/examples (https://github.com/k/examples)."
+        )
+        result = validate_grounding(text, ALLOWED)
+        assert "invented-guide" not in result.text
+        assert result.stripped_urls == ["https://kubernetes.io/invented-guide"]
+        assert result.cited_urls == ["https://github.com/k/examples"]
+        # The prose left behind reads cleanly — no orphaned "()" or double space.
+        assert "()" not in result.text
+        assert "  " not in result.text
+
+
+    def test_url_from_another_gap_is_stripped():
+        """The whole point of a per-gap allowlist: every gap's resources share
+        one prompt, so citing a real URL under the wrong skill is the cheapest
+        hallucination available."""
+        text = "Try terraform/modules (https://github.com/t/modules)."
+        result = validate_grounding(text, ALLOWED)
+        assert result.stripped_urls == ["https://github.com/t/modules"]
+        assert result.cited_urls == []
+
+
+    def test_markdown_link_to_fabricated_url_keeps_its_label():
+        text = "Start with [the handbook](https://example.com/handbook) today."
+        result = validate_grounding(text, ALLOWED)
+        assert result.text == "Start with the handbook today."
+        assert result.stripped_urls == ["https://example.com/handbook"]
+
+
+    def test_repeated_allowed_url_is_cited_once():
+        text = (
+            "Clone https://github.com/k/examples, then read "
+            "https://github.com/k/examples again."
+        )
+        result = validate_grounding(text, ALLOWED)
+        assert result.cited_urls == ["https://github.com/k/examples"]
+
+
+    def test_tip_with_no_urls_reports_no_citations():
+        result = validate_grounding("Just practise more.", ALLOWED)
+        assert result.cited_urls == []
+        assert result.stripped_urls == []
+        assert result.text == "Just practise more."
+    ```
+
+  - [ ] Verify it fails (`pytest tests/test_coach_grounding.py -v`) — expected:
+        `ImportError: cannot import name 'validate_grounding'`
+  - [ ] Implement in `grounding.py`.
+
+    ```python
+    class GroundingResult(BaseModel):
+        """The outcome of validating one tip against one gap's allowlist.
+
+        `stripped_urls` is returned rather than only logged so the caller can
+        count violations per run and store the surviving citations.
+        """
+
+        text: str
+        cited_urls: list[str] = []
+        stripped_urls: list[str] = []
+
+
+    def _remove_url(text: str, url: str) -> str:
+        """Take one URL out of the prose without leaving debris behind."""
+        escaped = re.escape(url)
+        # [label](url) -> label: the sentence still reads, minus the link.
+        text = re.sub(rf"\[([^\]]*)\]\(\s*{escaped}/?\s*\)", r"\1", text)
+        # " (url)" -> "": a parenthesised citation goes with its parentheses.
+        text = re.sub(rf"\s*\(\s*{escaped}/?\s*\)", "", text)
+        return text.replace(url, "")
+
+
+    def _tidy(text: str) -> str:
+        text = re.sub(r"\(\s*\)", "", text)
+        text = re.sub(r"[ \t]{2,}", " ", text)
+        text = re.sub(r"\s+([.,;:!?])", r"\1", text)
+        return text.strip()
+
+
+    def validate_grounding(text: str, allowed_urls: list[str]) -> GroundingResult:
+        """Strip every URL in `text` that is not in `allowed_urls`.
+
+        `allowed_urls` is the resource set retrieved for **one gap**, not for
+        the whole listing. Enforcement is deterministic on purpose: the
+        generation prompt also instructs the model to cite only these, but per
+        D-CC-5 that instruction is not what makes it true.
+        """
+        allowed = {canonical_url(url) for url in allowed_urls}
+        cited: list[str] = []
+        stripped: list[str] = []
+        cleaned = text
+
+        for url in extract_urls(text):
+            if canonical_url(url) in allowed:
+                if url not in cited:
+                    cited.append(url)
+            elif url not in stripped:
+                stripped.append(url)
+                cleaned = _remove_url(cleaned, url)
+
+        return GroundingResult(
+            text=_tidy(cleaned), cited_urls=cited, stripped_urls=stripped
+        )
+    ```
+
+  - [ ] Verify it passes (`pytest tests/test_coach_grounding.py -v`)
+  - [ ] Commit: `feat(coach): add deterministic grounding validator`
+
+---
+
+## Verification
+
+- [ ] All phase tests pass: `pytest tests/test_coach_grounding.py -v`
+- [ ] The module imports nothing from `asyncpg`, `litellm`, or `requests` —
+      confirm with
+      `grep -nE "asyncpg|litellm|requests|httpx" scout/sub_agents/coach/grounding.py`
+      returning nothing. This is the integrity boundary; it must stay testable
+      without a database or a model.
+- [ ] Manual: none — nothing calls this until Phase 3.
+
+## Rollback
+
+Revert the phase's three commits. `grounding.py` is a new file with no
+consumers until Phase 3; deleting it affects nothing else.
+
+---
+
+## Notes / Learnings
+
+<Filled in during execution — in particular, record the Task 1 spike's outcome:
+any URL shape the extractor cannot handle, and whether Phase 3's prompt must be
+constrained to avoid emitting it.>
