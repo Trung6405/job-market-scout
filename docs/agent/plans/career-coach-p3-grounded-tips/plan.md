@@ -66,6 +66,27 @@ untouched, because displaying them is P4.
   Blast-Radius requirement with no task attached to it is invisible to per-task
   review, because each reviewer only ever sees one brief.
 
+- **Manual verification result (2026-07-27, run `2026-07-27` on the dev DB).**
+  70 tips across 24 listings; 5 listings skipped for no corpus coverage. Of 162
+  stored citations, **zero** were absent from `resources` — checked by exact
+  string equality, which only passes because the final review's Fix 5 stores
+  the corpus spelling rather than the model's. Zero uncited tips stored, zero
+  duplicate `(run_listing_id, gap_skill)` rows, zero batch failures. A
+  subsequent `rerender.py` made **zero** LLM calls and left all 70 tips intact.
+
+  Honest caveat: the model emitted **no grounding violations at all** this run,
+  so the stripping path never fired against real output. The happy path is
+  confirmed end to end; enforcement remains evidenced by tests only.
+
+- **Found during the manual run, out of scope here:** `normalize_skill`
+  collapses `C`, `C++`, and `C#` all to `c` (and `F#` to `f`), so the corpus's
+  28 `c`-tagged resources are a mix of all three languages and a "C" gap
+  retrieves Cython/Nuitka. Grounding is unaffected — every cited URL is real
+  and genuinely carries the gap's normalized tag — but tip *relevance* suffers
+  for C-family gaps. `normalize_skill` lives in `scout/shared/skills.py` and is
+  shared by gap detection, the aggregator, and the retriever, so it is outside
+  this plan's Blast Radius and predates this branch. Needs its own ticket.
+
 - **Residual, accepted:** a legitimate citation wrapped in Markdown emphasis
   (`**[label](url)**`, `` `url` ``) is still stripped and its tip dropped. Fails
   safe — a real tip is lost, never a fabricated URL kept — and the prompt asks
@@ -180,7 +201,7 @@ untouched, because displaying them is P4.
 
 - [x] All acceptance criteria met
 - [x] All phase verification steps pass
-- [ ] Feature verified manually in a running environment (one real pipeline run
+- [x] Feature verified manually in a running environment (one real pipeline run
       writes `listing_tips`; a `rerender.py` re-render spends no LLM call)
 - [x] `docs/project/architecture-pipeline-overview.md` updated with the new
       stage and table
