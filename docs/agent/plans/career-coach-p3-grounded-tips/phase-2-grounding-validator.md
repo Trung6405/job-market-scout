@@ -362,29 +362,46 @@ several more, all pinned in `tests/test_coach_grounding.py`:
 - parenthesised citation `(url).`
 - Markdown link `[label](url)`, and autolink `<url>`
 - two URLs in one sentence; URLs at end of bullet lines (newline-delimited)
-- quoted URL `"url"`
+- quoted URL `"url"`, and uppercase or mixed-case schemes (`HTTPS://…`)
 - query string and fragment retained (`?tab=readme#setup`)
 - duplicates returned in order, as the docstring promises
 - text with no URL, and the empty string
 
-**Two shapes are deliberately not handled.** Both are pinned as tests so they
-stay visible, and both constrain Phase 3:
+**Bracket truncation is NOT safe on its own — it needs the truncation guard.**
+The original spike recorded truncation as the safe direction of error. That was
+wrong for this corpus. The corpus stores GitHub **repo roots**, so a fabricated
+deep link written as `https://github.com/a/b(fake/path)` truncates to exactly
+`https://github.com/a/b` — an allowlist entry. Comparison passes, nothing is
+stripped, and the entire fabricated string stays in the tip verbatim. The same
+holds for any stop character, e.g. `https://github.com/a/b'sfake`.
 
-1. **A URL whose path genuinely contains parentheses or brackets** (e.g.
-   `https://en.wikipedia.org/wiki/Deployment_(computing)`) is truncated at the
-   first bracket. This is the accepted cost of excluding bracket characters:
-   the alternative is swallowing the closing paren of *every* parenthesised
-   citation, which would fail the allowlist comparison for every legitimate
-   citation. Consequence: such a URL would be truncated, fail comparison, and
-   be stripped — the safe direction of error (a real link lost, never a
-   fabricated one kept). The corpus stores GitHub repo roots, which never
-   contain brackets, so this should not fire in practice.
-2. **A schemeless mention** (`github.com/k/examples`) is not extracted, so
-   nothing downstream can strip it. This *is* the unsafe direction: a
-   fabricated schemeless reference would survive untouched. Phase 3's
-   generation prompt must therefore require citations as full `https://` URLs
-   and forbid bare-domain references; the prompt cannot be trusted for
-   correctness (D-CC-5), but it can be used to keep output inside the shape
-   the deterministic validator can police.
+`extract_urls` therefore detects truncation and returns the **full
+non-whitespace token** instead of the prefix. A token containing a bracket or
+quote can never equal an allowlist entry, so it is always stripped — the safe
+direction — and Task 3's removal step takes the whole fabricated string out
+rather than leaving a dangling `(fake/path)`. The rule: a match that stops at
+one of `<>"'()[]` is a *legitimate wrap* only when the character before the
+match opens the pair the character after it closes (`(url)`, `[label](url)`,
+`<url>`, `"url"`, `'url'`); everything else — an opening bracket right after
+the URL, or a closer with no matching opener — is truncation. Consequence for
+a URL whose path genuinely contains brackets (e.g.
+`…/Deployment_(computing)`): it is extracted whole, fails comparison, and is
+stripped. A real link is lost; a fabricated one is never kept.
 
-No fragile pattern was added to chase either case.
+**One shape remains deliberately not handled**, pinned as a test so it stays
+visible, and it constrains Phase 3:
+
+- **A schemeless mention** (`github.com/k/examples`) is not extracted, so
+  nothing downstream can strip it. This *is* the unsafe direction: a
+  fabricated schemeless reference would survive untouched. Phase 3's
+  generation prompt must therefore require citations as full `https://` URLs
+  and forbid bare-domain references; the prompt cannot be trusted for
+  correctness (D-CC-5), but it can be used to keep output inside the shape
+  the deterministic validator can police.
+
+An uppercase scheme (`HTTPS://github.com/a/b`) used to fall in that same unsafe
+class — un-extracted, therefore un-strippable. Scheme matching is now
+case-insensitive, so it is extracted and policed like any other URL, and Task
+2's `canonical_url` lowercases the scheme for comparison.
+
+No fragile pattern was added to chase any of these.
