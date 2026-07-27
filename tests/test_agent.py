@@ -193,6 +193,12 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     async def _fake_record_listing_meta(conn, run_id, matches_with_requirements):
         pass
 
+    async def _fake_run_grounded_tips(conn, gaps_by_match, settings=None):
+        return [(match, []) for match, _checks in gaps_by_match]
+
+    async def _fake_record_listing_tips(conn, run_id, tips_by_match):
+        pass
+
     monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
     monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
     monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
@@ -211,6 +217,8 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     monkeypatch.setattr("scout.agent.run_requirements_extraction", _fake_requirements)
     monkeypatch.setattr("scout.agent.record_listing_gaps", _fake_record_listing_gaps)
     monkeypatch.setattr("scout.agent.record_listing_meta", _fake_record_listing_meta)
+    monkeypatch.setattr("scout.agent.run_grounded_tips", _fake_run_grounded_tips)
+    monkeypatch.setattr("scout.agent.record_listing_tips", _fake_record_listing_tips)
 
     texts = await _run_pipeline_agent()
 
@@ -317,6 +325,12 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
     async def _fake_record_listing_meta(conn, run_id, meta_by_match):
         pass
 
+    async def _fake_run_grounded_tips(conn, gaps_by_match, settings=None):
+        return [(match, []) for match, _checks in gaps_by_match]
+
+    async def _fake_record_listing_tips(conn, run_id, tips_by_match):
+        pass
+
     async def _fake_render_run(conn, run_id, settings):
         calls.append(("render_run", conn, run_id, settings))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
@@ -346,6 +360,8 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
     )
     monkeypatch.setattr("scout.agent.record_listing_gaps", _fake_record_listing_gaps)
     monkeypatch.setattr("scout.agent.record_listing_meta", _fake_record_listing_meta)
+    monkeypatch.setattr("scout.agent.run_grounded_tips", _fake_run_grounded_tips)
+    monkeypatch.setattr("scout.agent.record_listing_tips", _fake_record_listing_tips)
     monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
     monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
     monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
@@ -367,6 +383,153 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
     assert any("Report rendered:" in t for t in texts)
     report_text = next(t for t in texts if "Report rendered:" in t)
     assert "dashboard.html" in report_text
+
+
+@pytest.mark.asyncio
+async def test_scout_pipeline_agent_persists_grounded_tips(monkeypatch):
+    """Tips are generated outside the run transaction and written inside it."""
+    from scout.shared.schemas import GroundedTip
+
+    listing = _make_listing()
+    score = ListingScore(
+        source="linkedin", external_id="1", score=80, reasoning="Good fit."
+    )
+    profile = _make_profile()
+    requirements = ListingRequirements(
+        source="linkedin",
+        external_id="1",
+        must_have=[RequirementItem(name="Kubernetes", kind="skill")],
+        nice_to_have=[],
+    )
+
+    call_order: list[str] = []
+    recorded: list[tuple] = []
+
+    async def _fake_run_scraper(settings):
+        return [listing]
+
+    async def _fake_track_listings(listings, settings=None):
+        return listings
+
+    async def _fake_run_scorer(listings, settings):
+        return [score]
+
+    async def _fake_run_briefing(matches, settings, report_path=None):
+        return {}
+
+    class _RecordingTransaction(_FakeTransaction):
+        async def __aenter__(self):
+            call_order.append("transaction-open")
+            return None
+
+    class _FakeConn:
+        def transaction(self):
+            return _RecordingTransaction()
+
+    class _FakePoolAcquire:
+        async def __aenter__(self):
+            return _FakeConn()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakePool:
+        def acquire(self):
+            return _FakePoolAcquire()
+
+        async def close(self):
+            pass
+
+    async def _fake_create_pool(settings):
+        return _FakePool()
+
+    async def _fake_start_run(conn, run_date):
+        return 1
+
+    async def _fake_record_run_listings(conn, run_id, matches):
+        pass
+
+    async def _fake_finish_run(conn, run_id, *, listings_scraped, listings_scored):
+        pass
+
+    def _fake_load_profile(path):
+        return profile
+
+    async def _fake_run_requirements_extraction(listings, settings=None):
+        return [requirements]
+
+    async def _fake_record_listing_gaps(conn, run_id, gaps_by_match):
+        pass
+
+    async def _fake_record_listing_meta(conn, run_id, meta_by_match):
+        pass
+
+    async def _fake_run_grounded_tips(conn, gaps_by_match, settings=None):
+        call_order.append("generate")
+        return [
+            (
+                match,
+                [
+                    GroundedTip(
+                        gap_skill="Kubernetes",
+                        tip="Start with https://github.com/k/examples.",
+                        cited_urls=["https://github.com/k/examples"],
+                    )
+                ],
+            )
+            for match, _checks in gaps_by_match
+        ]
+
+    async def _fake_record_listing_tips(conn, run_id, tips_by_match):
+        call_order.append("record")
+        recorded.append((run_id, tips_by_match))
+
+    async def _fake_render_run(conn, run_id, settings):
+        return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
+
+    async def _fake_render_history(conn, settings):
+        return Path("reports/history.html")
+
+    def _fake_render_profile(profile_arg, settings):
+        return Path("reports/profile.html")
+
+    async def _fake_get_adjacent_runs(conn, run_date):
+        return None, None
+
+    monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
+    monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
+    monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
+    monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
+    monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
+    monkeypatch.setattr("scout.agent.start_run", _fake_start_run)
+    monkeypatch.setattr("scout.agent.record_run_listings", _fake_record_run_listings)
+    monkeypatch.setattr("scout.agent.finish_run", _fake_finish_run)
+    monkeypatch.setattr("scout.agent.load_profile", _fake_load_profile)
+    monkeypatch.setattr(
+        "scout.agent.run_requirements_extraction", _fake_run_requirements_extraction
+    )
+    monkeypatch.setattr("scout.agent.record_listing_gaps", _fake_record_listing_gaps)
+    monkeypatch.setattr("scout.agent.record_listing_meta", _fake_record_listing_meta)
+    monkeypatch.setattr("scout.agent.run_grounded_tips", _fake_run_grounded_tips)
+    monkeypatch.setattr("scout.agent.record_listing_tips", _fake_record_listing_tips)
+    monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
+    monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
+    monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
+    monkeypatch.setattr("scout.agent.get_adjacent_runs", _fake_get_adjacent_runs)
+
+    texts = await _run_pipeline_agent()
+
+    # Generation is outside the transaction: it makes LLM calls that take
+    # minutes, and agent.py holds a connection only around persistence.
+    assert call_order.index("generate") < call_order.index("transaction-open")
+    assert call_order.index("transaction-open") < call_order.index("record")
+
+    run_id, tips_by_match = recorded[0]
+    assert run_id == 1
+    assert len(tips_by_match) == 1
+    assert tips_by_match[0][0].listing.external_id == "1"
+    assert tips_by_match[0][1][0].cited_urls == ["https://github.com/k/examples"]
+    assert any("Coach: 1 grounded tip(s) across 1 listing(s)" in t for t in texts)
 
 
 @pytest.mark.asyncio
@@ -926,6 +1089,12 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
     async def _fake_record_listing_meta(conn, run_id, meta_by_match):
         calls.append(("record_listing_meta", run_id, meta_by_match))
 
+    async def _fake_run_grounded_tips(conn, gaps_by_match, settings=None):
+        return [(match, []) for match, _checks in gaps_by_match]
+
+    async def _fake_record_listing_tips(conn, run_id, tips_by_match):
+        calls.append(("record_listing_tips", run_id, tips_by_match))
+
     async def _fake_render_run(conn, run_id, settings):
         calls.append(("render_run", run_id))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
@@ -955,6 +1124,8 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
     )
     monkeypatch.setattr("scout.agent.record_listing_gaps", _fake_record_listing_gaps)
     monkeypatch.setattr("scout.agent.record_listing_meta", _fake_record_listing_meta)
+    monkeypatch.setattr("scout.agent.run_grounded_tips", _fake_run_grounded_tips)
+    monkeypatch.setattr("scout.agent.record_listing_tips", _fake_record_listing_tips)
     monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
     monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
     monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)

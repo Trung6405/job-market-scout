@@ -11,6 +11,7 @@ from scout.shared.db import (
     get_adjacent_runs,
     record_listing_gaps,
     record_listing_meta,
+    record_listing_tips,
     record_run_listings,
     start_run,
 )
@@ -21,6 +22,7 @@ from scout.sub_agents.advisor.gaps import evaluate_requirements
 from scout.sub_agents.advisor.report import render_history, render_profile, render_run
 from scout.sub_agents.advisor.runner import run_requirements_extraction
 from scout.sub_agents.briefing.briefing import run_briefing
+from scout.sub_agents.coach.tips import run_grounded_tips
 from scout.sub_agents.scorer.results import join_match_results
 from scout.sub_agents.scorer.runner import run_scorer
 from scout.sub_agents.scraper.runner import run_scraper
@@ -115,15 +117,32 @@ class ScoutPipelineAgent:
                 f"across {len(checks_by_match)} listing(s)",
             )
 
+            # Another LLM stage, so the same rule applies: retrieval reads
+            # only the corpus, which no part of this run writes, so it takes
+            # its own short-lived connection rather than extending the run
+            # transaction across minutes of model calls.
+            async with pool.acquire() as conn:
+                tips_by_match = await run_grounded_tips(
+                    conn, checks_by_match, settings
+                )
+            tipped = sum(1 for _match, tips in tips_by_match if tips)
+            tip_count = sum(len(tips) for _match, tips in tips_by_match)
+            yield PipelineEvent(
+                self.name,
+                f"Coach: {tip_count} grounded tip(s) across {tipped} listing(s)",
+            )
+
             # One transaction for the whole run so a mid-block failure leaves
-            # nothing half-written: scores, gaps, meta, and the finished marker
-            # commit together or not at all. render_run reads this run's own
-            # in-flight rows through the same connection, so it stays inside
-            # the transaction; render_profile touches no DB and stays outside.
+            # nothing half-written: scores, gaps, tips, meta, and the finished
+            # marker commit together or not at all. render_run reads this
+            # run's own in-flight rows through the same connection, so it
+            # stays inside the transaction; render_profile touches no DB and
+            # stays outside.
             async with pool.acquire() as conn:
                 async with conn.transaction():
                     await record_run_listings(conn, run_id, banded_matches)
                     await record_listing_gaps(conn, run_id, checks_by_match)
+                    await record_listing_tips(conn, run_id, tips_by_match)
                     await record_listing_meta(conn, run_id, matches_with_requirements)
                     await finish_run(
                         conn,

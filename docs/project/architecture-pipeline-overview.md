@@ -8,7 +8,7 @@
 
 ## Pipeline
 
-`scout/agent.py`'s `ScoutPipelineAgent` runs six stages in order, in a
+`scout/agent.py`'s `ScoutPipelineAgent` runs seven stages in order, in a
 single container, per daily run. It is a plain class — no external agent
 framework — with a `run()` method yielding `PipelineEvent`s
 (`scout/shared/events.py`) that `scout/main.py` logs as it iterates them.
@@ -23,7 +23,7 @@ before skipping it with a warning — one truncated or malformed response
 costs that batch's listings, not the whole run.
 
 ```
-Scraper → Tracker → Scorer → Advisor → Persistence/Report → Briefing
+Scraper → Tracker → Scorer → Advisor → Coach → Persistence/Report → Briefing
 ```
 
 🤖 = LLM-calling stage · ⚙️ = deterministic code stage
@@ -34,6 +34,7 @@ Scraper → Tracker → Scorer → Advisor → Persistence/Report → Briefing
 | **Tracker** | ⚙️ | `scout/sub_agents/tracker/` | Diff scraped listings against the DB; persist all listings; mark new/changed/closed; dedupe; pass only new/changed listings downstream. |
 | **Scorer** | 🤖 | `scout/sub_agents/scorer/` | LLM-score every relevant listing 0–100 against the configured profile, batched. Preference-neutral: `remote_only`/`preferred_locations`/`min_salary` are not scoring inputs, so a listing the student wouldn't want still gets a fair score and a place on the dashboard — preferences narrow the Briefing instead (see below). |
 | **Advisor** | 🤖 + ⚙️ | `scout/sub_agents/advisor/` | Turn raw scores into personalized guidance — see below. |
+| **Coach** | 🤖 + ⚙️ | `scout/sub_agents/coach/` | Turn each listing's unmet skill gaps into short, actionable tips that cite only real learning resources from the curated `resources` corpus — see below. |
 | **Briefing** | 🤖 | `scout/sub_agents/briefing/` | Filter scored matches to the ones passing the student's preferences (`scout/sub_agents/briefing/filters.py::passes_preferences`) and the minimum score, summarize the top matches, and send the daily briefing, linking to the rendered report. |
 
 ## Why the Advisor stage exists
@@ -67,14 +68,53 @@ fails fast at startup if it's missing or invalid — see
 `docs/agent/specs/profile-candidate-source/spec.md`), so gap detection
 always runs; there's no missing-profile skip path.
 
+## Why the Coach stage exists
+
+The Advisor names what's missing; it doesn't say what to do about it.
+The Coach stage closes that half, and does so without letting the model
+invent study material:
+
+- **`runner.py` (+ `bootstrap.py`, `github_search.py`, `tagging.py`,
+  `embeddings.py`)** — the corpus aggregator: it harvests candidate learning
+  resources for the skills that actually show up as gaps, skill-tags and
+  embeds them into the `resources` table. It runs on a weekly cadence,
+  separately from `ScoutPipelineAgent`, so the daily run only ever *reads*
+  the corpus.
+- **`retriever.py`** — `retrieve_for_skills(conn, skills, ...)` embeds each
+  *distinct* gap skill once for the whole run and pulls its top-k resources,
+  so a skill that is a gap on twenty listings costs one embedding.
+- **`tips.py`** — `run_grounded_tips()`, one `complete_json` call per listing
+  (size-1 batches through `run_batches`, so a failed call costs that listing's
+  tips and nothing else), prompted with only that listing's gaps and their
+  retrieved resources. A listing whose gaps retrieve nothing is never sent to
+  the model at all.
+- **`grounding.py`** — `validate_grounding()` re-checks the reply
+  deterministically against the allowlist actually given to the model: a URL
+  the corpus didn't supply is stripped from the tip and logged as a grounding
+  violation, and a tip left citing nothing is dropped. Only the validator
+  constructs a `GroundedTip`, so an unvalidated tip can't reach the DB by
+  mistake.
+
+Generation runs **before** the run transaction opens (`scout/agent.py`), for
+the same reason the Scorer and Advisor calls do: it takes its own short-lived
+connection for retrieval — the corpus is read-only to this run — rather than
+holding the run transaction open across minutes of model calls. Only the
+`record_listing_tips` write goes inside.
+
+The run reports its result as a `Coach: N grounded tip(s) across M listing(s)`
+pipeline event. **Nothing renders tips yet** — P3 deliberately ends with them
+stored and observable but invisible; surfacing them on the job-detail page is
+P4's work.
+
 ## Persistence
 
 `scout/shared/db.py` owns two run-scoped tables written by
 `ScoutPipelineAgent` after scoring: `runs` (one row per run, keyed by
 date) and `run_listings` (score + band per listing), plus
 `listing_gaps` (flagged missing skills per listing, when a profile
-exists). This is what makes `history.html` real instead of hardcoded
-sample data — see `docs/agent/specs/advisor-report/spec.md` for the original
+exists) and `listing_tips` (the Coach's grounded tips, one row per tip,
+each carrying the `cited_urls` it was validated against). This is what
+makes `history.html` real instead of hardcoded sample data — see `docs/agent/specs/advisor-report/spec.md` for the original
 problem statement and success criteria.
 
 ### Run identity & idempotency
@@ -87,13 +127,15 @@ history is deliberately not kept (see the same-day-overwrite decision in
 
 A run persists all-or-nothing: after both LLM passes complete,
 `ScoutPipelineAgent` writes `run_listings` (scores + bands), the extracted
-meta onto those rows, `listing_gaps`, the finished marker, and the report
+meta onto those rows, `listing_gaps`, `listing_tips`, the finished marker, and the report
 renders inside a **single transaction** (`scout/agent.py`). If a run dies partway through
 the Advisor, that transaction rolls back and only the `start_run` row
 survives (with `finished_at` NULL) — the marker that the run is
 incomplete. The **next same-date run heals it** deterministically:
 `start_run` upserts the run row, `record_run_listings` upserts on
-`(run_id, listing_id)`, and `record_listing_gaps` delete-then-inserts. So
+`(run_id, listing_id)`, and `record_listing_gaps` / `record_listing_tips`
+delete-then-insert (scoped to the listings supplied, so a partial re-run
+doesn't wipe the rest of the run's rows). So
 re-running a broken day is always safe and converges to a clean state.
 
 ## Scheduling & hosting

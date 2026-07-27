@@ -1,7 +1,7 @@
 # Phase 3: Generation Stage & Wiring
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** Phase 1 complete (`GroundedTip`, `record_listing_tips`),
 > Phase 2 complete (`validate_grounding`), and P2's `retrieve_for_skills` on the
 > branch this one is based on.
@@ -759,7 +759,7 @@ the job-detail template still untouched.
   `docs/project/architecture-pipeline-overview.md`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: the generated tips reach `record_listing_tips`,
+  - [x] Write failing test: the generated tips reach `record_listing_tips`,
         the run reports them as a pipeline event, and generation happens
         **before** the transaction opens — the LLM call must not hold a
         transaction open for minutes.
@@ -832,9 +832,9 @@ the job-detail template still untouched.
 
     (`PipelineEvent` is `(author, text)` — see `scout/shared/events.py`.)
 
-  - [ ] Verify it fails (`pytest tests/test_agent.py::test_scout_pipeline_agent_persists_grounded_tips -v`)
+  - [x] Verify it fails (`pytest tests/test_agent.py::test_scout_pipeline_agent_persists_grounded_tips -v`)
         — expected: `AttributeError: <module 'scout.agent'> has no attribute 'run_grounded_tips'`
-  - [ ] Implement in `scout/agent.py`. Generation goes **before** the run
+  - [x] Implement in `scout/agent.py`. Generation goes **before** the run
         transaction is opened — it makes LLM calls that take minutes, and
         `agent.py`'s existing comment is explicit that the connection is only
         held around actual persistence. Only the cheap local write goes inside.
@@ -880,11 +880,11 @@ the job-detail template still untouched.
                     await record_listing_tips(conn, run_id, tips_by_match)
     ```
 
-  - [ ] Verify it passes (`pytest tests/test_agent.py -v`)
-  - [ ] Update `docs/project/architecture-pipeline-overview.md`: add the
+  - [x] Verify it passes (`pytest tests/test_agent.py -v`)
+  - [x] Update `docs/project/architecture-pipeline-overview.md`: add the
         grounded-tip stage and the `listing_tips` table to the pipeline
         description, noting that nothing renders tips until P4.
-  - [ ] Commit: `feat(coach): wire the grounded-tip stage into the pipeline`
+  - [x] Commit: `feat(coach): wire the grounded-tip stage into the pipeline`
         (include the docs update and the plan/phase status ticks in this same
         commit)
 
@@ -892,9 +892,9 @@ the job-detail template still untouched.
 
 ## Verification
 
-- [ ] All phase tests pass:
+- [x] All phase tests pass:
       `pytest tests/test_coach_tips.py tests/test_coach_tips_prompt.py tests/test_coach_config.py tests/test_agent.py -v`
-- [ ] Full suite, no regression: `pytest -q`
+- [x] Full suite, no regression: `pytest -q`
 - [ ] Manual: run the pipeline against the dev database with a populated
       corpus. Confirm `SELECT count(*) FROM listing_tips;` is non-zero, that
       every `cited_urls` entry also appears in `SELECT url FROM resources`, and
