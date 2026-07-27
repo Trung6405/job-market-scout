@@ -453,3 +453,64 @@ case-insensitive, so it is extracted and policed like any other URL, and Task
 2's `canonical_url` lowercases the scheme for comparison.
 
 No fragile pattern was added to chase any of these.
+
+### Task 3 defect — substring removal was the wrong primitive
+
+Shipped in `15b6d68`, fixed after review. `_remove_url` ended in
+`text.replace(url, "")`. A URL is not a token to `str.replace`; it is a
+substring, and these substrings nest. Every allowlisted GitHub URL has
+`https://github.com` and `https://github.com/<org>` as literal prefixes, so
+removing a fabricated URL reached *inside* a legitimate citation's occurrence:
+
+```
+allowlist = ["https://github.com/k/examples"]
+
+"Search GitHub (https://github.com) then clone https://github.com/k/examples."
+  -> "Search GitHub then clone /k/examples."   cited: ["https://github.com/k/examples"]
+"Read https://github.com/k/examples then https://github.com/k/example."
+  -> "Read s then."                            cited: ["https://github.com/k/examples"]
+```
+
+The mangled prose was the visible half. The dangerous half was `cited_urls`:
+it was accumulated from `extract_urls(text)` on the *original* text, alongside
+the removals rather than from their result, so it kept naming a citation the
+returned text no longer contained. That is exactly the signal Phase 3's caller
+uses to drop tips citing nothing — so a tip whose only citation had been
+destroyed was stored as properly grounded. Order was irrelevant; the fabrication
+mangled the citation whether it came before or after it. Sorting removals
+longest-first would **not** have fixed it either: allowed URLs are never removed
+at all, so a short fabricated URL's substring replace still reaches into a long
+allowed URL's occurrence. Only position fixes it.
+
+The fix, and the two rules worth carrying into Phase 3:
+
+- **Remove by span.** An internal `_iter_urls` generator yields
+  `(url, start, end)`; `extract_urls` is now a thin wrapper over it, unchanged
+  in behaviour and signature. The span is of the token actually *returned* —
+  widened by the truncation guard, trimmed of trailing punctuation — not of the
+  bare regex match, or removal would leave the widened remainder behind.
+  `validate_grounding` rebuilds the text in one pass, copying between spans
+  verbatim and dropping spans that fail the allowlist. Wrapper cleanup
+  (`[label](url)` → `label`, `(url)` → nothing) is matched *relative to the
+  span* — `\Z`-anchored opener patterns on the slice before it, a closer
+  pattern at its end — so a wrapper cannot be found across a neighbouring URL.
+  Spans starting before the rebuild cursor are skipped: a widened token can
+  contain a later regex match, and cutting it twice would corrupt the text.
+- **Derive the report from the result, never alongside it.** `cited_urls` is
+  now read back out of the rebuilt, tidied text via `extract_urls`. Any
+  bookkeeping computed in parallel with a transformation can disagree with it;
+  when the disagreement is what a caller's drop/keep decision rests on, it must
+  be derived instead. Pinned as a `cited_urls == extract_urls(result.text)`
+  assertion across the removal cases.
+
+Also fixed in the same pass (minor): `_tidy` left a space stranded before a
+newline. `[ \t]{2,}` needs two spaces and `\s+([.,;:!?])` needs punctuation, so
+neither rule fired on the single space a line-final citation leaves behind —
+and a bullet list is the commonest tip layout, so line-final citations are the
+commonest strip.
+
+Deliberately left alone: a fabricated URL nested *inside* an allowed URL's
+widened token (only reachable via `https://a/b(https://c/d)` with the outer
+token allowlisted) is skipped rather than cut, so it survives. Cutting it would
+corrupt a citation the allowlist approved, and the shape requires an allowlist
+entry containing a bracket, which the corpus of GitHub repo roots does not have.

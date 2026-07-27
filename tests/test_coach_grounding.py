@@ -327,3 +327,109 @@ def test_bare_fabricated_url_ending_a_sentence_leaves_clean_prose():
     result = validate_grounding(text, ALLOWED)
     assert result.stripped_urls == ["https://example.com/handbook"]
     assert result.text == "Then read."
+
+
+# --- Removal is positional, not substring-based -----------------------------
+#
+# Removing a URL by `str.replace` reached inside *other* URLs' occurrences:
+# every allowlisted GitHub URL has "https://github.com" and
+# "https://github.com/<org>" as literal prefixes, so stripping a fabricated
+# prefix mangled the legitimate citation standing next to it. The prose damage
+# was the visible half; the dangerous half was that `cited_urls` went on naming
+# a URL the returned text no longer contained, and the caller drops a tip only
+# when `cited_urls` is empty — so a citationless tip was stored as grounded.
+#
+# Sorting removals longest-first would not have fixed it: allowed URLs are
+# never removed, so a short fabricated URL's substring replace still reaches
+# into a long allowed one. Every case below therefore asserts `cited_urls`
+# against the URLs *actually present* in the returned text, not merely that it
+# is non-empty.
+
+
+@pytest.mark.parametrize(
+    "text,expected_text,expected_stripped",
+    [
+        # The ordinary-prose trigger: a model mentions the bare domain in
+        # passing and cites a real deep link in the same sentence.
+        (
+            "Search GitHub (https://github.com) then clone "
+            "https://github.com/k/examples.",
+            "Search GitHub then clone https://github.com/k/examples.",
+            ["https://github.com"],
+        ),
+        (
+            "Browse https://github.com for repos, then clone "
+            "https://github.com/k/examples.",
+            "Browse for repos, then clone https://github.com/k/examples.",
+            ["https://github.com"],
+        ),
+        # A fabricated near-miss that is a strict *prefix* of the allowed URL,
+        # in both orders — order never mattered to the substring bug.
+        (
+            "Read https://github.com/k/examples then https://github.com/k/example.",
+            "Read https://github.com/k/examples then.",
+            ["https://github.com/k/example"],
+        ),
+        (
+            "Read https://github.com/k/example then https://github.com/k/examples.",
+            "Read then https://github.com/k/examples.",
+            ["https://github.com/k/example"],
+        ),
+        # The reverse containment: the allowed URL is a prefix of the
+        # fabricated one (a real repo root with extra path glued on).
+        (
+            "Start at https://github.com/k/examples then see "
+            "https://github.com/k/examples/docs.",
+            "Start at https://github.com/k/examples then see.",
+            ["https://github.com/k/examples/docs"],
+        ),
+    ],
+)
+def test_removal_never_damages_a_neighbouring_url(
+    text, expected_text, expected_stripped
+):
+    result = validate_grounding(text, ALLOWED)
+    assert result.text == expected_text
+    assert result.stripped_urls == expected_stripped
+    # cited_urls must describe the text that was actually returned.
+    assert result.cited_urls == ["https://github.com/k/examples"]
+    assert result.cited_urls == extract_urls(result.text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Search GitHub (https://github.com) then clone https://github.com/k/examples.",
+        "Read https://github.com/k/examples then https://github.com/k/example.",
+        "Read https://github.com/k/example then https://github.com/k/examples.",
+        "Start at https://github.com/k/examples then see https://github.com/k/examples/docs.",
+        "Try https://github.com/t/modules and https://github.com/k/examples.",
+        "Only https://github.com/t/modules here.",
+        "Work through kubernetes/examples (https://github.com/k/examples).",
+    ],
+)
+def test_cited_urls_always_matches_the_returned_text(text):
+    """The invariant the caller's "drop tips citing nothing" rule depends on:
+    `cited_urls` is derived from the returned text, so it can never claim a
+    citation the reader will not find."""
+    result = validate_grounding(text, ALLOWED)
+    assert result.cited_urls == extract_urls(result.text)
+
+
+def test_stripping_a_line_final_url_leaves_no_trailing_space():
+    """A bullet list is the commonest tip layout, so a citation ending a line
+    is the commonest strip. `[ \\t]{2,}` needs two spaces and `\\s+([.,;:!?])`
+    needs punctuation, so neither tidy rule fired on the one space left
+    behind."""
+    result = validate_grounding("Read https://x.test/a\nThen continue.", ALLOWED)
+    assert result.text == "Read\nThen continue."
+    assert result.stripped_urls == ["https://x.test/a"]
+    assert result.cited_urls == []
+
+
+def test_stripping_one_bullet_leaves_the_other_bullet_intact():
+    text = "- Docs: https://bad.test/a\n- Real: https://github.com/k/examples\n"
+    result = validate_grounding(text, ALLOWED)
+    assert result.text == "- Docs:\n- Real: https://github.com/k/examples"
+    assert result.cited_urls == extract_urls(result.text)
+    assert result.stripped_urls == ["https://bad.test/a"]

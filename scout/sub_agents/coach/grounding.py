@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import BaseModel
@@ -76,6 +77,34 @@ def _full_token(text: str, start: int) -> str:
     return text[start:end]
 
 
+def _iter_urls(text: str) -> Iterator[tuple[str, int, int]]:
+    """Every URL in `text` paired with the span it actually occupies.
+
+    The span belongs to the token *returned*, not to the bare regex match:
+    `_is_truncated` can widen a match to the whole non-whitespace run, and
+    trailing sentence punctuation is trimmed back off the end. Removal works
+    from these spans rather than by substring search, which is the difference
+    between taking one URL out and reaching inside another one's occurrence.
+    Every allowlisted GitHub URL has `https://github.com` and
+    `https://github.com/<org>` as literal prefixes, so a substring removal of a
+    fabricated bare-domain mention also ate the front of the legitimate
+    citation standing next to it — leaving `/k/examples` in the prose while
+    `cited_urls` still claimed the whole URL was cited. Sorting removals
+    longest-first does not help: allowed URLs are never removed at all, so a
+    short fabricated URL's substring replace still reaches into a long allowed
+    one. Only position does.
+    """
+    for match in _URL_PATTERN.finditer(text):
+        start = match.start()
+        raw = (
+            _full_token(text, start)
+            if _is_truncated(text, match)
+            else match.group(0)
+        )
+        url = raw.rstrip(_TRAILING_PUNCTUATION)
+        yield url, start, start + len(url)
+
+
 def extract_urls(text: str) -> list[str]:
     """Every URL appearing in a tip, in order, duplicates included.
 
@@ -93,15 +122,7 @@ def extract_urls(text: str) -> list[str]:
     fabricated remainder sits outside the closing delimiter, so it is not part
     of the link and no reader can follow it. But it is not removed either.
     """
-    urls: list[str] = []
-    for match in _URL_PATTERN.finditer(text):
-        raw = (
-            _full_token(text, match.start())
-            if _is_truncated(text, match)
-            else match.group(0)
-        )
-        urls.append(raw.rstrip(_TRAILING_PUNCTUATION))
-    return urls
+    return [url for url, _start, _end in _iter_urls(text)]
 
 
 def canonical_url(url: str) -> str:
@@ -140,20 +161,44 @@ class GroundingResult(BaseModel):
     stripped_urls: list[str] = []
 
 
-def _remove_url(text: str, url: str) -> str:
-    """Take one URL out of the prose without leaving debris behind."""
-    escaped = re.escape(url)
-    # [label](url) -> label: the sentence still reads, minus the link.
-    text = re.sub(rf"\[([^\]]*)\]\(\s*{escaped}/?\s*\)", r"\1", text)
-    # " (url)" -> "": a parenthesised citation goes with its parentheses.
-    text = re.sub(rf"\s*\(\s*{escaped}/?\s*\)", "", text)
-    return text.replace(url, "")
+# The wrappers prose puts around a citation, matched relative to the URL's own
+# span so that removing one URL can never touch another's characters. The
+# opener patterns are anchored at the end of the slice preceding the URL with
+# \Z; the closer is matched starting at the URL's end.
+_MARKDOWN_LINK_OPEN = re.compile(r"\[([^\]]*)\]\(\s*\Z")
+_PAREN_OPEN = re.compile(r"\s*\(\s*\Z")
+_WRAP_CLOSE = re.compile(r"/?\s*\)")
+
+
+def _removal_span(text: str, start: int, end: int) -> tuple[int, int, str]:
+    """What to cut, and what to put back, to take out the URL at [start, end).
+
+    Returns the wrapper's span when the URL sits inside one, so no debris is
+    left behind: `[label](url)` collapses to its label and a parenthesised
+    citation goes with its parentheses. Otherwise only the URL's own
+    characters are cut.
+    """
+    close = _WRAP_CLOSE.match(text, end)
+    if close is not None:
+        # [label](url) -> label: the sentence still reads, minus the link.
+        link = _MARKDOWN_LINK_OPEN.search(text, 0, start)
+        if link is not None:
+            return link.start(), close.end(), link.group(1)
+        # " (url)" -> "": a parenthesised citation goes with its parentheses.
+        paren = _PAREN_OPEN.search(text, 0, start)
+        if paren is not None:
+            return paren.start(), close.end(), ""
+    return start, end, ""
 
 
 def _tidy(text: str) -> str:
     text = re.sub(r"\(\s*\)", "", text)
     text = re.sub(r"[ \t]{2,}", " ", text)
     text = re.sub(r"\s+([.,;:!?])", r"\1", text)
+    # A single space stranded at the end of a line: neither rule above fires
+    # (one space, no punctuation), and a bullet list is the commonest tip
+    # layout, so a line-final citation left one every time it was stripped.
+    text = re.sub(r"[ \t]+(?=\n)", "", text)
     return text.strip()
 
 
@@ -181,20 +226,41 @@ def validate_grounding(text: str, allowed_urls: list[str]) -> GroundingResult:
     the whole listing. Enforcement is deterministic on purpose: the
     generation prompt also instructs the model to cite only these, but per
     D-CC-5 that instruction is not what makes it true.
+
+    The text is rebuilt in one pass over the URL spans, copying everything
+    between them verbatim and dropping the spans that fail the allowlist, and
+    `cited_urls` is then read back out of the rebuilt text. Deriving the
+    citations from the result rather than computing them alongside it is the
+    point: the caller drops any tip whose `cited_urls` is empty, so a
+    `cited_urls` that can name a URL the returned text no longer contains
+    turns "uncited advice is worthless" into "uncited advice is stored".
     """
     allowed = {_safe_canonical(url) for url in allowed_urls}
-    cited: list[str] = []
     stripped: list[str] = []
-    cleaned = text
+    pieces: list[str] = []
+    cursor = 0
 
-    for url in extract_urls(text):
+    for url, start, end in _iter_urls(text):
+        if start < cursor:
+            # A widened token already swallowed this match; it is not a
+            # separate occurrence, and cutting it again would corrupt the text.
+            continue
         if _safe_canonical(url) in allowed:
-            if url not in cited:
-                cited.append(url)
-        elif url not in stripped:
+            continue
+        cut_start, cut_end, replacement = _removal_span(text, start, end)
+        pieces.append(text[cursor : max(cut_start, cursor)])
+        pieces.append(replacement)
+        cursor = cut_end
+        if url not in stripped:
             stripped.append(url)
-            cleaned = _remove_url(cleaned, url)
+    pieces.append(text[cursor:])
+
+    cleaned = _tidy("".join(pieces))
+    cited: list[str] = []
+    for url in extract_urls(cleaned):
+        if url not in cited and _safe_canonical(url) in allowed:
+            cited.append(url)
 
     return GroundingResult(
-        text=_tidy(cleaned), cited_urls=cited, stripped_urls=stripped
+        text=cleaned, cited_urls=cited, stripped_urls=stripped
     )
