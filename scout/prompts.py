@@ -4,7 +4,7 @@ import json
 
 from scout.config import Settings
 from scout.shared.profile import render_profile_text
-from scout.shared.schemas import Listing, MatchResult
+from scout.shared.schemas import Listing, MatchResult, RetrievedResource
 
 def _project_listing_for_scoring(listing: Listing, description_char_limit: int) -> dict:
     return {
@@ -227,4 +227,58 @@ strings), "resource_type" (string), "level" (string or null), "summary"
 
 README:
 {readme_text[:4000]}
+"""
+
+
+def build_coach_tips_instruction(
+    listing: Listing, resources_by_skill: dict[str, list[RetrievedResource]]
+) -> str:
+    gaps_json = json.dumps(
+        {
+            "role": listing.title,
+            "company": listing.company,
+            "gaps": [
+                {
+                    "skill": skill,
+                    "resources": [
+                        {
+                            "title": resource.title,
+                            "url": str(resource.url),
+                            "summary": resource.summary,
+                            "type": resource.resource_type,
+                        }
+                        for resource in resources
+                    ],
+                }
+                for skill, resources in resources_by_skill.items()
+            ],
+        },
+        indent=2,
+    )
+    return f"""\
+You are the career coach for Job Market Scout. For each skill gap below,
+write one short, practical tip (2-3 sentences) telling the candidate how to
+start closing that gap using the learning resources provided for it.
+
+Rules:
+- Reference ONLY the resources listed under that same skill. Do not cite a
+  resource listed under a different skill, and do not invent any URL,
+  repository, book, or course that is not in the list.
+- Include the URL of at least one resource you reference, written out in
+  full and starting with "https://". Never refer to a resource by bare
+  domain or name alone (not "github.com/foo/bar", not "the foo/bar repo").
+- Write each URL as plain text, optionally wrapped in parentheses. Do not
+  wrap it in asterisks, underscores, backticks, or angle brackets, and do
+  not nest it inside another bracketed phrase.
+- Copy each "skill" value exactly as given — it is how the tip is matched
+  back to the gap.
+- Be concrete about what to do with the resource, not just that it exists.
+- Do not call any tool.
+
+Return a JSON object with one key, "tips": a list of objects, each with
+"skill" (copied exactly) and "tip" (the text). Return only the JSON object,
+no commentary.
+
+Skill gaps and their resources:
+{gaps_json}
 """

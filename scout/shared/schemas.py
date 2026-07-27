@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 # The Scorer's 0-100 score buckets into one of these qualitative bands via
 # advisor.bands.classify_band. Keeping it a closed Literal makes the vocabulary
@@ -174,6 +174,28 @@ class GroundedTip(BaseModel):
     gap_skill: str
     tip: str
     cited_urls: list[str] = []
+
+
+class GeneratedTip(BaseModel):
+    """One tip as the model returned it — untrusted until validated.
+
+    Deliberately distinct from `GroundedTip`: nothing constructs a
+    `GroundedTip` except the validator, so an unvalidated tip cannot be
+    passed to `record_listing_tips` by mistake.
+
+    The prompt asks the model for a key named "skill"; the field is named
+    `gap_skill` to match `GroundedTip` and `listing_gaps.skill`, so the
+    alias bridges the two without renaming either.
+    """
+
+    gap_skill: str = Field(alias="skill")
+    tip: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class GeneratedTips(BaseModel):
+    tips: list[GeneratedTip]
 
 
 class ResourceTags(BaseModel):

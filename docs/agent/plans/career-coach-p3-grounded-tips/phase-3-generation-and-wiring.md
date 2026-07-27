@@ -85,7 +85,7 @@ the job-detail template still untouched.
   `tests/test_coach_tips_prompt.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: the prompt names every gap and every resource URL
+  - [x] Write failing test: the prompt names every gap and every resource URL
         given, instructs the model to cite only those, and puts the variable
         JSON last (the prefix-cache convention from the llm-call-efficiency
         spec).
@@ -143,9 +143,9 @@ the job-detail template still untouched.
         assert prompt.rstrip().endswith("}") or prompt.rstrip().endswith("]")
     ```
 
-  - [ ] Verify it fails (`pytest tests/test_coach_tips_prompt.py -v`) —
+  - [x] Verify it fails (`pytest tests/test_coach_tips_prompt.py -v`) —
         expected: `ImportError: cannot import name 'build_coach_tips_instruction'`
-  - [ ] Implement the schemas in `scout/shared/schemas.py`, next to
+  - [x] Implement the schemas in `scout/shared/schemas.py`, next to
         `GroundedTip`.
 
     ```python
@@ -165,7 +165,7 @@ the job-detail template still untouched.
         tips: list[GeneratedTip]
     ```
 
-  - [ ] Implement the prompt in `scout/prompts.py`, below
+  - [x] Implement the prompt in `scout/prompts.py`, below
         `build_coach_tagging_instruction`.
 
     ```python
@@ -240,8 +240,8 @@ the job-detail template still untouched.
     Import `Field` and `ConfigDict` from `pydantic` in `schemas.py` if not
     already imported.
 
-  - [ ] Verify it passes (`pytest tests/test_coach_tips_prompt.py -v`)
-  - [ ] Commit: `feat(coach): add grounded-tip schemas and prompt`
+  - [x] Verify it passes (`pytest tests/test_coach_tips_prompt.py -v`)
+  - [x] Commit: `feat(coach): add grounded-tip schemas and prompt`
 
 ### Task 3: Generation stage — retrieve once, one call per listing
 
