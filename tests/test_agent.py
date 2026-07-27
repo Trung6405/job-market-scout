@@ -38,6 +38,53 @@ class _FakeTransaction:
         return False
 
 
+class _FakeConn:
+    def transaction(self):
+        return _FakeTransaction()
+
+
+class _FakePoolAcquire:
+    """`pool.acquire()` as an async context manager, recording *both* ends.
+
+    Recording the release is the point: a real pool has a fixed size, so an
+    acquire that is never released doesn't fail loudly — it exhausts the pool
+    and hangs the next stage of the nightly run. An unbalanced ledger makes
+    that visible here instead.
+    """
+
+    def __init__(self, ledger: list[str], conn):
+        self._ledger = ledger
+        self._conn = conn
+
+    async def __aenter__(self):
+        self._ledger.append("acquire")
+        return self._conn
+
+    async def __aexit__(self, exc_type, exc, tb):
+        self._ledger.append("release")
+        return False
+
+
+class _FakePool:
+    """Stand-in for the asyncpg pool `scout.agent.create_pool` returns."""
+
+    def __init__(self, *, conn=None, on_close=None):
+        self.ledger: list[str] = []
+        self._conn = conn if conn is not None else _FakeConn()
+        self._on_close = on_close
+
+    def acquire(self):
+        return _FakePoolAcquire(self.ledger, self._conn)
+
+    async def close(self):
+        if self._on_close is not None:
+            self._on_close()
+
+    @property
+    def leaked(self) -> bool:
+        return self.ledger.count("acquire") != self.ledger.count("release")
+
+
 @pytest.fixture(autouse=True)
 def _discord_configured_for_briefing():
     """The pipeline only runs briefing when Discord is configured
@@ -127,27 +174,11 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
         calls.append(("briefing", matches, report_path))
         return {}
 
-    class _FakeConn:
-        def transaction(self):
-            return _FakeTransaction()
-
-    class _FakePoolAcquire:
-        async def __aenter__(self):
-            return _FakeConn()
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-    class _FakePool:
-        def acquire(self):
-            return _FakePoolAcquire()
-
-        async def close(self):
-            calls.append("pool_closed")
+    pool = _FakePool(on_close=lambda: calls.append("pool_closed"))
 
     async def _fake_create_pool(settings):
         calls.append("create_pool")
-        return _FakePool()
+        return pool
 
     async def _fake_start_run(conn, run_date):
         calls.append(("start_run", run_date))
@@ -252,6 +283,7 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     assert any("Report rendered:" in t for t in texts)
     assert any("Run persisted:" in t for t in texts)
     assert any("Briefing: Discord message sent" in t for t in texts)
+    assert not pool.leaked
 
 
 @pytest.mark.asyncio
@@ -283,26 +315,10 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
         calls.append("briefing")
         return {}
 
-    class _FakeConn:
-        def transaction(self):
-            return _FakeTransaction()
-
-    class _FakePoolAcquire:
-        async def __aenter__(self):
-            return _FakeConn()
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-    class _FakePool:
-        def acquire(self):
-            return _FakePoolAcquire()
-
-        async def close(self):
-            calls.append("pool_closed")
+    pool = _FakePool(on_close=lambda: calls.append("pool_closed"))
 
     async def _fake_create_pool(settings):
-        return _FakePool()
+        return pool
 
     async def _fake_start_run(conn, run_date):
         return 1
@@ -383,6 +399,7 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
     assert any("Report rendered:" in t for t in texts)
     report_text = next(t for t in texts if "Report rendered:" in t)
     assert "dashboard.html" in report_text
+    assert not pool.leaked
 
 
 @pytest.mark.asyncio
@@ -422,26 +439,14 @@ async def test_scout_pipeline_agent_persists_grounded_tips(monkeypatch):
             call_order.append("transaction-open")
             return None
 
-    class _FakeConn:
+    class _RecordingConn:
         def transaction(self):
             return _RecordingTransaction()
 
-    class _FakePoolAcquire:
-        async def __aenter__(self):
-            return _FakeConn()
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-    class _FakePool:
-        def acquire(self):
-            return _FakePoolAcquire()
-
-        async def close(self):
-            pass
+    pool = _FakePool(conn=_RecordingConn())
 
     async def _fake_create_pool(settings):
-        return _FakePool()
+        return pool
 
     async def _fake_start_run(conn, run_date):
         return 1
@@ -530,6 +535,142 @@ async def test_scout_pipeline_agent_persists_grounded_tips(monkeypatch):
     assert tips_by_match[0][0].listing.external_id == "1"
     assert tips_by_match[0][1][0].cited_urls == ["https://github.com/k/examples"]
     assert any("Coach: 1 grounded tip(s) across 1 listing(s)" in t for t in texts)
+    assert not pool.leaked
+
+
+@pytest.mark.asyncio
+async def test_scout_pipeline_agent_survives_a_failing_coach_stage(monkeypatch):
+    """A Coach failure must not cost the run everything else.
+
+    Retrieval loads a local sentence-transformers model that fetches its
+    weights over the network on a cold container, and that happens outside
+    run_batches' per-call guard — so an unguarded raise propagated out of
+    run(), losing the scores, gaps, meta, report render and Discord briefing
+    and leaving a start_run row with finished_at NULL. Tips render nothing
+    until P4, so degrading to "no tips" is the only proportionate response.
+    """
+    listing = _make_listing()
+    score = ListingScore(
+        source="linkedin", external_id="1", score=80, reasoning="Good fit."
+    )
+    profile = _make_profile()
+    requirements = ListingRequirements(
+        source="linkedin",
+        external_id="1",
+        must_have=[RequirementItem(name="Kubernetes", kind="skill")],
+        nice_to_have=[],
+    )
+
+    calls: list = []
+
+    async def _fake_run_scraper(settings):
+        return [listing]
+
+    async def _fake_track_listings(listings, settings=None):
+        return listings
+
+    async def _fake_run_scorer(listings, settings):
+        return [score]
+
+    async def _fake_run_briefing(matches, settings, report_path=None):
+        calls.append("briefing")
+        return {}
+
+    pool = _FakePool(on_close=lambda: calls.append("pool_closed"))
+
+    async def _fake_create_pool(settings):
+        return pool
+
+    async def _fake_start_run(conn, run_date):
+        return 1
+
+    async def _fake_record_run_listings(conn, run_id, matches):
+        calls.append(("record_run_listings", matches))
+
+    async def _fake_finish_run(conn, run_id, *, listings_scraped, listings_scored):
+        calls.append(("finish_run", listings_scraped, listings_scored))
+
+    def _fake_load_profile(path):
+        return profile
+
+    async def _fake_run_requirements_extraction(listings, settings=None):
+        return [requirements]
+
+    async def _fake_record_listing_gaps(conn, run_id, gaps_by_match):
+        calls.append(("record_listing_gaps", gaps_by_match))
+
+    async def _fake_record_listing_meta(conn, run_id, meta_by_match):
+        calls.append(("record_listing_meta", meta_by_match))
+
+    async def _boom(conn, gaps_by_match, settings=None):
+        raise RuntimeError("model weights download failed")
+
+    async def _fake_record_listing_tips(conn, run_id, tips_by_match):
+        calls.append(("record_listing_tips", tips_by_match))
+
+    async def _fake_render_run(conn, run_id, settings):
+        calls.append("render_run")
+        return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
+
+    async def _fake_render_history(conn, settings):
+        calls.append("render_history")
+        return Path("reports/history.html")
+
+    def _fake_render_profile(profile_arg, settings):
+        calls.append("render_profile")
+        return Path("reports/profile.html")
+
+    async def _fake_get_adjacent_runs(conn, run_date):
+        return None, None
+
+    monkeypatch.setattr("scout.agent.run_scraper", _fake_run_scraper)
+    monkeypatch.setattr("scout.agent.track_listings", _fake_track_listings)
+    monkeypatch.setattr("scout.agent.run_scorer", _fake_run_scorer)
+    monkeypatch.setattr("scout.agent.run_briefing", _fake_run_briefing)
+    monkeypatch.setattr("scout.agent.create_pool", _fake_create_pool)
+    monkeypatch.setattr("scout.agent.start_run", _fake_start_run)
+    monkeypatch.setattr("scout.agent.record_run_listings", _fake_record_run_listings)
+    monkeypatch.setattr("scout.agent.finish_run", _fake_finish_run)
+    monkeypatch.setattr("scout.agent.load_profile", _fake_load_profile)
+    monkeypatch.setattr(
+        "scout.agent.run_requirements_extraction", _fake_run_requirements_extraction
+    )
+    monkeypatch.setattr("scout.agent.record_listing_gaps", _fake_record_listing_gaps)
+    monkeypatch.setattr("scout.agent.record_listing_meta", _fake_record_listing_meta)
+    monkeypatch.setattr("scout.agent.run_grounded_tips", _boom)
+    monkeypatch.setattr("scout.agent.record_listing_tips", _fake_record_listing_tips)
+    monkeypatch.setattr("scout.agent.render_run", _fake_render_run)
+    monkeypatch.setattr("scout.agent.render_history", _fake_render_history)
+    monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
+    monkeypatch.setattr("scout.agent.get_adjacent_runs", _fake_get_adjacent_runs)
+
+    texts = await _run_pipeline_agent()
+
+    kinds = [c if isinstance(c, str) else c[0] for c in calls]
+    assert "record_run_listings" in kinds
+    assert "record_listing_gaps" in kinds
+    assert "record_listing_meta" in kinds
+    assert ("finish_run", 1, 1) in calls
+    assert "render_run" in kinds
+    assert "render_history" in kinds
+    assert "render_profile" in kinds
+    assert "briefing" in kinds
+    assert "pool_closed" in kinds
+
+    # Empty *list*, never [(match, [])]: record_listing_tips returns early on
+    # an empty list, whereas empty entries make it DELETE those listings'
+    # tips — so a same-day re-run whose Coach stage failed would erase the
+    # good tips the earlier run wrote.
+    tips_call = next(c for c in calls if c[0] == "record_listing_tips")
+    assert tips_call[1] == []
+
+    assert any("Coach stage failed" in t for t in texts)
+    assert any("Scorer: 1 scored" in t for t in texts)
+    assert any("Gaps detected: 1" in t for t in texts)
+    assert any("Report rendered:" in t for t in texts)
+    assert any("Run persisted:" in t for t in texts)
+    assert any("Briefing: Discord message sent" in t for t in texts)
+    assert not pool.leaked
 
 
 @pytest.mark.asyncio
@@ -553,26 +694,10 @@ async def test_scout_pipeline_agent_short_circuits_when_nothing_relevant(
         calls.append("briefing")
         return {}
 
-    class _FakeConn:
-        def transaction(self):
-            return _FakeTransaction()
-
-    class _FakePoolAcquire:
-        async def __aenter__(self):
-            return _FakeConn()
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-    class _FakePool:
-        def acquire(self):
-            return _FakePoolAcquire()
-
-        async def close(self):
-            calls.append("pool_closed")
+    pool = _FakePool(on_close=lambda: calls.append("pool_closed"))
 
     async def _fake_create_pool(settings):
-        return _FakePool()
+        return pool
 
     async def _fake_start_run(conn, run_date):
         calls.append(("start_run", run_date))
@@ -604,6 +729,7 @@ async def test_scout_pipeline_agent_short_circuits_when_nothing_relevant(
     assert "briefing" not in [c if isinstance(c, str) else c[0] for c in calls]
     assert any("Tracker: 0 new/changed" in t for t in texts)
     assert any("nothing to score or brief" in t.lower() for t in texts)
+    assert not pool.leaked
 
 
 @pytest.mark.asyncio
@@ -791,33 +917,10 @@ async def test_scout_pipeline_agent_warns_when_extraction_drops_listings(monkeyp
     async def _fake_run_briefing(matches, settings, report_path=None):
         return {}
 
-    class _FakeConn:
-        def transaction(self):
-            return _FakeTransaction()
-
-    class _FakeTransaction:
-        async def __aenter__(self):
-            return None
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-    class _FakePoolAcquire:
-        async def __aenter__(self):
-            return _FakeConn()
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-    class _FakePool:
-        def acquire(self):
-            return _FakePoolAcquire()
-
-        async def close(self):
-            pass
+    pool = _FakePool()
 
     async def _fake_create_pool(settings):
-        return _FakePool()
+        return pool
 
     async def _fake_start_run(conn, run_date):
         return 1
@@ -868,6 +971,7 @@ async def test_scout_pipeline_agent_warns_when_extraction_drops_listings(monkeyp
     assert any(
         "1" in t and "no extracted requirements" in t.lower() for t in texts
     )
+    assert not pool.leaked
 
 
 @pytest.mark.asyncio
@@ -1045,26 +1149,10 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
         calls.append("briefing")
         return {}
 
-    class _FakeConn:
-        def transaction(self):
-            return _FakeTransaction()
-
-    class _FakePoolAcquire:
-        async def __aenter__(self):
-            return _FakeConn()
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-    class _FakePool:
-        def acquire(self):
-            return _FakePoolAcquire()
-
-        async def close(self):
-            pass
+    pool = _FakePool()
 
     async def _fake_create_pool(settings):
-        return _FakePool()
+        return pool
 
     async def _fake_start_run(conn, run_date):
         return 1
@@ -1151,3 +1239,4 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
     assert calls[-1] == "briefing"
     assert any("Report rendered:" in t for t in texts)
     assert any("Run persisted:" in t for t in texts)
+    assert not pool.leaked
