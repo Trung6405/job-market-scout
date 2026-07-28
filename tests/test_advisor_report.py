@@ -731,3 +731,45 @@ async def test_job_detail_orders_must_have_gaps_before_nice_to_have(db_pool, tmp
     # selects listing_gaps with no ORDER BY, so the database never promised
     # one. Adding an ORDER BY belongs to whoever owns that read path, not to a
     # rendering change.
+
+
+_NO_RESOURCES_LINE = "No verified learning resources for these gaps yet"
+
+
+@pytest.mark.asyncio
+async def test_job_detail_says_so_when_no_gap_has_a_tip(db_pool, tmp_path):
+    """The honest empty state that replaces the deleted generic advice — this
+    is what a pre-tips historical run renders after a re-render."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn, tmp_path, [_K8S_GAP, _TERRAFORM_GAP], []
+        )
+
+    assert _NO_RESOURCES_LINE in html
+
+
+@pytest.mark.asyncio
+async def test_job_detail_omits_the_empty_state_when_a_tip_exists(db_pool, tmp_path):
+    """A partly-covered listing is not 'uncovered': the untipped gap simply
+    renders as it always did, with no apology attached."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP, _TERRAFORM_GAP],
+            [GroundedTip(gap_skill="Kubernetes", tip="Ship one manifest.", cited_urls=[])],
+        )
+
+    assert _NO_RESOURCES_LINE not in html
+    assert "Ship one manifest." in _gap_block(html, "Kubernetes")
+
+
+@pytest.mark.asyncio
+async def test_job_detail_has_no_empty_state_without_gaps(db_pool, tmp_path):
+    """Nothing to close, nothing to apologise for — the existing no-gaps
+    message already covers this."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(conn, tmp_path, [], [])
+
+    assert _NO_RESOURCES_LINE not in html
+    assert "No skill gaps detected" in html

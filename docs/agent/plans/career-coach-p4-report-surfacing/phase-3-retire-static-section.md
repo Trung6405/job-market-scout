@@ -1,7 +1,7 @@
 # Phase 3: Retire the Static Section
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** In progress
 > **Depends on:** Phase 2 complete (gap blocks carry their tips)
 
 ---
@@ -34,18 +34,18 @@ all met.
   `tests/test_advisor_report.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: seed a run whose listing has two gaps and **no**
+  - [x] Write failing test: seed a run whose listing has two gaps and **no**
         stored tips. Assert the rendered page contains "No verified learning
         resources for these gaps yet", and that a listing which *does* have
         tips does not contain that line.
-  - [ ] Verify it fails (`pytest tests/test_advisor_report.py -v`)
-  - [ ] Implement minimal change: inside the gaps section, after the gap
+  - [x] Verify it fails (`pytest tests/test_advisor_report.py -v`)
+  - [x] Implement minimal change: inside the gaps section, after the gap
         loop, render the line in a muted paragraph when `detail.tips` is
         empty. Gate on `detail.tips`, not on the cap — a listing whose only
         tips are orphans should still say the corpus covered nothing, and both
         conditions agree in every real case.
-  - [ ] Verify it passes (`pytest tests/test_advisor_report.py -v`)
-  - [ ] Commit: `feat(advisor): add the no-resources-yet empty state`
+  - [x] Verify it passes (`pytest tests/test_advisor_report.py -v`) — 22 passed
+  - [x] Commit: `feat(advisor): add the no-resources-yet empty state`
 
 ### Task 2: Delete the static positioning section
 
