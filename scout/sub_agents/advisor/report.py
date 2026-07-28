@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import re
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import asyncpg
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markdown_it import MarkdownIt
-from markupsafe import Markup
+from markupsafe import Markup, escape
 
 from scout.config import Settings
 from scout.shared.db import (
@@ -47,6 +49,118 @@ def _render_markdown(text: str | None) -> Markup:
     return Markup(_MARKDOWN.render(text))
 
 
+# Kept character-for-character in step with the pattern in
+# ``scout/sub_agents/coach/grounding.py``, ``re.IGNORECASE`` included. That
+# module decides which URLs may be *stored*; this one decides which are
+# *clickable*, and the two stay independent in policy — but they must agree on
+# where a URL starts and ends. Drift is not a cosmetic bug: the validator
+# canonicalizes the scheme before comparing, so it stores a tip citing
+# ``HTTPS://github.com/k/examples`` intact, and a case-sensitive pattern here
+# rendered that validated citation as dead text.
+#
+# Excluding brackets from the class rather than balancing them afterwards is
+# also what makes ``[label](url)`` yield a clean URL.
+_URL_PATTERN = re.compile(r"https?://[^\s<>\"'()\[\]]+", re.IGNORECASE)
+
+# The validator additionally widens a match to its whole non-whitespace token
+# when the match stopped at a stop character that was not closing a wrap, so a
+# fabricated deep link cannot keep an allowlisted prefix. That is deliberately
+# *not* mirrored here: it exists to decide what may be stored, and by the time
+# text reaches this module the validator has already stripped every token it
+# widened. Rendering only ever sees what survived, so the widening would have
+# nothing left to catch.
+
+# Trailing sentence punctuation is prose, never part of the URL — same
+# reasoning, and same set, as the validator's.
+_TRAILING_PUNCTUATION = ".,;:!?"
+
+
+def _iter_urls(text: str) -> list[tuple[int, int, str]]:
+    """Every URL in a tip as an ``(start, end, url)`` span of ``text``.
+
+    Spans index the *raw* string so ``_linkify`` can splice on them and escape
+    each piece itself. Locating URLs before escaping also keeps the spans
+    identical to the validator's: matching escaped text would shift them, and a
+    URL ending in ``&`` would escape to ``&amp;``, whose trailing ``;`` the
+    punctuation trim would then eat.
+    """
+    spans: list[tuple[int, int, str]] = []
+    for match in _URL_PATTERN.finditer(text):
+        url = match.group(0).rstrip(_TRAILING_PUNCTUATION)
+        if url:
+            spans.append((match.start(), match.start() + len(url), url))
+    return spans
+
+
+# A Markdown citation's ``[label](`` opener, anchored so it must sit flush
+# against the URL that follows. The coach's validator rewrites this syntax only
+# for URLs it *strips*, so a surviving citation keeps its brackets verbatim in
+# ``listing_tips.tip`` and arrives here intact.
+_MARKDOWN_LABEL = re.compile(r"\[([^\[\]]*)\]\($")
+
+
+def _link_label(url: str) -> str:
+    """A citation's visible text: host and path, without the ceremony.
+
+    Readers scan for *what* is being recommended, not for its scheme or query
+    string, so ``https://www.example.com/x?tab=readme`` shows as
+    ``example.com/x``. The full URL stays in the ``href``.
+
+    The host is lowercased because its case is a spelling accident — DNS is
+    case-insensitive, and a model writing ``GitHub.com`` should not shout from
+    the page. The path is left alone: its case is significant, and the label
+    should name the resource as it really is.
+    """
+    parts = urlsplit(url)
+    host = parts.netloc.lower().removeprefix("www.")
+    return f"{host}{parts.path.rstrip('/')}"
+
+
+def _linkify(text: str) -> Markup:
+    """Render a tip's prose with every citation in it linked.
+
+    Every URL is linked, deliberately without a per-page budget. An earlier
+    version capped them and left the rest as bare text, on the theory that a
+    page should not stack links. Re-rendering the real corpus showed that
+    theory backwards: 93% of generated tips cite two or three resources, so
+    the cap left more than half of all citations as unclickable URLs sitting
+    in prose beside linked ones — advice naming a resource the reader cannot
+    open, which is the very failure the grounding chain exists to prevent.
+    Link volume is better controlled upstream by ``COACH_TOP_K``, which bounds
+    how many resources a tip can cite at all.
+
+    Escaping is this function's own responsibility: returning ``Markup`` opts
+    the value out of Jinja's autoescape, so nothing downstream will do it. The
+    prose is escaped piecewise and the anchors are assembled last, which means
+    every character passes through ``escape`` exactly once and escaping cannot
+    destroy a link it has already inserted.
+    """
+    if not text:
+        return Markup("")
+
+    out: list[str] = []
+    cursor = 0
+    for start, end, url in _iter_urls(text):
+        markdown = _MARKDOWN_LABEL.search(text, cursor, start)
+        if markdown is not None and text[end : end + 1] == ")":
+            # Swallow the whole ``[label](url)`` construct, not just the URL,
+            # so no bracket debris is left around the anchor.
+            start = markdown.start()
+            end += 1
+            label = markdown.group(1) or _link_label(url)
+        else:
+            label = _link_label(url)
+
+        out.append(str(escape(text[cursor:start])))
+        out.append(
+            f'<a href="{escape(url)}" target="_blank" rel="noopener noreferrer">'
+            f"{escape(label)}</a>"
+        )
+        cursor = end
+    out.append(str(escape(text[cursor:])))
+    return Markup("".join(out))
+
+
 def _format_salary(listing: Listing) -> str:
     if listing.salary_min and listing.salary_max:
         return f"${listing.salary_min:,.0f}–{listing.salary_max:,.0f}"
@@ -66,6 +180,7 @@ def _get_env() -> Environment:
     env.filters["band_css"] = _band_css
     env.filters["format_salary"] = _format_salary
     env.filters["markdown"] = _render_markdown
+    env.filters["linkify"] = _linkify
     return env
 
 

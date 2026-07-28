@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from scout.shared.db import (
     finish_run,
     record_listing_gaps,
     record_listing_meta,
+    record_listing_tips,
     record_run_listings,
     start_run,
     upsert_listing,
@@ -17,6 +19,7 @@ from scout.shared.db import (
 from scout.shared.schemas import (
     Background,
     DomainKnowledge,
+    GroundedTip,
     Listing,
     ListingRequirements,
     MatchResult,
@@ -208,7 +211,7 @@ async def test_render_run_job_detail_shows_snapshot_breakdown_and_checklist(
     assert "Why this band" in job_detail_html
     assert "1 / 2" in job_detail_html  # must-have tech stack fit
     assert "Requirements vs your profile" in job_detail_html
-    assert "How to position your application" in job_detail_html
+    assert "How to position your application" not in job_detail_html
     assert "PostgreSQL" in job_detail_html
 
 
@@ -491,3 +494,347 @@ def test_render_profile_writes_profile_html(tmp_path):
     assert "Minh Nguyen" in html
     assert "Recipe-sharing web app" in html
     assert "Python" in html
+
+
+async def _render_with_tips(
+    conn,
+    tmp_path,
+    gaps: list[SkillGap],
+    tips: list[GroundedTip],
+) -> str:
+    """Seed one run with the given gaps and stored tips, return its detail page."""
+    listing = _make_listing()
+    await upsert_listing(conn, listing)
+    run_id = await start_run(conn, date(2026, 7, 21))
+    match = MatchResult(listing=listing, score=72, reasoning="Decent overlap")
+    await record_run_listings(conn, run_id, [(match, "competitive")])
+    await record_listing_gaps(conn, run_id, [(match, gaps)])
+    await record_listing_tips(conn, run_id, [(match, tips)])
+    await finish_run(conn, run_id, listings_scraped=1, listings_scored=1)
+
+    run_listing_id = await conn.fetchval(
+        "SELECT id FROM run_listings WHERE run_id = $1", run_id
+    )
+    paths = await render_run(conn, run_id, Settings(report_output_dir=str(tmp_path)))
+    return paths[f"job_detail_{run_listing_id}"].read_text(encoding="utf-8")
+
+
+def _gap_block(html: str, skill: str) -> str:
+    """The one gap block naming `skill`, so assertions are about placement.
+
+    Each segment is cut at the end of the gaps section as well as at the next
+    block, so the last block does not run on into the rest of the page.
+    """
+    blocks = [
+        block.split("</section>")[0] for block in html.split('class="gapblock"')[1:]
+    ]
+    matching = [block for block in blocks if skill in block]
+    assert len(matching) == 1, f"expected exactly one gap block for {skill!r}"
+    return matching[0]
+
+
+_K8S_GAP = SkillGap(skill="Kubernetes", requirement_level="must_have")
+_TERRAFORM_GAP = SkillGap(skill="Terraform", requirement_level="nice_to_have")
+
+
+@pytest.mark.asyncio
+async def test_job_detail_renders_each_tip_inside_its_own_gap_block(db_pool, tmp_path):
+    """The whole point of the placement: advice sits with the gap it answers,
+    and a gap the corpus did not cover is not given someone else's advice."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP, _TERRAFORM_GAP],
+            [
+                GroundedTip(
+                    gap_skill="Kubernetes",
+                    tip="Work through the worked examples, then ship one manifest.",
+                    cited_urls=[],
+                )
+            ],
+        )
+
+    assert "Work through the worked examples" in _gap_block(html, "Kubernetes")
+    assert "Work through the worked examples" not in _gap_block(html, "Terraform")
+
+
+@pytest.mark.asyncio
+async def test_job_detail_renders_no_tip_for_a_skill_that_is_not_a_gap(
+    db_pool, tmp_path
+):
+    """Pins that the template iterates gaps, not tips. The coach stage already
+    drops tips for unrequested skills, so this guards the direction of
+    iteration rather than a live failure — reversing it would surface advice
+    for a skill the listing never asked about."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP],
+            [
+                GroundedTip(gap_skill="Kubernetes", tip="Ship one manifest.", cited_urls=[]),
+                GroundedTip(gap_skill="Rust", tip="Read the ownership chapter.", cited_urls=[]),
+            ],
+        )
+
+    assert "Ship one manifest." in html
+    assert "Read the ownership chapter." not in html
+    assert "Rust" not in html
+
+
+@pytest.mark.asyncio
+async def test_job_detail_renders_only_the_first_tip_stored_for_a_gap(
+    db_pool, tmp_path
+):
+    """listing_tips has no unique constraint, so a duplicate is possible in
+    principle even though the coach stage drops them."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP],
+            [
+                GroundedTip(gap_skill="Kubernetes", tip="First stored advice.", cited_urls=[]),
+                GroundedTip(gap_skill="Kubernetes", tip="Second stored advice.", cited_urls=[]),
+            ],
+        )
+
+    assert "First stored advice." in html
+    assert "Second stored advice." not in html
+
+
+@pytest.mark.asyncio
+async def test_job_detail_links_every_citation_in_a_tip(db_pool, tmp_path):
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP, _TERRAFORM_GAP],
+            [
+                GroundedTip(
+                    gap_skill="Kubernetes",
+                    tip=(
+                        "Start at https://github.com/k/examples, then "
+                        "https://github.com/k/website, then https://github.com/k/kops."
+                    ),
+                    cited_urls=[],
+                )
+            ],
+        )
+
+    block = _gap_block(html, "Kubernetes")
+    assert block.count("<a href=") == 3
+    assert 'href="https://github.com/k/examples"' in block
+    assert ">github.com/k/examples</a>" in block
+
+
+@pytest.mark.asyncio
+async def test_job_detail_leaves_no_bare_url_unlinked_across_several_tips(
+    db_pool, tmp_path
+):
+    """The regression the real corpus exposed: with a per-page link budget,
+    every gap past the first showed its second citation as unclickable text."""
+    skills = ("Kubernetes", "Terraform", "Go")
+    gaps = [SkillGap(skill=s, requirement_level="must_have") for s in skills]
+    tips = [
+        GroundedTip(
+            gap_skill=s,
+            tip=f"Start at https://github.com/x/{s.lower()} and then https://github.com/y/{s.lower()}.",
+            cited_urls=[],
+        )
+        for s in skills
+    ]
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(conn, tmp_path, gaps, tips)
+
+    for skill in skills:
+        assert _gap_block(html, skill).count("<a href=") == 2
+    tips_markup = "".join(re.findall(r'<p class="tip">(.*?)</p>', html, re.S))
+    assert "https://" not in re.sub(r"<a [^>]*>.*?</a>", "", tips_markup)
+
+
+@pytest.mark.asyncio
+async def test_job_detail_renders_a_markdown_citation_without_bracket_debris(
+    db_pool, tmp_path
+):
+    """The validator leaves this syntax intact for URLs it does not strip."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP],
+            [
+                GroundedTip(
+                    gap_skill="Kubernetes",
+                    tip="Work through [kubernetes/examples](https://github.com/k/examples) first.",
+                    cited_urls=[],
+                )
+            ],
+        )
+
+    block = _gap_block(html, "Kubernetes")
+    assert block.count("<a href=") == 1
+    assert ">kubernetes/examples</a>" in block
+    assert "[" not in block
+    assert "](" not in block
+
+
+@pytest.mark.asyncio
+async def test_job_detail_escapes_markup_in_tip_text(db_pool, tmp_path):
+    """Tip text is LLM output reaching the page through a filter that opts out
+    of Jinja's autoescape, so assert it at the layer that ships HTML."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP],
+            [
+                GroundedTip(
+                    gap_skill="Kubernetes",
+                    tip="Beware <script>alert(1)</script> and javascript:alert(2) too.",
+                    cited_urls=[],
+                )
+            ],
+        )
+
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html
+    assert 'href="javascript:' not in html
+
+
+@pytest.mark.asyncio
+async def test_job_detail_orders_must_have_gaps_before_nice_to_have(db_pool, tmp_path):
+    """Priority is carried by position and pill, which is what replaced the
+    deleted static advice that used to name the top must-have in prose."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [
+                SkillGap(skill="Terraform", requirement_level="nice_to_have"),
+                SkillGap(skill="Ansible", requirement_level="nice_to_have"),
+                SkillGap(skill="Kubernetes", requirement_level="must_have"),
+            ],
+            [],
+        )
+
+    gaps_section = html.split("Skill gaps to close")[1].split("</section>")[0]
+    assert gaps_section.index("Kubernetes") < gaps_section.index("Terraform")
+    assert gaps_section.index("Kubernetes") < gaps_section.index("Ansible")
+    # Nothing is asserted about order *within* a level: `get_run_details`
+    # selects listing_gaps with no ORDER BY, so the database never promised
+    # one. Adding an ORDER BY belongs to whoever owns that read path, not to a
+    # rendering change.
+
+
+_NO_RESOURCES_LINE = "No verified learning resources for these gaps yet"
+
+
+@pytest.mark.asyncio
+async def test_job_detail_says_so_when_no_gap_has_a_tip(db_pool, tmp_path):
+    """The honest empty state that replaces the deleted generic advice — this
+    is what a pre-tips historical run renders after a re-render."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn, tmp_path, [_K8S_GAP, _TERRAFORM_GAP], []
+        )
+
+    assert _NO_RESOURCES_LINE in html
+
+
+@pytest.mark.asyncio
+async def test_job_detail_omits_the_empty_state_when_a_tip_exists(db_pool, tmp_path):
+    """A partly-covered listing is not 'uncovered': the untipped gap simply
+    renders as it always did, with no apology attached."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP, _TERRAFORM_GAP],
+            [GroundedTip(gap_skill="Kubernetes", tip="Ship one manifest.", cited_urls=[])],
+        )
+
+    assert _NO_RESOURCES_LINE not in html
+    assert "Ship one manifest." in _gap_block(html, "Kubernetes")
+
+
+@pytest.mark.asyncio
+async def test_job_detail_has_no_empty_state_without_gaps(db_pool, tmp_path):
+    """Nothing to close, nothing to apologise for — the existing no-gaps
+    message already covers this."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(conn, tmp_path, [], [])
+
+    assert _NO_RESOURCES_LINE not in html
+    assert "No skill gaps detected" in html
+
+
+@pytest.mark.asyncio
+async def test_job_detail_has_no_static_positioning_advice(db_pool, tmp_path):
+    """The three deleted branches, pinned individually rather than only by the
+    heading — a heading is easy to rename while leaving the prose behind."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP, _TERRAFORM_GAP],
+            [GroundedTip(gap_skill="Kubernetes", tip="Ship one manifest.", cited_urls=[])],
+        )
+
+    assert "How to position your application" not in html
+    assert "the highest-impact gap" not in html
+    assert "don't over-invest before applying" not in html
+    assert "lead your application with those directly" not in html
+
+
+@pytest.mark.asyncio
+async def test_rerender_of_a_pre_tips_run_shows_the_empty_state(
+    db_pool, tmp_path, monkeypatch
+):
+    """The shape every historical run has: gaps recorded, no tips, because the
+    coach stage did not exist when it ran. rerender rebuilds pages from the
+    database alone, so this is what the whole archive looks like after P4 —
+    the empty state rather than the deleted static advice.
+
+    Kept separate from test_rerender_all_regenerates_pages_from_db, which
+    pins Markdown rendering and stale-file overwrite on a run with no gaps.
+    """
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        match = MatchResult(listing=listing, score=64, reasoning="Partial overlap")
+        await record_run_listings(conn, run_id, [(match, "competitive")])
+        await record_listing_gaps(conn, run_id, [(match, [_K8S_GAP, _TERRAFORM_GAP])])
+        await finish_run(conn, run_id, listings_scraped=1, listings_scored=1)
+        run_listing_id = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id
+        )
+
+    monkeypatch.setattr(rerender, "default_settings", Settings(report_output_dir=str(tmp_path)))
+
+    class _NonClosingPool:
+        def acquire(self):
+            return db_pool.acquire()
+
+        async def close(self):
+            pass
+
+    async def _fake_create_pool(_settings):
+        return _NonClosingPool()
+
+    monkeypatch.setattr(rerender, "create_pool", _fake_create_pool)
+
+    await rerender.rerender_all()
+
+    html = (tmp_path / "2026-07-21" / f"job-detail-{run_listing_id}.html").read_text(
+        encoding="utf-8"
+    )
+    assert _NO_RESOURCES_LINE in html
+    assert "How to position your application" not in html
+    assert "the highest-impact gap" not in html
+    # The gaps themselves still render, must-have first — the page says less
+    # than it used to, not nothing.
+    assert "Kubernetes" in html
+    assert html.index("Kubernetes") < html.index("Terraform")

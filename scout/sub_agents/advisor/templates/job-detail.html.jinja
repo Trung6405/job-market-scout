@@ -101,10 +101,13 @@
     border-radius:6px;padding:2px 7px}
   .gaphead .nice{font-size:11px;color:var(--muted);background:#f1f2f6;border:1px solid var(--line);
     border-radius:6px;padding:2px 7px}
+  .gapblock .tip{margin:10px 0 0;font-size:13.5px;color:#464b59}
+  /* Citations are underlined rather than colour-only: the tip is body text, so
+     an unstyled indigo run reads as emphasis instead of as something to click. */
+  .gapblock .tip a{color:var(--accent);text-decoration:underline;
+    text-underline-offset:2px;word-break:break-word}
   .no-gaps{font-size:13.5px;color:#464b59}
-  .tips{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
-  .tips ol{margin:0;padding-left:20px;font-size:13.5px;color:#464b59}
-  .tips li{margin:7px 0}
+  .no-resources{margin:14px 0 0;font-size:13px;color:var(--muted)}
   .disclaimer{margin-top:26px;font-size:12px;color:var(--muted);background:var(--panel);
     border:1px dashed var(--line);border-radius:12px;padding:12px 14px}
   @media(max-width:600px){
@@ -258,7 +261,16 @@
     <div class="coach">
       Closing these gaps — especially the must-have ones — would meaningfully lift this candidacy.
     </div>
-    {% for gap in detail.gaps %}
+    {# Must-haves lead, so priority reads off position and pill rather than a
+       sentence restating the list. Concatenated explicitly rather than sorted
+       on requirement_level, which would work only by the alphabetical accident
+       that 'must_have' happens to precede 'nice_to_have'. #}
+    {% set ordered_gaps = (detail.gaps|selectattr('requirement_level', 'equalto', 'must_have')|list)
+                          + (detail.gaps|rejectattr('requirement_level', 'equalto', 'must_have')|list) %}
+    {% for gap in ordered_gaps %}
+    {# One tip per gap: the coach stage drops duplicates, and if one ever slips
+       through, the first stored wins rather than both rendering. #}
+    {% set gap_tips = detail.tips|selectattr('gap_skill', 'equalto', gap.skill)|list %}
     <div class="gapblock">
       <div class="gaphead">
         <span class="skill">{{ gap.skill }}</span>
@@ -268,37 +280,23 @@
         <span class="nice">nice-to-have</span>
         {% endif %}
       </div>
+      {% if gap_tips %}
+      <p class="tip">{{ gap_tips[0].tip|linkify }}</p>
+      {% endif %}
     </div>
     {% endfor %}
+    {# Gated on tips rather than on the link cap: a listing whose only stored
+       tips are orphans has no advice to show either, and both conditions agree
+       in every case a run can actually produce. #}
+    {% if not detail.tips %}
+    <p class="no-resources">No verified learning resources for these gaps yet — the corpus is still filling in.</p>
+    {% endif %}
     {% else %}
     <div class="gapblock">
       <p class="no-gaps">No skill gaps detected for this role — your profile covers everything the agent flagged.</p>
     </div>
     {% endif %}
   </section>
-
-  {% if detail.gaps %}
-  <section>
-    <h2>How to position your application</h2>
-    <div class="tips">
-      <ol>
-        {% set must_gaps = detail.gaps|selectattr('requirement_level', 'equalto', 'must_have')|list %}
-        {% if must_gaps %}
-        <li>Prioritize <b>{{ must_gaps[0].skill }}</b> — it's the highest-impact gap since it's a must-have for this role.</li>
-        {% if must_gaps|length > 1 %}
-        <li>Also work toward: {{ must_gaps[1:]|map(attribute='skill')|join(', ') }} — the other missing must-have skill(s).</li>
-        {% endif %}
-        {% else %}
-        <li>You cover every must-have skill this listing states — lead your application with those directly.</li>
-        {% endif %}
-        {% set nice_gaps = detail.gaps|selectattr('requirement_level', 'equalto', 'nice_to_have')|list %}
-        {% if nice_gaps %}
-        <li>{{ nice_gaps|map(attribute='skill')|join(', ') }} {% if nice_gaps|length == 1 %}is{% else %}are{% endif %} nice-to-have, not required — a line of familiarity is enough, don't over-invest before applying.</li>
-        {% endif %}
-      </ol>
-    </div>
-  </section>
-  {% endif %}
 
   <div class="disclaimer">
     The <em>{{ detail.band|band_label }}</em> band is a rough estimate of fit, <strong>not a guarantee of an offer</strong>.
