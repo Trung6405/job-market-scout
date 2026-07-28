@@ -108,9 +108,6 @@
     text-underline-offset:2px;word-break:break-word}
   .no-gaps{font-size:13.5px;color:#464b59}
   .no-resources{margin:14px 0 0;font-size:13px;color:var(--muted)}
-  .tips{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
-  .tips ol{margin:0;padding-left:20px;font-size:13.5px;color:#464b59}
-  .tips li{margin:7px 0}
   .disclaimer{margin-top:26px;font-size:12px;color:var(--muted);background:var(--panel);
     border:1px dashed var(--line);border-radius:12px;padding:12px 14px}
   @media(max-width:600px){
@@ -303,29 +300,6 @@
     </div>
     {% endif %}
   </section>
-
-  {% if detail.gaps %}
-  <section>
-    <h2>How to position your application</h2>
-    <div class="tips">
-      <ol>
-        {% set must_gaps = detail.gaps|selectattr('requirement_level', 'equalto', 'must_have')|list %}
-        {% if must_gaps %}
-        <li>Prioritize <b>{{ must_gaps[0].skill }}</b> — it's the highest-impact gap since it's a must-have for this role.</li>
-        {% if must_gaps|length > 1 %}
-        <li>Also work toward: {{ must_gaps[1:]|map(attribute='skill')|join(', ') }} — the other missing must-have skill(s).</li>
-        {% endif %}
-        {% else %}
-        <li>You cover every must-have skill this listing states — lead your application with those directly.</li>
-        {% endif %}
-        {% set nice_gaps = detail.gaps|selectattr('requirement_level', 'equalto', 'nice_to_have')|list %}
-        {% if nice_gaps %}
-        <li>{{ nice_gaps|map(attribute='skill')|join(', ') }} {% if nice_gaps|length == 1 %}is{% else %}are{% endif %} nice-to-have, not required — a line of familiarity is enough, don't over-invest before applying.</li>
-        {% endif %}
-      </ol>
-    </div>
-  </section>
-  {% endif %}
 
   <div class="disclaimer">
     The <em>{{ detail.band|band_label }}</em> band is a rough estimate of fit, <strong>not a guarantee of an offer</strong>.

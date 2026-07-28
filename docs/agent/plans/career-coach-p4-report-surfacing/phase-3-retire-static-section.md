@@ -54,21 +54,21 @@ all met.
   `tests/test_advisor_report.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: **invert** the existing assertion at
+  - [x] Write failing test: **invert** the existing assertion at
         `tests/test_advisor_report.py:211` — `"How to position your
         application" not in job_detail_html` — and add that neither
         `"the highest-impact gap"` nor `"don't over-invest before applying"`
         appears, so the three deleted branches are pinned individually rather
         than only by the heading.
-  - [ ] Verify it fails (`pytest tests/test_advisor_report.py -v`) — expected:
+  - [x] Verify it fails (`pytest tests/test_advisor_report.py -v`) — expected:
         the section is still rendered.
-  - [ ] Implement minimal change: delete the whole
+  - [x] Implement minimal change: delete the whole
         `{% if detail.gaps %}…{% endif %}` section (currently lines 280–301)
         and the now-unused `.tips` CSS rules, keeping `.coach` — the callout
         above the gap list still renders and still carries the must-have
         framing.
-  - [ ] Verify it passes (`pytest tests/test_advisor_report.py -v`)
-  - [ ] Commit: `feat(advisor): delete the static positioning advice section`
+  - [x] Verify it passes (`pytest tests/test_advisor_report.py -v`) — 23 passed
+  - [x] Commit: `feat(advisor): delete the static positioning advice section`
 
 > `nice_reqs` / `nice_met` and `must_reqs` / `must_met` are set earlier in the
 > template for the match-breakdown section and are unrelated to the deleted

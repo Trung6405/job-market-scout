@@ -210,7 +210,7 @@ async def test_render_run_job_detail_shows_snapshot_breakdown_and_checklist(
     assert "Why this band" in job_detail_html
     assert "1 / 2" in job_detail_html  # must-have tech stack fit
     assert "Requirements vs your profile" in job_detail_html
-    assert "How to position your application" in job_detail_html
+    assert "How to position your application" not in job_detail_html
     assert "PostgreSQL" in job_detail_html
 
 
@@ -522,9 +522,7 @@ def _gap_block(html: str, skill: str) -> str:
     """The one gap block naming `skill`, so assertions are about placement.
 
     Each segment is cut at the end of the gaps section as well as at the next
-    block: the last block would otherwise run on into the rest of the page,
-    which until phase 3 still names the top must-have gap in its static
-    positioning advice.
+    block, so the last block does not run on into the rest of the page.
     """
     blocks = [
         block.split("</section>")[0] for block in html.split('class="gapblock"')[1:]
@@ -773,3 +771,21 @@ async def test_job_detail_has_no_empty_state_without_gaps(db_pool, tmp_path):
 
     assert _NO_RESOURCES_LINE not in html
     assert "No skill gaps detected" in html
+
+
+@pytest.mark.asyncio
+async def test_job_detail_has_no_static_positioning_advice(db_pool, tmp_path):
+    """The three deleted branches, pinned individually rather than only by the
+    heading — a heading is easy to rename while leaving the prose behind."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP, _TERRAFORM_GAP],
+            [GroundedTip(gap_skill="Kubernetes", tip="Ship one manifest.", cited_urls=[])],
+        )
+
+    assert "How to position your application" not in html
+    assert "the highest-impact gap" not in html
+    assert "don't over-invest before applying" not in html
+    assert "lead your application with those directly" not in html
