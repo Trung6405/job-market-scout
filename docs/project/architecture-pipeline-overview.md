@@ -119,9 +119,14 @@ Citations are linked in the tip's own prose by a `linkify` Jinja filter in
 URL pattern is deliberately kept identical to the grounding validator's, with a
 test asserting so: the validator decides what may be *stored* and the filter
 what is *clickable*, and if they disagreed on where a URL begins, a validated
-citation could render as dead text. A page spends a budget of three links
-divided across the gaps that have advice, so several tipped gaps share links
-rather than stacking a dozen.
+citation could render as dead text.
+
+Every citation in a tip is linked. An earlier version of this stage capped
+links per page and left the rest as plain text, which sounded prudent and was
+not: most generated tips cite two or three resources, so the cap left more than
+half of all citations as bare unclickable URLs beside linked ones. How many
+links a page carries is governed upstream by `COACH_TOP_K`, which bounds how
+many resources a tip can cite at all.
 
 A listing whose gaps have no tips — every run recorded before the Coach stage
 existed, and any listing the corpus does not cover — says so in one line rather

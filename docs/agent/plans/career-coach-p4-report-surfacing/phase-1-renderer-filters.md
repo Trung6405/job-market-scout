@@ -12,7 +12,9 @@ Add the two pure functions the template will need — `linkify`, which turns the
 first N distinct `http`/`https` URLs in tip text into safely-escaped anchors,
 whether written bare or as `[label](url)`, and
 `citation_cap`, which computes how many links each tipped gap may show. Both
-are registered as Jinja filters. Nothing renders differently at the end of this
+are registered as Jinja filters. *(`citation_cap` and `linkify`'s limit were
+later removed — see Notes and the spec's 2026-07-28 amendment. The tasks below
+are left as the execution log of what was done at the time.)* Nothing renders differently at the end of this
 phase; the template is untouched.
 
 ## Safety Checklist

@@ -2,7 +2,8 @@
 
 > **Parent plan:** [plan.md](plan.md)
 > **Status:** Complete
-> **Depends on:** Phase 1 complete (`linkify` and `citation_cap` registered)
+> **Depends on:** Phase 1 complete (`linkify` registered; `citation_cap`
+> existed at the time and was later removed — spec amendment 2026-07-28)
 
 ---
 
