@@ -194,6 +194,38 @@ async def test_skill_with_only_a_dead_resource_maps_to_empty_list(db_pool):
 
 
 @pytest.mark.asyncio
+async def test_never_checked_resource_stays_retrievable(db_pool):
+    """A freshly aggregated resource — last_verified, dead_since, and
+    consecutive_failures all at their defaults — must be usable before its
+    first link-health check."""
+    async with db_pool.acquire() as conn:
+        await _seed_resource(conn, "https://example.com/fresh-agg", ["go"], _unit(0))
+
+        results = await get_resources_for_skills(
+            conn, ["go"], [_unit(0)], k=10, max_age_days=90
+        )
+
+    assert {str(r.url) for r in results["go"]} == {"https://example.com/fresh-agg"}
+
+
+@pytest.mark.asyncio
+async def test_resource_below_failure_threshold_stays_retrievable(db_pool):
+    """Failing, but not yet dead, is not the same as dead."""
+    async with db_pool.acquire() as conn:
+        await _seed_resource(conn, "https://example.com/failing", ["ruby"], _unit(0))
+        await conn.execute(
+            "UPDATE resources SET consecutive_failures = 2 WHERE url = $1",
+            "https://example.com/failing",
+        )
+
+        results = await get_resources_for_skills(
+            conn, ["ruby"], [_unit(0)], k=10, max_age_days=90
+        )
+
+    assert {str(r.url) for r in results["ruby"]} == {"https://example.com/failing"}
+
+
+@pytest.mark.asyncio
 async def test_each_skill_is_ranked_by_its_own_query_vector(db_pool):
     """Pins the skills/vectors pairing in the parallel-array unnest.
 
