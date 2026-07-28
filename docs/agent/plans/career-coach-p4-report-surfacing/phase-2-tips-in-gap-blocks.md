@@ -60,18 +60,18 @@ because retiring it is Phase 3.
 - **Files:** `tests/test_advisor_report.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: seed a listing with one gap (`Kubernetes`) and two
+  - [x] Write failing test: seed a listing with one gap (`Kubernetes`) and two
         stored tips — one for `Kubernetes`, one for `Rust`, which is not a gap
         on this listing. Assert the `Rust` tip's text appears nowhere in the
         rendered page.
-  - [ ] Verify it fails (`pytest tests/test_advisor_report.py -v`) — expected
+  - [x] Verify it fails (`pytest tests/test_advisor_report.py -v`) — expected
         to already pass, since the template iterates gaps rather than tips.
         Keep it as the regression guard that pins that direction of iteration;
         record in Notes that it passed on write rather than weakening the
         template to manufacture a failure.
-  - [ ] Implement minimal change: none expected.
-  - [ ] Verify it passes (`pytest tests/test_advisor_report.py -v`)
-  - [ ] Commit: `test(advisor): pin that orphan tips render nowhere`
+  - [x] Implement minimal change: none expected.
+  - [x] Verify it passes (`pytest tests/test_advisor_report.py -v`) — 14 passed
+  - [x] Commit: `test(advisor): pin that orphan tips render nowhere`
 
 ### Task 3: Citations are linkified under the cap
 

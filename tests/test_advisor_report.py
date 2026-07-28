@@ -558,3 +558,48 @@ async def test_job_detail_renders_each_tip_inside_its_own_gap_block(db_pool, tmp
 
     assert "Work through the worked examples" in _gap_block(html, "Kubernetes")
     assert "Work through the worked examples" not in _gap_block(html, "Terraform")
+
+
+@pytest.mark.asyncio
+async def test_job_detail_renders_no_tip_for_a_skill_that_is_not_a_gap(
+    db_pool, tmp_path
+):
+    """Pins that the template iterates gaps, not tips. The coach stage already
+    drops tips for unrequested skills, so this guards the direction of
+    iteration rather than a live failure — reversing it would surface advice
+    for a skill the listing never asked about."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP],
+            [
+                GroundedTip(gap_skill="Kubernetes", tip="Ship one manifest.", cited_urls=[]),
+                GroundedTip(gap_skill="Rust", tip="Read the ownership chapter.", cited_urls=[]),
+            ],
+        )
+
+    assert "Ship one manifest." in html
+    assert "Read the ownership chapter." not in html
+    assert "Rust" not in html
+
+
+@pytest.mark.asyncio
+async def test_job_detail_renders_only_the_first_tip_stored_for_a_gap(
+    db_pool, tmp_path
+):
+    """listing_tips has no unique constraint, so a duplicate is possible in
+    principle even though the coach stage drops them."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP],
+            [
+                GroundedTip(gap_skill="Kubernetes", tip="First stored advice.", cited_urls=[]),
+                GroundedTip(gap_skill="Kubernetes", tip="Second stored advice.", cited_urls=[]),
+            ],
+        )
+
+    assert "First stored advice." in html
+    assert "Second stored advice." not in html
