@@ -1,14 +1,24 @@
 from __future__ import annotations
 
+import logging
+import time
+
 import requests
 
 from scout.config import Settings
-from scout.shared.schemas import LinkCheck, LinkVerdict
+from scout.config import settings as default_settings
+from scout.shared.db import create_pool, get_resources_to_check, record_link_check
+from scout.shared.schemas import LinkCheck, LinkHealthSummary, LinkVerdict
+
+logger = logging.getLogger("scout.coach.link_health")
 
 _GONE_CODES = frozenset({404, 410})
 # Bounds what lands in resources.last_check_error — a stack-trace-length
 # message would bloat the column for no diagnostic benefit.
 _MAX_REASON_LENGTH = 300
+# Sequential, like the aggregator's GitHub Search throttle — the corpus is
+# GitHub-heavy today, and this keeps one run from bursting requests at it.
+_CHECK_THROTTLE_SECONDS = 1.0
 
 
 def classify_status(status_code: int) -> LinkVerdict:
@@ -68,3 +78,50 @@ def check_url(url: str, settings: Settings) -> LinkCheck:
     get_verdict = classify_status(get_response.status_code)
     reason = None if get_verdict == "healthy" else f"HTTP {get_response.status_code}"
     return LinkCheck(verdict=get_verdict, reason=reason)
+
+
+async def run_link_health(settings: Settings | None = None) -> LinkHealthSummary:
+    """Check the next batch of due resources and record each verdict.
+
+    A single URL's check is never allowed to abandon the rest of the
+    batch — ``check_url`` already folds network failures into a
+    ``transient`` verdict, but this loop also guards against anything else
+    going wrong for one row (an unexpected exception), converting it to the
+    same ``transient`` verdict rather than losing every check queued after
+    it. An empty batch is a valid, successful, zero-count run.
+    """
+    active_settings = settings or default_settings
+    pool = await create_pool(active_settings)
+    try:
+        async with pool.acquire() as conn:
+            batch = await get_resources_to_check(
+                conn, active_settings.coach_link_health_batch
+            )
+
+            tally = {
+                "verified": 0,
+                "recovered": 0,
+                "newly_dead": 0,
+                "still_dead": 0,
+                "failing": 0,
+            }
+            for index, row in enumerate(batch):
+                if index > 0:
+                    time.sleep(_CHECK_THROTTLE_SECONDS)
+                try:
+                    check = check_url(row["url"], active_settings)
+                except Exception as exc:  # noqa: BLE001 - one row must not sink the batch
+                    check = LinkCheck(verdict="transient", reason=_reason(exc))
+
+                transition = await record_link_check(
+                    conn,
+                    row["id"],
+                    check.verdict,
+                    check.reason,
+                    active_settings.coach_link_health_max_failures,
+                )
+                tally[transition] += 1
+
+            return LinkHealthSummary(checked=len(batch), **tally)
+    finally:
+        await pool.close()
