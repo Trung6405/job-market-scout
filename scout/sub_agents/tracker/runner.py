@@ -20,7 +20,7 @@ async def track_listings(
 ) -> list[Listing]:
     active_settings = settings or default_settings
     owns_pool = pool is None
-    active_pool = pool or await create_pool(settings)
+    active_pool = pool or await create_pool(active_settings)
 
     try:
         if owns_pool:

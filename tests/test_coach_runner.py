@@ -177,8 +177,12 @@ def test_gather_candidate_urls_throttles_between_skill_searches(monkeypatch):
     ]
     # One skill needs no throttle before its own (first) call; every
     # subsequent search call is preceded by a sleep to stay under GitHub's
-    # 30 requests/minute search API limit.
-    assert sleep_calls == [runner._SEARCH_THROTTLE_SECONDS] * 2
+    # 30 requests/minute search API limit. The sleep absorbs elapsed
+    # request time, so each value is at most (and here, with an instant
+    # fake search, approximately) the full throttle window.
+    assert sleep_calls == pytest.approx(
+        [runner._SEARCH_THROTTLE_SECONDS] * 2, abs=0.25
+    )
 
 
 def test_gather_candidate_urls_skips_skill_on_rate_limit_and_continues(monkeypatch):

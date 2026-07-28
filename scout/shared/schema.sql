@@ -55,6 +55,12 @@ CREATE TABLE IF NOT EXISTS listing_gaps (
 ALTER TABLE listing_gaps ADD COLUMN IF NOT EXISTS met BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE listing_gaps ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'skill';
 
+-- The FK column is how every reader reaches gap/tip rows (history counts,
+-- render_run's ANY() lookups, re-run DELETEs, and the ON DELETE CASCADE);
+-- without these the gap table gets seq-scanned ~30x per history render and
+-- the cost grows with every day of history.
+CREATE INDEX IF NOT EXISTS idx_listing_gaps_run_listing_id ON listing_gaps (run_listing_id);
+
 CREATE TABLE IF NOT EXISTS listing_tips (
     id BIGSERIAL PRIMARY KEY,
     run_listing_id BIGINT NOT NULL REFERENCES run_listings (id) ON DELETE CASCADE,
@@ -62,6 +68,8 @@ CREATE TABLE IF NOT EXISTS listing_tips (
     tip TEXT NOT NULL,
     cited_urls TEXT[] NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_listing_tips_run_listing_id ON listing_tips (run_listing_id);
 
 CREATE EXTENSION IF NOT EXISTS vector;
 

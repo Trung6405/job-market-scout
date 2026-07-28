@@ -38,7 +38,7 @@ def _repo(name: str, days_old: int) -> dict:
 def test_search_candidates_filters_stale_repos(monkeypatch):
     items = [_repo("fresh", days_old=30), _repo("stale", days_old=600)]
     monkeypatch.setattr(
-        "scout.sub_agents.coach.github_search.requests.get",
+        "scout.sub_agents.coach.github_search._session.get",
         lambda *a, **k: _FakeResponse(json_data={"items": items}),
     )
     candidates = search_candidates("kubernetes", _settings())
@@ -48,7 +48,7 @@ def test_search_candidates_filters_stale_repos(monkeypatch):
 def test_search_candidates_caps_at_top_n(monkeypatch):
     items = [_repo(f"repo{i}", days_old=1) for i in range(10)]
     monkeypatch.setattr(
-        "scout.sub_agents.coach.github_search.requests.get",
+        "scout.sub_agents.coach.github_search._session.get",
         lambda *a, **k: _FakeResponse(json_data={"items": items}),
     )
     candidates = search_candidates("kubernetes", _settings(coach_top_n_per_skill=3))
@@ -57,7 +57,7 @@ def test_search_candidates_caps_at_top_n(monkeypatch):
 
 def test_search_candidates_raises_on_http_error(monkeypatch):
     monkeypatch.setattr(
-        "scout.sub_agents.coach.github_search.requests.get",
+        "scout.sub_agents.coach.github_search._session.get",
         lambda *a, **k: _FakeResponse(status_code=403),
     )
     with pytest.raises(requests.HTTPError):
@@ -66,7 +66,7 @@ def test_search_candidates_raises_on_http_error(monkeypatch):
 
 def test_fetch_readme_returns_text(monkeypatch):
     monkeypatch.setattr(
-        "scout.sub_agents.coach.github_search.requests.get",
+        "scout.sub_agents.coach.github_search._session.get",
         lambda *a, **k: _FakeResponse(text="# Kubernetes\n\nContainer orchestration."),
     )
     readme = fetch_readme("https://github.com/kubernetes/kubernetes", _settings())
@@ -75,7 +75,7 @@ def test_fetch_readme_returns_text(monkeypatch):
 
 def test_fetch_readme_returns_none_on_404(monkeypatch):
     monkeypatch.setattr(
-        "scout.sub_agents.coach.github_search.requests.get",
+        "scout.sub_agents.coach.github_search._session.get",
         lambda *a, **k: _FakeResponse(status_code=404),
     )
     readme = fetch_readme("https://github.com/no/readme", _settings())

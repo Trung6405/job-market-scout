@@ -161,13 +161,18 @@ async def run_grounded_tips(
     async def _call(
         batch: list[tuple[MatchResult, dict[str, list[RetrievedResource]]]],
     ) -> list[tuple[MatchResult, list[GroundedTip]]]:
-        match, covered = batch[0]
-        generated = await complete_json(
-            build_coach_tips_instruction(match.listing, covered),
-            GeneratedTips,
-            active_settings,
-        )
-        return [(match, _to_grounded_tips(match, covered, generated))]
+        # One LLM call per listing (batches of 1 below). Iterating keeps
+        # this correct if the batch size is ever raised — the old
+        # ``batch[0]`` would have silently dropped every other listing.
+        results: list[tuple[MatchResult, list[GroundedTip]]] = []
+        for match, covered in batch:
+            generated = await complete_json(
+                build_coach_tips_instruction(match.listing, covered),
+                GeneratedTips,
+                active_settings,
+            )
+            results.append((match, _to_grounded_tips(match, covered, generated)))
+        return results
 
     # Size-1 batches: one call per listing, with run_batches' existing
     # concurrency limit and skip-on-failure. A single-item batch that

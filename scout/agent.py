@@ -187,7 +187,12 @@ class ScoutPipelineAgent:
                 # link until someone runs a full rerender.
                 prev_run, _ = await get_adjacent_runs(conn, run_date)
                 if prev_run is not None:
-                    await render_run(conn, prev_run.id, settings)
+                    # Only the dashboard's next-day link changes; its
+                    # job-detail pages would be rewritten byte-identically.
+                    await render_run(
+                        conn, prev_run.id, settings,
+                        run=prev_run, dashboard_only=True,
+                    )
             render_profile(profile, settings)
             yield PipelineEvent(
                 self.name, f"Report rendered: {report_paths['dashboard']}"

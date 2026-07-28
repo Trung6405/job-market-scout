@@ -4,7 +4,9 @@ Bicep templates that create the single Azure VM hosting the job-market-scout
 containers. This folder is **IaC only** — no secrets, no CI/CD YAML (those live
 in `.github/workflows/`: `deploy.yml`, `scheduled-run.yml`, `infra-provision.yml`).
 
-Implements [`docs/specs/azure-vm-cicd-deploy/spec.md`](../docs/specs/azure-vm-cicd-deploy/spec.md).
+Implements the CI/CD-for-Azure-VM design in
+[`docs/agent/specs/tracker-orchestration/spec.md`, Appendix C](../docs/agent/specs/tracker-orchestration/spec.md)
+(originally `docs/agent/specs/azure-vm-cicd-deploy/spec.md`, since merged there).
 
 ## Files
 

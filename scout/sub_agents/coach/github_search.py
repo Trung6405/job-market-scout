@@ -7,6 +7,10 @@ import requests
 from scout.config import Settings
 
 _SEARCH_URL = "https://api.github.com/search/repositories"
+# One keep-alive session for every GitHub call — an aggregator run makes
+# hundreds of requests to api.github.com, and a bare requests.get would pay
+# a fresh TCP+TLS handshake for each one.
+_session = requests.Session()
 # The Search API has no relative-date query operator, so "pushed within
 # ~18 months" (spec) is filtered client-side against this cutoff.
 _STALE_AFTER = timedelta(days=548)
@@ -21,7 +25,7 @@ def _headers(settings: Settings) -> dict[str, str]:
 
 def search_candidates(skill: str, settings: Settings) -> list[str]:
     """Return up to `coach_top_n_per_skill` candidate repo URLs for `skill`."""
-    response = requests.get(
+    response = _session.get(
         _SEARCH_URL,
         headers=_headers(settings),
         params={
@@ -53,7 +57,7 @@ def fetch_readme(repo_url: str, settings: Settings) -> str | None:
     candidate, not two.
     """
     owner_repo = repo_url.removeprefix("https://github.com/").rstrip("/")
-    response = requests.get(
+    response = _session.get(
         f"https://api.github.com/repos/{owner_repo}/readme",
         headers={**_headers(settings), "Accept": "application/vnd.github.raw+json"},
         timeout=10,

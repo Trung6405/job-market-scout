@@ -50,8 +50,8 @@ def test_check_url_healthy_head_issues_no_get(monkeypatch):
         calls.append("get")
         return _FakeResponse(200)
 
-    monkeypatch.setattr("scout.sub_agents.coach.link_health.requests.head", _fake_head)
-    monkeypatch.setattr("scout.sub_agents.coach.link_health.requests.get", _fake_get)
+    monkeypatch.setattr("scout.sub_agents.coach.link_health._session.head", _fake_head)
+    monkeypatch.setattr("scout.sub_agents.coach.link_health._session.get", _fake_get)
 
     result = check_url("https://example.com/repo", _settings())
 
@@ -61,11 +61,11 @@ def test_check_url_healthy_head_issues_no_get(monkeypatch):
 
 def test_check_url_falls_back_to_get_on_non_success_head(monkeypatch):
     monkeypatch.setattr(
-        "scout.sub_agents.coach.link_health.requests.head",
+        "scout.sub_agents.coach.link_health._session.head",
         lambda *a, **k: _FakeResponse(405),
     )
     monkeypatch.setattr(
-        "scout.sub_agents.coach.link_health.requests.get",
+        "scout.sub_agents.coach.link_health._session.get",
         lambda *a, **k: _FakeResponse(200),
     )
 
@@ -76,11 +76,11 @@ def test_check_url_falls_back_to_get_on_non_success_head(monkeypatch):
 
 def test_check_url_get_confirms_gone(monkeypatch):
     monkeypatch.setattr(
-        "scout.sub_agents.coach.link_health.requests.head",
+        "scout.sub_agents.coach.link_health._session.head",
         lambda *a, **k: _FakeResponse(404),
     )
     monkeypatch.setattr(
-        "scout.sub_agents.coach.link_health.requests.get",
+        "scout.sub_agents.coach.link_health._session.get",
         lambda *a, **k: _FakeResponse(404),
     )
 
@@ -92,11 +92,11 @@ def test_check_url_get_confirms_gone(monkeypatch):
 def test_check_url_get_wins_over_head_verdict(monkeypatch):
     """A HEAD 404 that a GET resolves as 200 is healthy — the GET is authoritative."""
     monkeypatch.setattr(
-        "scout.sub_agents.coach.link_health.requests.head",
+        "scout.sub_agents.coach.link_health._session.head",
         lambda *a, **k: _FakeResponse(404),
     )
     monkeypatch.setattr(
-        "scout.sub_agents.coach.link_health.requests.get",
+        "scout.sub_agents.coach.link_health._session.get",
         lambda *a, **k: _FakeResponse(200),
     )
 
@@ -113,7 +113,7 @@ def test_check_url_passes_configured_timeout_and_follows_redirects(monkeypatch):
         captured["allow_redirects"] = allow_redirects
         return _FakeResponse(200)
 
-    monkeypatch.setattr("scout.sub_agents.coach.link_health.requests.head", _fake_head)
+    monkeypatch.setattr("scout.sub_agents.coach.link_health._session.head", _fake_head)
 
     check_url(
         "https://example.com/repo",
@@ -136,8 +136,8 @@ def test_check_url_network_errors_are_transient(monkeypatch, exc):
     def _raise(*a, **k):
         raise exc
 
-    monkeypatch.setattr("scout.sub_agents.coach.link_health.requests.head", _raise)
-    monkeypatch.setattr("scout.sub_agents.coach.link_health.requests.get", _raise)
+    monkeypatch.setattr("scout.sub_agents.coach.link_health._session.head", _raise)
+    monkeypatch.setattr("scout.sub_agents.coach.link_health._session.get", _raise)
 
     result = check_url("https://example.com/repo", _settings())
 
@@ -149,7 +149,7 @@ def test_check_url_reason_is_truncated(monkeypatch):
     def _raise(*a, **k):
         raise requests.ConnectionError("x" * 1000)
 
-    monkeypatch.setattr("scout.sub_agents.coach.link_health.requests.head", _raise)
+    monkeypatch.setattr("scout.sub_agents.coach.link_health._session.head", _raise)
 
     result = check_url("https://example.com/repo", _settings())
 
@@ -159,14 +159,14 @@ def test_check_url_reason_is_truncated(monkeypatch):
 def test_check_url_get_network_error_after_head_transient(monkeypatch):
     """A HEAD 5xx followed by a GET that raises stays transient, not an exception."""
     monkeypatch.setattr(
-        "scout.sub_agents.coach.link_health.requests.head",
+        "scout.sub_agents.coach.link_health._session.head",
         lambda *a, **k: _FakeResponse(503),
     )
 
     def _raise_get(*a, **k):
         raise requests.Timeout("timed out")
 
-    monkeypatch.setattr("scout.sub_agents.coach.link_health.requests.get", _raise_get)
+    monkeypatch.setattr("scout.sub_agents.coach.link_health._session.get", _raise_get)
 
     result = check_url("https://example.com/repo", _settings())
 
