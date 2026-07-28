@@ -301,3 +301,17 @@ class LinkCheck(BaseModel):
 
     verdict: LinkVerdict
     reason: str | None = None
+
+
+class LinkHealthSummary(BaseModel):
+    """One link-health pass's result — logged by coach_link_health.py.
+
+    Counts map one-to-one onto the transitions ``record_link_check`` returns.
+    """
+
+    checked: int
+    verified: int
+    recovered: int
+    newly_dead: int
+    still_dead: int
+    failing: int
