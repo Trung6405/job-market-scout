@@ -4,8 +4,21 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from scout.shared.db import get_resources_to_check, record_link_check
+from scout.shared.db import (
+    get_resources_for_skills,
+    get_resources_to_check,
+    record_link_check,
+    vector_text,
+)
 from scout.shared.schemas import Resource
+
+_DIMS = 384
+
+
+def _unit(index: int) -> list[float]:
+    vector = [0.0] * _DIMS
+    vector[index] = 1.0
+    return vector
 
 
 def _embedding() -> list[float]:
@@ -220,3 +233,45 @@ async def test_record_link_check_healthy_check_resets_transient_streak(db_pool):
     assert transition == "failing"
     assert row["dead_since"] is None
     assert row["consecutive_failures"] == 1
+
+
+@pytest.mark.asyncio
+async def test_dead_resource_is_absent_from_retrieval_and_reappears_on_recovery(
+    db_pool,
+):
+    """Wires Phase 3's writer to Phase 4's reader: a verdict recorded here
+    must actually change what retrieval returns, not just what's stored."""
+    async with db_pool.acquire() as conn:
+        resource_id = await conn.fetchval(
+            """
+            INSERT INTO resources (url, title, resource_type, skills, summary, embedding, source)
+            VALUES ($1, $2, 'repo', $3, 'Seeded test resource.', $4::vector, 'test')
+            RETURNING id
+            """,
+            "https://example.com/roundtrip",
+            "roundtrip",
+            ["kubernetes"],
+            vector_text(_unit(0)),
+        )
+
+        before = await get_resources_for_skills(
+            conn, ["kubernetes"], [_unit(0)], k=10, max_age_days=90
+        )
+        assert len(before["kubernetes"]) == 1
+
+        await record_link_check(
+            conn, resource_id, verdict="gone", reason="HTTP 404", max_failures=3
+        )
+        after_death = await get_resources_for_skills(
+            conn, ["kubernetes"], [_unit(0)], k=10, max_age_days=90
+        )
+        assert after_death["kubernetes"] == []
+
+        await record_link_check(
+            conn, resource_id, verdict="healthy", reason=None, max_failures=3
+        )
+        after_recovery = await get_resources_for_skills(
+            conn, ["kubernetes"], [_unit(0)], k=10, max_age_days=90
+        )
+
+    assert len(after_recovery["kubernetes"]) == 1
