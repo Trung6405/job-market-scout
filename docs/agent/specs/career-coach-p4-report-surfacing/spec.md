@@ -297,6 +297,12 @@ anticipated.
   that displays some citations and not others. `_CITATION_BUDGET` and the
   `citation_cap` filter are removed rather than left unused.
 
+  The measurement is reproducible: `python -m scripts.audit_rendered_citations`
+  re-renders every stored run into a temporary directory and reports tips
+  rendered, citations linked, bare unlinked URLs, and the citations-per-tip
+  distribution. It exits non-zero if a stored tip fails to render, a citation
+  renders unclickable, or a page still carries the retired section.
+
   Superseded by this: the Must-have bullets on the budget and its floor, the
   Should-have bullet making the budget a named constant, and the
   corresponding Alternatives rows, which recorded a decision between
