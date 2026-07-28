@@ -102,19 +102,19 @@ because retiring it is Phase 3.
   `tests/test_advisor_report.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: seed a listing whose gaps are stored
+  - [x] Write failing test: seed a listing whose gaps are stored
         nice-to-have-first (`Terraform` nice, `Kubernetes` must). Assert the
         rendered page's index of `Kubernetes` precedes that of `Terraform`.
-  - [ ] Verify it fails (`pytest tests/test_advisor_report.py -v`) — expected:
+  - [x] Verify it fails (`pytest tests/test_advisor_report.py -v`) — expected:
         stored order preserved, nice-to-have first.
-  - [ ] Implement minimal change: build the ordered list explicitly above the
+  - [x] Implement minimal change: build the ordered list explicitly above the
         loop —
         `{% set ordered_gaps = (detail.gaps|selectattr('requirement_level', 'equalto', 'must_have')|list) + (detail.gaps|rejectattr('requirement_level', 'equalto', 'must_have')|list) %}`
         — and iterate that. Explicit concatenation rather than
         `sort(attribute='requirement_level')`, which would work only by the
         alphabetical accident that `must_have` sorts before `nice_to_have`.
-  - [ ] Verify it passes (`pytest tests/test_advisor_report.py -v`)
-  - [ ] Commit: `feat(advisor): order skill gaps must-have first`
+  - [x] Verify it passes (`pytest tests/test_advisor_report.py -v`) — 19 passed
+  - [x] Commit: `feat(advisor): order skill gaps must-have first`
 
 ### Task 5: Tip text cannot inject markup into the page
 
@@ -169,4 +169,18 @@ Phase 1's filters remain registered but uncalled, which changes nothing.
 
 ## Notes / Learnings
 
-<Filled in during execution.>
+- **Gap order within a requirement level is not defined.** Task 4's test first
+  asserted that two nice-to-have gaps kept their stored order, and it failed:
+  `get_run_details` selects `listing_gaps` with no `ORDER BY`
+  (`scout/shared/db.py:555`), so the database never promised one and the page
+  can reorder same-level gaps between renders of the same run. The assertion
+  was wrong, not the template — it now asserts only what this phase decides
+  (must-haves lead) and says why it stops there. Adding an `ORDER BY` belongs
+  to whoever owns that read path; `scout/shared/` is outside this phase's
+  blast radius.
+- **A skipped DB test is not a passing DB test.** One run of this suite
+  reported "16 passed, 2 skipped in 3056s" — the `db_pool` fixture skips when
+  Postgres is unreachable, and the machine appears to have suspended mid-run.
+  Read at a glance that looks green. Re-run against a healthy container it was
+  18 passed, no skips, 28s. Worth running this suite with `-rs` so skips are
+  named rather than counted.

@@ -261,7 +261,13 @@
     {# One page-wide citation budget, divided evenly across the gaps that have
        advice, so several tipped gaps share links rather than stacking them. #}
     {% set link_cap = detail|citation_cap %}
-    {% for gap in detail.gaps %}
+    {# Must-haves lead, so priority reads off position and pill rather than a
+       sentence restating the list. Concatenated explicitly rather than sorted
+       on requirement_level, which would work only by the alphabetical accident
+       that 'must_have' happens to precede 'nice_to_have'. #}
+    {% set ordered_gaps = (detail.gaps|selectattr('requirement_level', 'equalto', 'must_have')|list)
+                          + (detail.gaps|rejectattr('requirement_level', 'equalto', 'must_have')|list) %}
+    {% for gap in ordered_gaps %}
     {# One tip per gap: the coach stage drops duplicates, and if one ever slips
        through, the first stored wins rather than both rendering. #}
     {% set gap_tips = detail.tips|selectattr('gap_skill', 'equalto', gap.skill)|list %}

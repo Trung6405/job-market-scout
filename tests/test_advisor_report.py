@@ -706,3 +706,28 @@ async def test_job_detail_escapes_markup_in_tip_text(db_pool, tmp_path):
     assert "<script>alert(1)</script>" not in html
     assert "&lt;script&gt;" in html
     assert 'href="javascript:' not in html
+
+
+@pytest.mark.asyncio
+async def test_job_detail_orders_must_have_gaps_before_nice_to_have(db_pool, tmp_path):
+    """Priority is carried by position and pill, which is what replaced the
+    deleted static advice that used to name the top must-have in prose."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [
+                SkillGap(skill="Terraform", requirement_level="nice_to_have"),
+                SkillGap(skill="Ansible", requirement_level="nice_to_have"),
+                SkillGap(skill="Kubernetes", requirement_level="must_have"),
+            ],
+            [],
+        )
+
+    gaps_section = html.split("Skill gaps to close")[1].split("</section>")[0]
+    assert gaps_section.index("Kubernetes") < gaps_section.index("Terraform")
+    assert gaps_section.index("Kubernetes") < gaps_section.index("Ansible")
+    # Nothing is asserted about order *within* a level: `get_run_details`
+    # selects listing_gaps with no ORDER BY, so the database never promised
+    # one. Adding an ORDER BY belongs to whoever owns that read path, not to a
+    # rendering change.
