@@ -159,9 +159,6 @@ jobs:
           BRIEFING_MAX_MATCHES: ${{ secrets.BRIEFING_MAX_MATCHES }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
-          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          GMAIL_RECIPIENT: ${{ secrets.GMAIL_RECIPIENT }}
           GITHUB_PAT: ${{ secrets.SCOUT_GITHUB_PAT }}
         run: |
           set -euo pipefail
@@ -183,9 +180,6 @@ jobs:
           BRIEFING_MAX_MATCHES=${BRIEFING_MAX_MATCHES}
           DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
           DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
-          GMAIL_ADDRESS=${GMAIL_ADDRESS}
-          GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
-          GMAIL_RECIPIENT=${GMAIL_RECIPIENT}
           GITHUB_PAT=${GITHUB_PAT}
           __SCOUT_ENV_EOF__
 

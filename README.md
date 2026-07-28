@@ -63,9 +63,10 @@ exists) with prev/next links to adjacent days, a per-role detail page
 checklist, and gap-closing coaching tips when a profile exists), a
 history of past days, and a profile page — into `./reports` on the
 host (mounted from the container's `/app/reports`). Open
-`./reports/history.html` to browse past days. GitHub learning-resource
-links per skill gap are not implemented yet — gaps are shown by name
-only.
+`./reports/history.html` to browse past days. Each skill gap on a
+job-detail page also carries grounded coaching tips citing curated
+GitHub learning resources (maintained by the Career Coach's weekly
+resource aggregator and daily link-health checker).
 
 The Discord briefing links each match straight to its listing; browse the
 full scored dashboard from the `./reports` directory (or the live URLs
