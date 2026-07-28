@@ -19,23 +19,23 @@ itself, with no templated generic advice anywhere on the page.
 
 ## Acceptance Criteria
 
-- [ ] A gap with a stored tip renders that tip inside its own gap block, and a
+- [x] A gap with a stored tip renders that tip inside its own gap block, and a
       gap without one renders exactly as it does today (skill + pill).
-- [ ] A tip stored for one gap never renders under a different gap.
-- [ ] Gaps render must-haves before nice-to-haves.
-- [ ] A tip's bare `http`/`https` URLs render as anchors labelled host + path
+- [x] A tip stored for one gap never renders under a different gap.
+- [x] Gaps render must-haves before nice-to-haves.
+- [x] A tip's bare `http`/`https` URLs render as anchors labelled host + path
       with the scheme and `www.` stripped; the anchor's `href` is the full URL.
-- [ ] A `[label](url)` citation renders as one anchor labelled `label`, with no
+- [x] A `[label](url)` citation renders as one anchor labelled `label`, with no
       literal brackets or parentheses left on the page.
-- [ ] URLs beyond the gap's citation cap render as visible, unlinked text.
-- [ ] The per-gap cap is `max(1, 3 // tipped_gaps)` counted in **distinct**
+- [x] URLs beyond the gap's citation cap render as visible, unlinked text.
+- [x] The per-gap cap is `max(1, 3 // tipped_gaps)` counted in **distinct**
       URLs: one tipped gap gets 3, two get 1 each, three get 1 each, five get
       1 each; a tip naming one resource twice spends one unit of budget.
 - [x] URL spans match what `scout/sub_agents/coach/grounding.py` finds, so
       every URL P3 stored is one P4 can linkify.
-- [ ] Markup in tip text is escaped, and a non-`http(s)` scheme
+- [x] Markup in tip text is escaped, and a non-`http(s)` scheme
       (`javascript:`, `data:`) is never turned into an anchor.
-- [ ] At most one tip renders per gap even if two are stored for it; a tip
+- [x] At most one tip renders per gap even if two are stored for it; a tip
       whose `gap_skill` matches no gap renders nowhere.
 - [ ] A listing with gaps but no tips renders the "no verified learning
       resources yet" line and no static positioning advice.
@@ -80,7 +80,7 @@ itself, with no templated generic advice anywhere on the page.
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
 | 1 | Renderer filters | [phase-1-renderer-filters.md](phase-1-renderer-filters.md) | Complete |
-| 2 | Tips in gap blocks | [phase-2-tips-in-gap-blocks.md](phase-2-tips-in-gap-blocks.md) | In progress |
+| 2 | Tips in gap blocks | [phase-2-tips-in-gap-blocks.md](phase-2-tips-in-gap-blocks.md) | Complete |
 | 3 | Retire the static section | [phase-3-retire-static-section.md](phase-3-retire-static-section.md) | Not started |
 
 > All phases are planned in advance — every row above has a written,

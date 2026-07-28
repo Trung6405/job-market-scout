@@ -101,6 +101,11 @@
     border-radius:6px;padding:2px 7px}
   .gaphead .nice{font-size:11px;color:var(--muted);background:#f1f2f6;border:1px solid var(--line);
     border-radius:6px;padding:2px 7px}
+  .gapblock .tip{margin:10px 0 0;font-size:13.5px;color:#464b59}
+  /* Citations are underlined rather than colour-only: the tip is body text, so
+     an unstyled indigo run reads as emphasis instead of as something to click. */
+  .gapblock .tip a{color:var(--accent);text-decoration:underline;
+    text-underline-offset:2px;word-break:break-word}
   .no-gaps{font-size:13.5px;color:#464b59}
   .tips{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
   .tips ol{margin:0;padding-left:20px;font-size:13.5px;color:#464b59}

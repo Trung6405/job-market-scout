@@ -1,7 +1,7 @@
 # Phase 2: Tips in Gap Blocks
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** In progress
+> **Status:** Complete
 > **Depends on:** Phase 1 complete (`linkify` and `citation_cap` registered)
 
 ---
@@ -121,44 +121,51 @@ because retiring it is Phase 3.
 - **Files:** `tests/test_advisor_report.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: seed a tip whose text contains
+  - [x] Write failing test: seed a tip whose text contains
         `<script>alert(1)</script>` and a `javascript:alert(1)` pseudo-URL.
         Assert the rendered page contains neither `<script>` as markup nor any
         `href="javascript:`, and does contain the escaped form — mirroring the
         existing description-injection test at `test_advisor_report.py:355-386`.
-  - [ ] Verify it fails (`pytest tests/test_advisor_report.py -v`) — expected
+  - [x] Verify it fails (`pytest tests/test_advisor_report.py -v`) — expected
         to pass already, given Phase 1 Tasks 2 and 4. Keep it: this is the
         assertion at the layer that actually ships HTML, and Phase 1's covers
         only the filter in isolation.
-  - [ ] Implement minimal change: none expected.
-  - [ ] Verify it passes (`pytest tests/test_advisor_report.py -v`)
-  - [ ] Commit: `test(advisor): assert tip text cannot inject markup`
+  - [x] Implement minimal change: none expected.
+  - [x] Verify it passes (`pytest tests/test_advisor_report.py -v`) — written and
+        passing alongside Task 3's batch, since both assert on the same
+        rendered page
+  - [x] Commit: `test(advisor): assert tip text cannot inject markup` — folded
+        into Task 3's commit
 
 ### Task 6: Style the tip inside the gap block
 
 - **Files:** `scout/sub_agents/advisor/templates/job-detail.html.jinja`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: none — this is CSS in the template's inline
+  - [x] Write failing test: none — this is CSS in the template's inline
         `<style>` block, verified by eye. Recorded as a deliberate exception
         to the TDD ordering, per the project's right-size-TDD rule.
-  - [ ] Implement minimal change: add `.gapblock .tip` (body text size and
+  - [x] Implement minimal change: add `.gapblock .tip` (body text size and
         muted colour matching `.no-gaps`) and `.gapblock .tip a` (accent
         colour, underlined) next to the existing `.gaphead` rules, and a small
         top margin so the tip sits under the skill row.
-  - [ ] Verify it passes (`pytest tests/test_advisor_report.py -v` — no
-        regression) and open a rendered page to confirm it reads well.
-  - [ ] Commit: `style(advisor): style grounded tips inside gap blocks`
+  - [x] Verify it passes (`pytest tests/test_advisor_report.py -v` — 19 passed)
+        and open a rendered page to confirm it reads well — done: the tip sits
+        under its skill row, the citation renders as an underlined
+        `github.com/kubernetes/examples`, and the untipped nice-to-have gap is
+        unchanged.
+  - [x] Commit: `style(advisor): style grounded tips inside gap blocks`
 
 ---
 
 ## Verification
 
-- [ ] All phase tests pass: `pytest tests/test_advisor_report.py -v`
-- [ ] Full suite green: `pytest -v`
-- [ ] Manual: open a generated `job-detail-*.html` from a seeded run — the tip
-      reads as part of its gap block, the citation is clickable and its label
-      is the shortened host + path, and must-have gaps lead.
+- [x] All phase tests pass: `pytest tests/test_advisor_report.py -v` — 19 passed
+- [x] Full suite green: `pytest -v` — 521 passed
+- [x] Manual: rendered a seeded detail page and read it back — must-have gap
+      leads, its tip sits inside the block, the citation is an underlined
+      `github.com/kubernetes/examples` anchoring the full URL, and the
+      untipped nice-to-have gap renders exactly as before.
 
 ## Rollback
 
