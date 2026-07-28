@@ -61,6 +61,12 @@ def _urls(text: str) -> list[str]:
         # A trailing slash names the same resource but is part of the URL.
         ("https://github.com/a/b/", ["https://github.com/a/b/"]),
         ("http://example.org/docs/", ["http://example.org/docs/"]),
+        # The scheme is matched case-insensitively, exactly as the grounding
+        # validator does. It stores a tip citing "HTTPS://..." because that
+        # canonicalizes onto the allowlist, so failing to find it here would
+        # render a validated citation as dead text.
+        ("Start with HTTPS://github.com/a/b now.", ["HTTPS://github.com/a/b"]),
+        ("Start with Https://github.com/a/b now.", ["Https://github.com/a/b"]),
         # No scheme: prose naming a repo, not a link.
         ("Look at github.com/a/b for examples.", []),
         (
@@ -313,3 +319,18 @@ def test_registered_linkify_output_is_not_double_escaped() -> None:
     )
     assert "&lt;a href" not in rendered
     assert "&lt;b&gt;" in rendered
+
+
+def test_linkify_links_an_uppercase_scheme() -> None:
+    """Regression: the validator matches the scheme case-insensitively, so a
+    tip citing HTTPS:// is stored with that spelling intact. Missing it here
+    left a grounded citation rendering as unclickable text."""
+    result = str(_linkify("Start with HTTPS://github.com/k/k now.", 3))
+    assert '<a href="HTTPS://github.com/k/k"' in result
+    assert result.count("<a href=") == 1
+
+
+def test_link_label_lowercases_the_host_but_not_the_path() -> None:
+    """A shouty host is a spelling accident; path case is significant."""
+    result = str(_linkify("See HTTPS://GitHub.com/k/Examples now.", 3))
+    assert ">github.com/k/Examples</a>" in result

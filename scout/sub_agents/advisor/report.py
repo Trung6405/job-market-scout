@@ -49,14 +49,26 @@ def _render_markdown(text: str | None) -> Markup:
     return Markup(_MARKDOWN.render(text))
 
 
-# Deliberately identical to the pattern in ``scout/sub_agents/coach/grounding.py``.
-# That module decides which URLs may be *stored*; this one decides which are
+# Kept character-for-character in step with the pattern in
+# ``scout/sub_agents/coach/grounding.py``, ``re.IGNORECASE`` included. That
+# module decides which URLs may be *stored*; this one decides which are
 # *clickable*, and the two stay independent in policy — but they must agree on
-# where a URL starts and ends. If this found a different span, a URL the
-# validator approved and stored could fail to render as a link, or render as a
-# fragment of itself. Excluding brackets from the class rather than balancing
-# them afterwards is also what makes ``[label](url)`` yield a clean URL.
-_URL_PATTERN = re.compile(r"https?://[^\s<>\"'()\[\]]+")
+# where a URL starts and ends. Drift is not a cosmetic bug: the validator
+# canonicalizes the scheme before comparing, so it stores a tip citing
+# ``HTTPS://github.com/k/examples`` intact, and a case-sensitive pattern here
+# rendered that validated citation as dead text.
+#
+# Excluding brackets from the class rather than balancing them afterwards is
+# also what makes ``[label](url)`` yield a clean URL.
+_URL_PATTERN = re.compile(r"https?://[^\s<>\"'()\[\]]+", re.IGNORECASE)
+
+# The validator additionally widens a match to its whole non-whitespace token
+# when the match stopped at a stop character that was not closing a wrap, so a
+# fabricated deep link cannot keep an allowlisted prefix. That is deliberately
+# *not* mirrored here: it exists to decide what may be stored, and by the time
+# text reaches this module the validator has already stripped every token it
+# widened. Rendering only ever sees what survived, so the widening would have
+# nothing left to catch.
 
 # Trailing sentence punctuation is prose, never part of the URL — same
 # reasoning, and same set, as the validator's.
@@ -93,9 +105,14 @@ def _link_label(url: str) -> str:
     Readers scan for *what* is being recommended, not for its scheme or query
     string, so ``https://www.example.com/x?tab=readme`` shows as
     ``example.com/x``. The full URL stays in the ``href``.
+
+    The host is lowercased because its case is a spelling accident — DNS is
+    case-insensitive, and a model writing ``GitHub.com`` should not shout from
+    the page. The path is left alone: its case is significant, and the label
+    should name the resource as it really is.
     """
     parts = urlsplit(url)
-    host = parts.netloc.removeprefix("www.")
+    host = parts.netloc.lower().removeprefix("www.")
     return f"{host}{parts.path.rstrip('/')}"
 
 

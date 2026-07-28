@@ -123,11 +123,20 @@ phase; the template is untouched.
   - [x] Verify it passes (`pytest tests/test_advisor_linkify.py -v`) — 26 passed
   - [x] Commit: `feat(advisor): render Markdown citations as single anchors`
 
-> This shape is not hypothetical. P3's prompt asks only that the URL be
-> "written in full" and never forbids Markdown, and P3's validator has a
-> dedicated case for `[label](url)` — but it rewrites that syntax **only** for
-> URLs it strips. A surviving citation keeps its Markdown verbatim in
-> `listing_tips.tip`, so it arrives here as stored text.
+> This shape is not hypothetical. P3's validator carries a dedicated
+> `_MARKDOWN_LINK_OPEN` case for `[label](url)` — but it rewrites that syntax
+> **only** for URLs it strips. A surviving citation keeps its Markdown
+> verbatim in `listing_tips.tip`, so it arrives here as stored text.
+>
+> **Corrected 2026-07-28.** This note originally justified the handling with
+> "P3's prompt never forbids Markdown". That was true of the prompt as drafted
+> and is no longer: P3 later constrained it to extractable citation shapes —
+> *"Write each URL as plain text, optionally wrapped in parentheses. Do not
+> wrap it in asterisks, underscores, backticks, or angle brackets, and do not
+> nest it inside another bracketed phrase."* The handling stands unchanged,
+> because a prompt rule is best-effort wording and the validator still
+> tolerates the shape; only the reason it is needed changed, from "the prompt
+> allows this" to "the prompt discourages it and nothing enforces that".
 
 ### Task 4: Honour the link limit, counting distinct URLs
 
@@ -227,6 +236,37 @@ them changes no rendered output.
 
 ## Notes / Learnings
 
+- **Reviewed against the merged P3 and found one real divergence
+  (2026-07-28).** Phase 1 was built while P3's phases 2–3 were unbuilt, so the
+  URL pattern was copied from P3's *phase doc*. The merged validator had since
+  gained `re.IGNORECASE` — its comment explains why: "HTTPS:// is a real thing
+  models write". Because the validator canonicalizes the scheme before
+  comparing, it stores a tip citing `HTTPS://github.com/k/examples` intact,
+  and this module's case-sensitive copy rendered that validated citation as
+  dead text. Fixed, with the uppercase-scheme shapes added to the extraction
+  cases and a cross-check confirming the two now agree on every shape tried.
+  The lesson is about the *comment*, not the flag: it claimed the pattern was
+  "deliberately identical" while it no longer was, which tells the next reader
+  a check has been done that hasn't.
+- **Acceptance criterion ticked prematurely.** "URL spans match what
+  `grounding.py` finds" was ticked at the end of phase 1 on the strength of
+  having copied the pattern, not of having compared against the merged module
+  — which did not exist yet. It is now true and verified; it was not when
+  first ticked. A criterion that depends on another branch's final code cannot
+  be confirmed before that code lands.
+- **The validator's truncation widening is deliberately not mirrored.** It
+  widens a match to its whole non-whitespace token when the match stopped at a
+  stop character that was not closing a wrap, so a fabricated deep link cannot
+  keep an allowlisted prefix. That decides what may be *stored*; by the time
+  text reaches the renderer every widened token has already been stripped, so
+  there is nothing left for it to catch. Recorded in the code so its absence
+  reads as a decision rather than an oversight.
+- **Emphasis markup survives into stored tips.** `_tidy` clears only
+  *orphaned* delimiters, so a deliberate `**bold**` reaches the template and
+  renders as literal asterisks. Cosmetic, and not worth routing tips through
+  the `markdown` filter to fix — that would fight `linkify` for the same text.
+  Left as a known limit for P4's manual verification to judge against real
+  tips.
 - **Task 5 passed on write, as predicted.** The pattern copied from the
   validator is anchored to `https?://`, so no other scheme was ever eligible
   to become an anchor. The tests were kept as regression guards rather than
