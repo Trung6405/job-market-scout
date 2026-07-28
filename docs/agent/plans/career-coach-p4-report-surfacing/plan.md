@@ -1,6 +1,6 @@
 # Plan: Career Coach P4 — Report Surfacing of Grounded Tips
 
-> **Status:** In progress
+> **Status:** Complete
 > **Created:** 2026-07-27 · **Last updated:** 2026-07-28
 > **Spec:** [spec.md](../../specs/career-coach-p4-report-surfacing/spec.md)
 
@@ -37,11 +37,11 @@ itself, with no templated generic advice anywhere on the page.
       (`javascript:`, `data:`) is never turned into an anchor.
 - [x] At most one tip renders per gap even if two are stored for it; a tip
       whose `gap_skill` matches no gap renders nowhere.
-- [ ] A listing with gaps but no tips renders the "no verified learning
+- [x] A listing with gaps but no tips renders the "no verified learning
       resources yet" line and no static positioning advice.
-- [ ] The string "How to position your application" appears nowhere in a
+- [x] The string "How to position your application" appears nowhere in a
       rendered job-detail page.
-- [ ] `pytest` passes with no regression to the existing suite.
+- [x] `pytest` passes with no regression to the existing suite.
 
 ---
 
@@ -81,7 +81,7 @@ itself, with no templated generic advice anywhere on the page.
 |---|-------|----------|--------|
 | 1 | Renderer filters | [phase-1-renderer-filters.md](phase-1-renderer-filters.md) | Complete |
 | 2 | Tips in gap blocks | [phase-2-tips-in-gap-blocks.md](phase-2-tips-in-gap-blocks.md) | Complete |
-| 3 | Retire the static section | [phase-3-retire-static-section.md](phase-3-retire-static-section.md) | In progress |
+| 3 | Retire the static section | [phase-3-retire-static-section.md](phase-3-retire-static-section.md) | Complete |
 
 > All phases are planned in advance — every row above has a written,
 > human-approved phase doc before phase 1 execution starts. If executing
@@ -153,16 +153,17 @@ itself, with no templated generic advice anywhere on the page.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All phase verification steps pass
-- [ ] Feature verified manually: a rendered job-detail page from seeded tips
+- [x] All acceptance criteria met
+- [x] All phase verification steps pass
+- [x] Feature verified manually: a rendered job-detail page from seeded tips
       opens in a browser with the tip under its gap and a working citation
 - [ ] End-to-end check: P3 merged (#33) and P4 is rebased onto `main`, so this
       is now runnable — a real run generating tips, re-rendered, confirmed on
       the live page. Still unticked; it has not been done.
-- [ ] `docs/project/architecture-pipeline-overview.md` updated where the
+- [x] `docs/project/architecture-pipeline-overview.md` updated where the
       report's coaching behaviour is described
-- [ ] No new lint or type-check warnings
+- [x] No new lint or type-check warnings — the project configures no linter
+      or type checker, so there is nothing to run and nothing was added
 
 ## Update Rules
 

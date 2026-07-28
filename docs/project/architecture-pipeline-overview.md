@@ -102,9 +102,32 @@ holding the run transaction open across minutes of model calls. Only the
 `record_listing_tips` write goes inside.
 
 The run reports its result as a `Coach: N grounded tip(s) across M listing(s)`
-pipeline event. **Nothing renders tips yet** — P3 deliberately ends with them
-stored and observable but invisible; surfacing them on the job-detail page is
-P4's work.
+pipeline event.
+
+### How tips reach the page
+
+Each stored tip renders inside the job-detail page's gap block for the gap it
+answers, joined on the gap skill's raw stored wording — which is why
+`GroundedTip.gap_skill` is never normalized. Gaps render must-haves first, so
+priority is carried by position and the requirement pill; the static "How to
+position your application" section that used to restate the gap list in prose
+is gone, along with its inability to name a resource.
+
+Citations are linked in the tip's own prose by a `linkify` Jinja filter in
+`scout/sub_agents/advisor/report.py`, which escapes the text itself — returning
+`Markup` opts it out of Jinja's autoescape, and the text is model output. Its
+URL pattern is deliberately kept identical to the grounding validator's, with a
+test asserting so: the validator decides what may be *stored* and the filter
+what is *clickable*, and if they disagreed on where a URL begins, a validated
+citation could render as dead text. A page spends a budget of three links
+divided across the gaps that have advice, so several tipped gaps share links
+rather than stacking a dozen.
+
+A listing whose gaps have no tips — every run recorded before the Coach stage
+existed, and any listing the corpus does not cover — says so in one line rather
+than falling back to generic advice. Because `rerender.py` rebuilds pages from
+the database alone, that is what the historical archive shows after a
+re-render.
 
 ## Persistence
 

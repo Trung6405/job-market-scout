@@ -1,7 +1,7 @@
 # Phase 3: Retire the Static Section
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** In progress
+> **Status:** Complete
 > **Depends on:** Phase 2 complete (gap blocks carry their tips)
 
 ---
@@ -99,13 +99,13 @@ all met.
   `docs/agent/plans/career-coach-p4-report-surfacing/phase-*.md`
 - **Gate:** none
 - **Steps:**
-  - [ ] Update the overview wherever it describes the detail page's coaching
+  - [x] Update the overview wherever it describes the detail page's coaching
         advice as templated, and record that grounded tips now render per gap.
-  - [ ] Tick the plan's Acceptance Criteria and Definition of Done, set all
+  - [x] Tick the plan's Acceptance Criteria and Definition of Done, set all
         three phase rows to Complete, and leave the deferred end-to-end check
         explicitly unticked with a note that it waits on P3's phases 2–3.
-  - [ ] Verify: `pytest -v` green.
-  - [ ] Commit: `docs(advisor): record grounded tips in the report overview`
+  - [x] Verify: `pytest -v` green.
+  - [x] Commit: `docs(advisor): record grounded tips in the report overview`
 
 > Docs bookkeeping rides in this task's own commit rather than a trailing
 > sweep, per the project's token-efficiency rule. Every earlier task's
@@ -115,12 +115,13 @@ all met.
 
 ## Verification
 
-- [ ] All phase tests pass: `pytest tests/test_advisor_report.py -v`
-- [ ] Full suite green: `pytest -v`
-- [ ] `grep -r "How to position your application" scout/` returns nothing
-- [ ] Manual: render a run with tips and one without; the first shows advice
-      per gap with working citations, the second shows the empty-state line
-      and no generic advice.
+- [x] All phase tests pass: `pytest tests/test_advisor_report.py -v` — 24 passed
+- [x] Full suite green: `pytest -v` — 526 passed
+- [x] `grep -r "How to position your application" scout/` returns nothing
+- [x] Manual: rendered both — the tipped listing shows Kubernetes first with
+      its advice and an underlined `github.com/kubernetes/examples` citation;
+      the untipped one shows both gaps and the single "No verified learning
+      resources for these gaps yet" line, with no generic advice on either.
 
 ## Rollback
 
@@ -132,4 +133,14 @@ exactly.
 
 ## Notes / Learnings
 
-<Filled in during execution.>
+- **Task 3 passed on write**, as the task allowed for: Tasks 1 and 2 already
+  implement the behaviour, so it pins that the behaviour survives the
+  `rerender_all` path rather than adding any. Kept as the regression guard on
+  the one code path that rewrites pages nobody asked to regenerate.
+- **The empty state is gated on `detail.tips`, not on the citation cap.** They
+  agree for every input a real run can produce; `tips` is the one that stays
+  correct if a listing ever stores only orphan tips.
+- **`.coach` survived the deletion.** It frames must-haves as the ones that
+  matter without naming them, so it is not the restate-the-list prose this
+  phase removed, and ordering plus the pill now carry what the deleted list
+  spelled out.
