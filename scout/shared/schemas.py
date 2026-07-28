@@ -288,3 +288,16 @@ class CoachSummary(BaseModel):
     candidates_seen: int
     inserted: int
     duplicates: int
+
+
+# healthy: the URL resolves. gone: permanently removed (404/410) — excludes on
+# the first observation. transient: everything else (timeout, 5xx, 429,
+# ambiguous 401/403) — excludes only after repeated failures (P5, FR-CC-10).
+LinkVerdict = Literal["healthy", "gone", "transient"]
+
+
+class LinkCheck(BaseModel):
+    """The result of checking one resource URL."""
+
+    verdict: LinkVerdict
+    reason: str | None = None
