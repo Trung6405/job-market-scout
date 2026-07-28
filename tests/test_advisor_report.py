@@ -789,3 +789,55 @@ async def test_job_detail_has_no_static_positioning_advice(db_pool, tmp_path):
     assert "the highest-impact gap" not in html
     assert "don't over-invest before applying" not in html
     assert "lead your application with those directly" not in html
+
+
+@pytest.mark.asyncio
+async def test_rerender_of_a_pre_tips_run_shows_the_empty_state(
+    db_pool, tmp_path, monkeypatch
+):
+    """The shape every historical run has: gaps recorded, no tips, because the
+    coach stage did not exist when it ran. rerender rebuilds pages from the
+    database alone, so this is what the whole archive looks like after P4 —
+    the empty state rather than the deleted static advice.
+
+    Kept separate from test_rerender_all_regenerates_pages_from_db, which
+    pins Markdown rendering and stale-file overwrite on a run with no gaps.
+    """
+    listing = _make_listing()
+    async with db_pool.acquire() as conn:
+        await upsert_listing(conn, listing)
+        run_id = await start_run(conn, date(2026, 7, 21))
+        match = MatchResult(listing=listing, score=64, reasoning="Partial overlap")
+        await record_run_listings(conn, run_id, [(match, "competitive")])
+        await record_listing_gaps(conn, run_id, [(match, [_K8S_GAP, _TERRAFORM_GAP])])
+        await finish_run(conn, run_id, listings_scraped=1, listings_scored=1)
+        run_listing_id = await conn.fetchval(
+            "SELECT id FROM run_listings WHERE run_id = $1", run_id
+        )
+
+    monkeypatch.setattr(rerender, "default_settings", Settings(report_output_dir=str(tmp_path)))
+
+    class _NonClosingPool:
+        def acquire(self):
+            return db_pool.acquire()
+
+        async def close(self):
+            pass
+
+    async def _fake_create_pool(_settings):
+        return _NonClosingPool()
+
+    monkeypatch.setattr(rerender, "create_pool", _fake_create_pool)
+
+    await rerender.rerender_all()
+
+    html = (tmp_path / "2026-07-21" / f"job-detail-{run_listing_id}.html").read_text(
+        encoding="utf-8"
+    )
+    assert _NO_RESOURCES_LINE in html
+    assert "How to position your application" not in html
+    assert "the highest-impact gap" not in html
+    # The gaps themselves still render, must-have first — the page says less
+    # than it used to, not nothing.
+    assert "Kubernetes" in html
+    assert html.index("Kubernetes") < html.index("Terraform")

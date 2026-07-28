@@ -79,18 +79,18 @@ all met.
 - **Files:** `tests/test_advisor_report.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: extend the existing
+  - [x] Write failing test: extend the existing
         `test_rerender_all_regenerates_pages_from_db`
         (`tests/test_advisor_report.py:440-480`) with a run whose listings have
         gaps and no tips — the pre-P3 shape — and assert the regenerated page
         contains the empty-state line and none of the deleted static advice.
-  - [ ] Verify it fails (`pytest tests/test_advisor_report.py -v`) if the
-        existing fixture already carries tips; if it passes on write, keep it
-        as the regression guard and note that in Notes.
-  - [ ] Implement minimal change: none expected — this asserts Tasks 1 and 2
+  - [x] Verify it fails — it passed on write, as the task allowed for: Tasks 1
+        and 2 already implement the behaviour, and this asserts it survives the
+        re-render path. Kept as the regression guard; noted below.
+  - [x] Implement minimal change: none expected — this asserts Tasks 1 and 2
         hold through the re-render path, which reads only from the database.
-  - [ ] Verify it passes (`pytest tests/test_advisor_report.py -v`)
-  - [ ] Commit: `test(advisor): pin historical re-render of untipped runs`
+  - [x] Verify it passes (`pytest tests/test_advisor_report.py -v`) — 24 passed
+  - [x] Commit: `test(advisor): pin historical re-render of untipped runs`
 
 ### Task 4: Update the architecture overview and close out the plan
 
