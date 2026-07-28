@@ -603,3 +603,106 @@ async def test_job_detail_renders_only_the_first_tip_stored_for_a_gap(
 
     assert "First stored advice." in html
     assert "Second stored advice." not in html
+
+
+@pytest.mark.asyncio
+async def test_job_detail_gives_a_lone_tipped_gap_the_whole_citation_budget(
+    db_pool, tmp_path
+):
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP, _TERRAFORM_GAP],
+            [
+                GroundedTip(
+                    gap_skill="Kubernetes",
+                    tip=(
+                        "Start at https://github.com/k/examples, then "
+                        "https://github.com/k/website, then https://github.com/k/kops."
+                    ),
+                    cited_urls=[],
+                )
+            ],
+        )
+
+    block = _gap_block(html, "Kubernetes")
+    assert block.count("<a href=") == 3
+    assert 'href="https://github.com/k/examples"' in block
+    assert ">github.com/k/examples</a>" in block
+
+
+@pytest.mark.asyncio
+async def test_job_detail_splits_the_citation_budget_across_tipped_gaps(
+    db_pool, tmp_path
+):
+    """Three tipped gaps get one link each — the budget divides, it does not
+    multiply."""
+    gaps = [
+        SkillGap(skill=skill, requirement_level="must_have")
+        for skill in ("Kubernetes", "Terraform", "Go")
+    ]
+    tips = [
+        GroundedTip(
+            gap_skill=skill,
+            tip=f"Start at https://github.com/x/{skill.lower()} and then https://github.com/y/{skill.lower()}.",
+            cited_urls=[],
+        )
+        for skill in ("Kubernetes", "Terraform", "Go")
+    ]
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(conn, tmp_path, gaps, tips)
+
+    for skill in ("Kubernetes", "Terraform", "Go"):
+        assert _gap_block(html, skill).count("<a href=") == 1
+    # The second URL in each tip stays readable, just not clickable.
+    assert "https://github.com/y/kubernetes" in html
+
+
+@pytest.mark.asyncio
+async def test_job_detail_renders_a_markdown_citation_without_bracket_debris(
+    db_pool, tmp_path
+):
+    """The validator leaves this syntax intact for URLs it does not strip."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP],
+            [
+                GroundedTip(
+                    gap_skill="Kubernetes",
+                    tip="Work through [kubernetes/examples](https://github.com/k/examples) first.",
+                    cited_urls=[],
+                )
+            ],
+        )
+
+    block = _gap_block(html, "Kubernetes")
+    assert block.count("<a href=") == 1
+    assert ">kubernetes/examples</a>" in block
+    assert "[" not in block
+    assert "](" not in block
+
+
+@pytest.mark.asyncio
+async def test_job_detail_escapes_markup_in_tip_text(db_pool, tmp_path):
+    """Tip text is LLM output reaching the page through a filter that opts out
+    of Jinja's autoescape, so assert it at the layer that ships HTML."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP],
+            [
+                GroundedTip(
+                    gap_skill="Kubernetes",
+                    tip="Beware <script>alert(1)</script> and javascript:alert(2) too.",
+                    cited_urls=[],
+                )
+            ],
+        )
+
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html
+    assert 'href="javascript:' not in html

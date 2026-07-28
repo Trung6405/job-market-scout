@@ -80,20 +80,20 @@ because retiring it is Phase 3.
   `tests/test_advisor_report.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: three cases. (a) One gap, one tip citing three
+  - [x] Write failing test: three cases. (a) One gap, one tip citing three
         distinct URLs → three anchors in that block, each `href` the full URL.
         (b) Three gaps each with a one-URL tip → one anchor per block, three on
         the page. (c) One gap whose tip cites its resource as
         `[label](url)` → one anchor labelled `label`, with no literal brackets
         in the rendered block. Assert on anchor count within the sliced gap
         block.
-  - [ ] Verify it fails (`pytest tests/test_advisor_report.py -v`) — expected:
+  - [x] Verify it fails (`pytest tests/test_advisor_report.py -v`) — expected:
         URLs render as plain text, zero anchors.
-  - [ ] Implement minimal change: compute the cap once above the loop with
+  - [x] Implement minimal change: compute the cap once above the loop with
         `{% set cap = detail|citation_cap %}` and render the tip as
         `{{ gap_tips[0].tip|linkify(cap) }}`.
-  - [ ] Verify it passes (`pytest tests/test_advisor_report.py -v`)
-  - [ ] Commit: `feat(advisor): linkify tip citations under the page cap`
+  - [x] Verify it passes (`pytest tests/test_advisor_report.py -v`) — 18 passed
+  - [x] Commit: `feat(advisor): linkify tip citations under the page cap`
 
 ### Task 4: Must-have gaps render first
 

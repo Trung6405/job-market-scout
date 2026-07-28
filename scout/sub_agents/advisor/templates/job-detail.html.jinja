@@ -258,6 +258,9 @@
     <div class="coach">
       Closing these gaps — especially the must-have ones — would meaningfully lift this candidacy.
     </div>
+    {# One page-wide citation budget, divided evenly across the gaps that have
+       advice, so several tipped gaps share links rather than stacking them. #}
+    {% set link_cap = detail|citation_cap %}
     {% for gap in detail.gaps %}
     {# One tip per gap: the coach stage drops duplicates, and if one ever slips
        through, the first stored wins rather than both rendering. #}
@@ -272,7 +275,7 @@
         {% endif %}
       </div>
       {% if gap_tips %}
-      <p class="tip">{{ gap_tips[0].tip }}</p>
+      <p class="tip">{{ gap_tips[0].tip|linkify(link_cap) }}</p>
       {% endif %}
     </div>
     {% endfor %}
