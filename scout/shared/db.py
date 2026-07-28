@@ -727,3 +727,21 @@ async def get_distinct_gap_skills(conn: asyncpg.Connection) -> list[str]:
         "SELECT DISTINCT skill FROM listing_gaps WHERE kind = 'skill' AND NOT met"
     )
     return [row["skill"] for row in rows]
+
+
+async def get_resources_to_check(
+    conn: asyncpg.Connection, limit: int
+) -> list[asyncpg.Record]:
+    """Return the next `limit` resources due a link-health check.
+
+    Ordered oldest-checked first, with never-checked (`last_verified` NULL)
+    rows first of all — a freshly aggregated resource is exactly as overdue
+    as one nobody has looked at in months. Every row starts NULL, so the
+    ordering among them is otherwise unspecified; the `id` tiebreak makes
+    consecutive runs advance through the corpus deterministically instead of
+    repeatedly revisiting the same subset.
+    """
+    return await conn.fetch(
+        "SELECT id, url FROM resources ORDER BY last_verified ASC NULLS FIRST, id LIMIT $1",
+        limit,
+    )
