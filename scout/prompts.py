@@ -6,6 +6,21 @@ from scout.config import Settings
 from scout.shared.profile import render_profile_text
 from scout.shared.schemas import Listing, MatchResult, RetrievedResource
 
+# Appended to a description that was cut, so the model can tell an elided
+# posting from a whole one. Without it the cut is silent and lands
+# mid-sentence, and the model reads the fragment as the complete posting —
+# then fills the gap with requirements the visible text never stated. The
+# sections lost are the trailing ones, which is where postings put their
+# requirements list, so this is the common case and not an edge case.
+TRUNCATION_MARKER = "[...description truncated; later sections not shown...]"
+
+
+def _truncate_description(description: str, description_char_limit: int) -> str:
+    if len(description) <= description_char_limit:
+        return description
+    return description[:description_char_limit] + "\n\n" + TRUNCATION_MARKER
+
+
 def _project_listing_for_scoring(listing: Listing, description_char_limit: int) -> dict:
     return {
         "source": listing.source,
@@ -16,7 +31,9 @@ def _project_listing_for_scoring(listing: Listing, description_char_limit: int) 
         "is_remote": listing.is_remote,
         "salary_min": listing.salary_min,
         "salary_max": listing.salary_max,
-        "description": listing.description[:description_char_limit],
+        "description": _truncate_description(
+            listing.description, description_char_limit
+        ),
     }
 
 
@@ -58,6 +75,12 @@ described as required, must-have, or similar. Check each one against the
 resume. A skill only counts as met if the resume states it or something
 clearly equivalent; do not assume a candidate has a skill just because it
 is adjacent to something they do have.
+
+A description ending in "{TRUNCATION_MARKER}" was cut for length and its
+later sections are not shown. Score it on the visible text alone. Treat
+the omitted text as unknown, not as absent and not as present: do not
+infer a requirement — a seniority bar in particular — that the visible
+text does not state, and do not penalise the listing for saying less.
 
 Then compare seniority level: the years of experience, scope, and
 language of the listing (e.g. "1+ years," "entry-level," "associate,"
@@ -144,6 +167,10 @@ punctuation decoration (e.g. "React" not "React.js" or "React 18",
 "JavaScript" not "JS", "PostgreSQL" not "Postgres"). This keeps a skill
 comparable across listings. Qualification, experience, and soft_skill
 names may stay as short natural phrases.
+
+A description ending in "{TRUNCATION_MARKER}" was cut for length and its
+later sections are not shown. Extract only from the visible text; the
+omitted text is unknown, so do not guess at what it might have listed.
 
 Only extract what the listing's description actually states. Do not
 invent requirements that aren't stated in the text, and do not infer or
