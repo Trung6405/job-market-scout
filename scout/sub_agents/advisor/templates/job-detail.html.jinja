@@ -259,6 +259,9 @@
       Closing these gaps — especially the must-have ones — would meaningfully lift this candidacy.
     </div>
     {% for gap in detail.gaps %}
+    {# One tip per gap: the coach stage drops duplicates, and if one ever slips
+       through, the first stored wins rather than both rendering. #}
+    {% set gap_tips = detail.tips|selectattr('gap_skill', 'equalto', gap.skill)|list %}
     <div class="gapblock">
       <div class="gaphead">
         <span class="skill">{{ gap.skill }}</span>
@@ -268,6 +271,9 @@
         <span class="nice">nice-to-have</span>
         {% endif %}
       </div>
+      {% if gap_tips %}
+      <p class="tip">{{ gap_tips[0].tip }}</p>
+      {% endif %}
     </div>
     {% endfor %}
     {% else %}

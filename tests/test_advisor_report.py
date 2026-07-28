@@ -10,6 +10,7 @@ from scout.shared.db import (
     finish_run,
     record_listing_gaps,
     record_listing_meta,
+    record_listing_tips,
     record_run_listings,
     start_run,
     upsert_listing,
@@ -17,6 +18,7 @@ from scout.shared.db import (
 from scout.shared.schemas import (
     Background,
     DomainKnowledge,
+    GroundedTip,
     Listing,
     ListingRequirements,
     MatchResult,
@@ -491,3 +493,68 @@ def test_render_profile_writes_profile_html(tmp_path):
     assert "Minh Nguyen" in html
     assert "Recipe-sharing web app" in html
     assert "Python" in html
+
+
+async def _render_with_tips(
+    conn,
+    tmp_path,
+    gaps: list[SkillGap],
+    tips: list[GroundedTip],
+) -> str:
+    """Seed one run with the given gaps and stored tips, return its detail page."""
+    listing = _make_listing()
+    await upsert_listing(conn, listing)
+    run_id = await start_run(conn, date(2026, 7, 21))
+    match = MatchResult(listing=listing, score=72, reasoning="Decent overlap")
+    await record_run_listings(conn, run_id, [(match, "competitive")])
+    await record_listing_gaps(conn, run_id, [(match, gaps)])
+    await record_listing_tips(conn, run_id, [(match, tips)])
+    await finish_run(conn, run_id, listings_scraped=1, listings_scored=1)
+
+    run_listing_id = await conn.fetchval(
+        "SELECT id FROM run_listings WHERE run_id = $1", run_id
+    )
+    paths = await render_run(conn, run_id, Settings(report_output_dir=str(tmp_path)))
+    return paths[f"job_detail_{run_listing_id}"].read_text(encoding="utf-8")
+
+
+def _gap_block(html: str, skill: str) -> str:
+    """The one gap block naming `skill`, so assertions are about placement.
+
+    Each segment is cut at the end of the gaps section as well as at the next
+    block: the last block would otherwise run on into the rest of the page,
+    which until phase 3 still names the top must-have gap in its static
+    positioning advice.
+    """
+    blocks = [
+        block.split("</section>")[0] for block in html.split('class="gapblock"')[1:]
+    ]
+    matching = [block for block in blocks if skill in block]
+    assert len(matching) == 1, f"expected exactly one gap block for {skill!r}"
+    return matching[0]
+
+
+_K8S_GAP = SkillGap(skill="Kubernetes", requirement_level="must_have")
+_TERRAFORM_GAP = SkillGap(skill="Terraform", requirement_level="nice_to_have")
+
+
+@pytest.mark.asyncio
+async def test_job_detail_renders_each_tip_inside_its_own_gap_block(db_pool, tmp_path):
+    """The whole point of the placement: advice sits with the gap it answers,
+    and a gap the corpus did not cover is not given someone else's advice."""
+    async with db_pool.acquire() as conn:
+        html = await _render_with_tips(
+            conn,
+            tmp_path,
+            [_K8S_GAP, _TERRAFORM_GAP],
+            [
+                GroundedTip(
+                    gap_skill="Kubernetes",
+                    tip="Work through the worked examples, then ship one manifest.",
+                    cited_urls=[],
+                )
+            ],
+        )
+
+    assert "Work through the worked examples" in _gap_block(html, "Kubernetes")
+    assert "Work through the worked examples" not in _gap_block(html, "Terraform")

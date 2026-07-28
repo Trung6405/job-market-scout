@@ -80,7 +80,7 @@ itself, with no templated generic advice anywhere on the page.
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
 | 1 | Renderer filters | [phase-1-renderer-filters.md](phase-1-renderer-filters.md) | Complete |
-| 2 | Tips in gap blocks | [phase-2-tips-in-gap-blocks.md](phase-2-tips-in-gap-blocks.md) | Not started |
+| 2 | Tips in gap blocks | [phase-2-tips-in-gap-blocks.md](phase-2-tips-in-gap-blocks.md) | In progress |
 | 3 | Retire the static section | [phase-3-retire-static-section.md](phase-3-retire-static-section.md) | Not started |
 
 > All phases are planned in advance — every row above has a written,

@@ -1,7 +1,7 @@
 # Phase 2: Tips in Gap Blocks
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** In progress
 > **Depends on:** Phase 1 complete (`linkify` and `citation_cap` registered)
 
 ---
@@ -34,21 +34,21 @@ because retiring it is Phase 3.
   `tests/test_advisor_report.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: seed a run whose listing has two gaps
+  - [x] Write failing test: seed a run whose listing has two gaps
         (`Kubernetes` must-have, `Terraform` nice-to-have) and one stored tip
         for `Kubernetes`. Render, then assert the `Kubernetes` gap block
         contains the tip text and the `Terraform` block does not — sliced by
         splitting the rendered HTML on `class="gapblock"`, so the assertion is
         about *which* block, not merely about the page containing the string.
-  - [ ] Verify it fails (`pytest tests/test_advisor_report.py -v`) — expected:
+  - [x] Verify it fails (`pytest tests/test_advisor_report.py -v`) — expected:
         tip text absent from the page entirely.
-  - [ ] Implement minimal change: inside the `{% for gap in detail.gaps %}`
+  - [x] Implement minimal change: inside the `{% for gap in detail.gaps %}`
         loop, look up the gap's tips with
         `{% set gap_tips = detail.tips|selectattr('gap_skill', 'equalto', gap.skill)|list %}`
         and render `gap_tips[0].tip` in a `<p class="tip">` when the list is
         non-empty. Take `[0]` explicitly — one tip per gap, first stored wins.
-  - [ ] Verify it passes (`pytest tests/test_advisor_report.py -v`)
-  - [ ] Commit: `feat(advisor): render each gap's grounded tip in its block`
+  - [x] Verify it passes (`pytest tests/test_advisor_report.py -v`) — 12 passed
+  - [x] Commit: `feat(advisor): render each gap's grounded tip in its block`
 
 > The join is on raw stored wording on both sides. `GroundedTip`'s docstring
 > states that `gap_skill` holds `listing_gaps.skill` unnormalised precisely so
