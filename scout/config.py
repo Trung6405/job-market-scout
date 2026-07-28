@@ -175,10 +175,9 @@ class Settings:
     # present fewer.
     coach_top_k: int = field(default_factory=partial(_env_int, "COACH_TOP_K", 3))
     # A resource stops being retrievable once its last successful link check
-    # is this old. `last_verified` is NULL until the P5 link-health checker
-    # exists, and NULL counts as live, so this cannot bite before P5 ships —
-    # at which point a URL that fails re-verification simply stops receiving a
-    # fresh stamp and ages out on its own (FR-CC-10).
+    # is this old. A never-checked resource has `last_verified` NULL, which
+    # counts as live, so a freshly aggregated resource is retrievable before
+    # its first link-health check (FR-CC-10).
     coach_resource_max_age_days: int = field(
         default_factory=partial(_env_int, "COACH_RESOURCE_MAX_AGE_DAYS", 90)
     )
@@ -192,6 +191,21 @@ class Settings:
     # listing that states twenty requirements the profile doesn't meet.
     coach_tips_max_gaps_per_listing: int = field(
         default_factory=partial(_env_int, "COACH_TIPS_MAX_GAPS_PER_LISTING", 5)
+    )
+    # Resources checked per link-health run, oldest-checked first. Bounds one
+    # run's network time; the corpus cycles through over consecutive runs.
+    coach_link_health_batch: int = field(
+        default_factory=partial(_env_int, "COACH_LINK_HEALTH_BATCH", 50)
+    )
+    # Consecutive transient failures (timeout, 5xx, 429, ambiguous 401/403)
+    # tolerated before a resource is excluded from retrieval. A permanent
+    # 404/410 excludes immediately regardless of this setting.
+    coach_link_health_max_failures: int = field(
+        default_factory=partial(_env_int, "COACH_LINK_HEALTH_MAX_FAILURES", 3)
+    )
+    # Per-request timeout (seconds) for a single link-health HTTP check.
+    coach_link_health_timeout_seconds: int = field(
+        default_factory=partial(_env_int, "COACH_LINK_HEALTH_TIMEOUT_SECONDS", 10)
     )
     profile: Profile = field(init=False)
 
