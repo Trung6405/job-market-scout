@@ -15,6 +15,8 @@ def _clear_coach_env(monkeypatch):
         "COACH_AWESOME_LISTS",
         "COACH_TOP_K",
         "COACH_RESOURCE_MAX_AGE_DAYS",
+        "COACH_TIPS_RESOURCES_PER_GAP",
+        "COACH_TIPS_MAX_GAPS_PER_LISTING",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -63,3 +65,17 @@ def test_coach_resource_max_age_days_defaults_to_ninety():
 def test_coach_resource_max_age_days_reads_env(monkeypatch):
     monkeypatch.setenv("COACH_RESOURCE_MAX_AGE_DAYS", "30")
     assert Settings().coach_resource_max_age_days == 30
+
+
+def test_coach_tips_settings_default():
+    settings = Settings()
+    assert settings.coach_tips_resources_per_gap == 3
+    assert settings.coach_tips_max_gaps_per_listing == 5
+
+
+def test_coach_tips_settings_read_env(monkeypatch):
+    monkeypatch.setenv("COACH_TIPS_RESOURCES_PER_GAP", "2")
+    monkeypatch.setenv("COACH_TIPS_MAX_GAPS_PER_LISTING", "8")
+    settings = Settings()
+    assert settings.coach_tips_resources_per_gap == 2
+    assert settings.coach_tips_max_gaps_per_listing == 8

@@ -10,6 +10,7 @@ import asyncpg
 from scout.config import Settings
 from scout.config import settings as default_settings
 from scout.shared.schemas import (
+    GroundedTip,
     Listing,
     ListingRequirements,
     MatchResult,
@@ -436,6 +437,80 @@ async def record_listing_gaps(
         )
 
 
+async def record_listing_tips(
+    conn: asyncpg.Connection,
+    run_id: int,
+    tips_by_match: list[tuple[MatchResult, list[GroundedTip]]],
+) -> None:
+    """Replace the stored tips for the supplied listings in one run.
+
+    Scoped to the listings supplied, not the whole run, for the same
+    reason ``record_listing_gaps`` is: a same-day re-run that only
+    re-analyses some listings must not wipe the rest of the run's tips.
+    """
+    if not tips_by_match:
+        return
+
+    # Inner transaction keeps delete-then-insert self-atomic when called on
+    # its own; nested inside the pipeline's run transaction asyncpg makes
+    # it a harmless savepoint.
+    async with conn.transaction():
+        rows = await conn.fetch(
+            """
+            SELECT run_listings.id, listings.source, listings.external_id
+            FROM run_listings
+            JOIN listings ON listings.id = run_listings.listing_id
+            WHERE run_listings.run_id = $1
+            """,
+            run_id,
+        )
+        id_by_key = {
+            (row["source"], row["external_id"]): row["id"] for row in rows
+        }
+
+        # Built from every match supplied — not just those with tips — so a
+        # listing whose tips are now all ungrounded has its stale rows
+        # cleared rather than left behind.
+        target_ids = [
+            id_by_key[(match.listing.source, match.listing.external_id)]
+            for match, _tips in tips_by_match
+            if (match.listing.source, match.listing.external_id) in id_by_key
+        ]
+        if not target_ids:
+            return
+
+        await conn.execute(
+            "DELETE FROM listing_tips WHERE run_listing_id = ANY($1::bigint[])",
+            target_ids,
+        )
+
+        records = [
+            (
+                id_by_key[(match.listing.source, match.listing.external_id)],
+                tip.gap_skill,
+                tip.tip,
+                tip.cited_urls,
+            )
+            for match, tips in tips_by_match
+            if (match.listing.source, match.listing.external_id) in id_by_key
+            for tip in tips
+        ]
+        if not records:
+            return
+
+        # executemany rather than record_listing_gaps' set-based unnest INSERT:
+        # cited_urls is TEXT[], and an array-of-arrays doesn't pass through
+        # unnest the way flat text columns do, whereas asyncpg binds a Python
+        # list[str] straight to TEXT[] here.
+        await conn.executemany(
+            """
+            INSERT INTO listing_tips (run_listing_id, gap_skill, tip, cited_urls)
+            VALUES ($1, $2, $3, $4)
+            """,
+            records,
+        )
+
+
 async def get_listing_gaps(conn: asyncpg.Connection, run_listing_id: int) -> list[SkillGap]:
     rows = await conn.fetch(
         "SELECT skill, requirement_level, met, kind FROM listing_gaps WHERE run_listing_id = $1",
@@ -493,6 +568,25 @@ async def get_run_details(conn: asyncpg.Connection, run_id: int) -> list[RunList
             )
         )
 
+    tip_rows = await conn.fetch(
+        """
+        SELECT run_listing_id, gap_skill, tip, cited_urls
+        FROM listing_tips
+        WHERE run_listing_id = ANY($1::bigint[])
+        ORDER BY id
+        """,
+        run_listing_ids,
+    )
+    tips_by_id: dict[int, list[GroundedTip]] = {}
+    for tip_row in tip_rows:
+        tips_by_id.setdefault(tip_row["run_listing_id"], []).append(
+            GroundedTip(
+                gap_skill=tip_row["gap_skill"],
+                tip=tip_row["tip"],
+                cited_urls=list(tip_row["cited_urls"]),
+            )
+        )
+
     details: list[RunListingDetail] = []
     for row in rows:
         data = dict(row)
@@ -517,6 +611,7 @@ async def get_run_details(conn: asyncpg.Connection, run_id: int) -> list[RunList
                     if check.kind == "skill" and not check.met
                 ],
                 requirements=requirements,
+                tips=tips_by_id.get(run_listing_id, []),
                 seniority=seniority,
                 work_type=work_type,
                 team=team,

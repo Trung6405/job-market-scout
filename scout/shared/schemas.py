@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 # The Scorer's 0-100 score buckets into one of these qualitative bands via
 # advisor.bands.classify_band. Keeping it a closed Literal makes the vocabulary
@@ -158,6 +158,46 @@ class RetrievedResource(BaseModel):
     similarity: float
 
 
+class GroundedTip(BaseModel):
+    """One validated coaching tip for a single gap skill (P3).
+
+    `cited_urls` is the post-validation survivor set, not what the model
+    emitted: any URL absent from the gap's retrieved resources has already
+    been stripped from `tip` and from this list. Storing it rather than
+    only logging it is what makes a grounding violation auditable after
+    the run.
+
+    `gap_skill` holds the gap's raw stored wording, as `listing_gaps.skill`
+    does, so a tip joins back to the gap it answers without renormalizing.
+    """
+
+    gap_skill: str
+    tip: str
+    cited_urls: list[str] = []
+
+
+class GeneratedTip(BaseModel):
+    """One tip as the model returned it — untrusted until validated.
+
+    Deliberately distinct from `GroundedTip`: nothing constructs a
+    `GroundedTip` except the validator, so an unvalidated tip cannot be
+    passed to `record_listing_tips` by mistake.
+
+    The prompt asks the model for a key named "skill"; the field is named
+    `gap_skill` to match `GroundedTip` and `listing_gaps.skill`, so the
+    alias bridges the two without renaming either.
+    """
+
+    gap_skill: str = Field(alias="skill")
+    tip: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class GeneratedTips(BaseModel):
+    tips: list[GeneratedTip]
+
+
 class ResourceTags(BaseModel):
     """The LLM tagging pass's output for one README (P1's tagging.py)."""
 
@@ -226,6 +266,7 @@ class RunListingDetail(BaseModel):
     band: Band
     gaps: list[SkillGap]
     requirements: list[SkillGap] = []
+    tips: list[GroundedTip] = []
     seniority: str | None = None
     work_type: str | None = None
     team: str | None = None

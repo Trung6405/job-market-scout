@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import AsyncGenerator
 from zoneinfo import ZoneInfo
@@ -11,6 +12,7 @@ from scout.shared.db import (
     get_adjacent_runs,
     record_listing_gaps,
     record_listing_meta,
+    record_listing_tips,
     record_run_listings,
     start_run,
 )
@@ -21,11 +23,14 @@ from scout.sub_agents.advisor.gaps import evaluate_requirements
 from scout.sub_agents.advisor.report import render_history, render_profile, render_run
 from scout.sub_agents.advisor.runner import run_requirements_extraction
 from scout.sub_agents.briefing.briefing import run_briefing
+from scout.sub_agents.coach.tips import run_grounded_tips
 from scout.sub_agents.scorer.results import join_match_results
 from scout.sub_agents.scorer.runner import run_scorer
 from scout.sub_agents.scraper.runner import run_scraper
 from scout.sub_agents.tracker.runner import track_listings
 
+
+logger = logging.getLogger(__name__)
 
 _LOCAL_TZ = ZoneInfo("Australia/Melbourne")
 
@@ -115,15 +120,53 @@ class ScoutPipelineAgent:
                 f"across {len(checks_by_match)} listing(s)",
             )
 
+            # Another LLM stage, so the same rule applies: the connection is
+            # held across the model calls (retrieval needs it first), but no
+            # *transaction* is — retrieval reads only the corpus, which no
+            # part of this run writes, so the run transaction is not extended
+            # across minutes of model calls.
+            #
+            # The whole stage is guarded because nothing below it depends on
+            # tips: retrieval loads a local embedding model that fetches its
+            # weights over the network on a cold container, and an unguarded
+            # failure there would cost the run its scores, gaps, meta, report
+            # and briefing — for a feature that renders nothing until P4.
+            try:
+                async with pool.acquire() as conn:
+                    tips_by_match = await run_grounded_tips(
+                        conn, checks_by_match, settings
+                    )
+            except Exception:
+                logger.exception("Coach stage failed; continuing without tips")
+                # Empty *list*, never a list of empty entries:
+                # record_listing_tips returns early on an empty list, whereas
+                # empty entries make it DELETE those listings' tips — so a
+                # same-day re-run whose Coach stage failed would erase the
+                # good tips the earlier run wrote.
+                tips_by_match = []
+                yield PipelineEvent(
+                    self.name,
+                    "Warning: Coach stage failed — run continues without tips.",
+                )
+            else:
+                tipped = sum(1 for _match, tips in tips_by_match if tips)
+                tip_count = sum(len(tips) for _match, tips in tips_by_match)
+                yield PipelineEvent(
+                    self.name,
+                    f"Coach: {tip_count} grounded tip(s) across {tipped} listing(s)",
+                )
+
             # One transaction for the whole run so a mid-block failure leaves
-            # nothing half-written: scores, gaps, meta, and the finished marker
-            # commit together or not at all. render_run reads this run's own
-            # in-flight rows through the same connection, so it stays inside
-            # the transaction; render_profile touches no DB and stays outside.
+            # nothing half-written: scores, gaps, tips, meta, and the finished
+            # marker commit together or not at all. render_run reads this
+            # run's own in-flight rows through the same connection, so it
+            # stays inside the transaction; render_profile touches no DB and
+            # stays outside.
             async with pool.acquire() as conn:
                 async with conn.transaction():
                     await record_run_listings(conn, run_id, banded_matches)
                     await record_listing_gaps(conn, run_id, checks_by_match)
+                    await record_listing_tips(conn, run_id, tips_by_match)
                     await record_listing_meta(conn, run_id, matches_with_requirements)
                     await finish_run(
                         conn,

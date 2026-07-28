@@ -182,6 +182,17 @@ class Settings:
     coach_resource_max_age_days: int = field(
         default_factory=partial(_env_int, "COACH_RESOURCE_MAX_AGE_DAYS", 90)
     )
+    # Resources injected into the prompt per gap. Kept separate from
+    # coach_top_k so the prompt's size can be tuned without changing what
+    # the retriever returns to any other caller.
+    coach_tips_resources_per_gap: int = field(
+        default_factory=partial(_env_int, "COACH_TIPS_RESOURCES_PER_GAP", 3)
+    )
+    # Gaps tipped per listing, must-haves first. Bounds prompt size on a
+    # listing that states twenty requirements the profile doesn't meet.
+    coach_tips_max_gaps_per_listing: int = field(
+        default_factory=partial(_env_int, "COACH_TIPS_MAX_GAPS_PER_LISTING", 5)
+    )
     profile: Profile = field(init=False)
 
     def __post_init__(self) -> None:
