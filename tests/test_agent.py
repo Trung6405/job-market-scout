@@ -280,6 +280,10 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
     assert any("Scraper: 1 listing" in t for t in texts)
     assert any("Tracker: 1 new/changed" in t for t in texts)
     assert any("Scorer: 1 scored" in t for t in texts)
+    # The count alone doesn't say how many reach the brief, nor why any
+    # given listing scored what it did.
+    assert any("1 passed threshold" in t for t in texts)
+    assert any("linkedin/1: 80" in t and "Good fit." in t for t in texts)
     assert any("Report rendered:" in t for t in texts)
     assert any("Run persisted:" in t for t in texts)
     assert any("Briefing: Discord message sent" in t for t in texts)

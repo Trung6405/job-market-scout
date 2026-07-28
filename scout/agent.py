@@ -76,7 +76,22 @@ class ScoutPipelineAgent:
             # connection is only acquired around the actual persistence calls
             # so it isn't held idle across those calls.
             scores = await run_scorer(relevant, settings)
-            yield PipelineEvent(self.name, f"Scorer: {len(scores)} scored")
+            # Report the threshold split and each listing's reasoning, not
+            # just a count: min_match_score is what briefing/select.py gates
+            # on, so "how many will actually be briefed, and why" is the
+            # question this event exists to answer.
+            passed = [s for s in scores if s.score >= settings.min_match_score]
+            summary = (
+                f"Scorer: {len(scores)} scored, {len(passed)} passed threshold "
+                f"(>={settings.min_match_score})"
+            )
+            factors = "\n".join(
+                f"  - {s.source}/{s.external_id}: {s.score} — {s.reasoning}"
+                for s in scores
+            )
+            yield PipelineEvent(
+                self.name, f"{summary}\n{factors}" if factors else summary
+            )
 
             matches = join_match_results(relevant, scores)
             banded_matches = [
