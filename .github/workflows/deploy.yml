@@ -162,6 +162,7 @@ jobs:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GMAIL_RECIPIENT: ${{ secrets.GMAIL_RECIPIENT }}
+          GITHUB_PAT: ${{ secrets.SCOUT_GITHUB_PAT }}
         run: |
           set -euo pipefail
           SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new $VM_USER@$VM_HOST"
@@ -185,6 +186,7 @@ jobs:
           GMAIL_ADDRESS=${GMAIL_ADDRESS}
           GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
           GMAIL_RECIPIENT=${GMAIL_RECIPIENT}
+          GITHUB_PAT=${GITHUB_PAT}
           __SCOUT_ENV_EOF__
 
       - name: Bring up containers
