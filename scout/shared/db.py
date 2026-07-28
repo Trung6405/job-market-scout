@@ -783,4 +783,24 @@ async def record_link_check(
         )
         return "recovered" if was_dead else "verified"
 
+    if verdict == "gone":
+        # COALESCE preserves the first dead_since across repeat checks, so
+        # the record of *when* a resource died survives being re-observed
+        # dead — only a healthy check ever clears it.
+        was_dead = await conn.fetchval(
+            "SELECT dead_since IS NOT NULL FROM resources WHERE id = $1", resource_id
+        )
+        await conn.execute(
+            """
+            UPDATE resources
+            SET consecutive_failures = consecutive_failures + 1,
+                dead_since = COALESCE(dead_since, now()),
+                last_check_error = $2
+            WHERE id = $1
+            """,
+            resource_id,
+            reason,
+        )
+        return "still_dead" if was_dead else "newly_dead"
+
     raise NotImplementedError

@@ -140,3 +140,40 @@ async def test_record_link_check_healthy_recovers_a_dead_row(db_pool):
     assert row["consecutive_failures"] == 0
     assert row["dead_since"] is None
     assert row["last_check_error"] is None
+
+
+@pytest.mark.asyncio
+async def test_record_link_check_gone_kills_on_first_observation(db_pool):
+    async with db_pool.acquire() as conn:
+        resource_id = await _insert(conn, "https://example.com/gone")
+
+        transition = await record_link_check(
+            conn, resource_id, verdict="gone", reason="HTTP 404", max_failures=3
+        )
+        row = await _row(conn, resource_id)
+
+    assert transition == "newly_dead"
+    assert row["dead_since"] is not None
+    assert row["consecutive_failures"] == 1
+    assert row["last_check_error"] == "HTTP 404"
+    assert row["last_verified"] is None
+
+
+@pytest.mark.asyncio
+async def test_record_link_check_gone_twice_keeps_original_dead_since(db_pool):
+    async with db_pool.acquire() as conn:
+        resource_id = await _insert(conn, "https://example.com/stillgone")
+
+        await record_link_check(
+            conn, resource_id, verdict="gone", reason="HTTP 404", max_failures=3
+        )
+        first_dead_since = (await _row(conn, resource_id))["dead_since"]
+
+        transition = await record_link_check(
+            conn, resource_id, verdict="gone", reason="HTTP 404", max_failures=3
+        )
+        row = await _row(conn, resource_id)
+
+    assert transition == "still_dead"
+    assert row["dead_since"] == first_dead_since
+    assert row["consecutive_failures"] == 2
