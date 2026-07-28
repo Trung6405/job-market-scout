@@ -33,10 +33,14 @@ phase; the template is untouched.
 
 > **Read `scout/sub_agents/coach/grounding.py` first.** P3's validator solves
 > the same lexing problem and its pattern is the one to copy, not to improve
-> on — see the note below. If P3's Phase 2 has not landed when this task runs,
-> take the pattern from its phase doc
-> (`docs/agent/plans/career-coach-p3-grounded-tips/phase-2-grounding-validator.md`,
-> Task 1) and re-check it against the merged module afterwards.
+> on — see the note below.
+>
+> **Resolved 2026-07-28.** When this task actually ran, P3 was unmerged, so
+> the pattern came from its phase doc — and the merged module had moved on,
+> which is how the case-sensitivity bug got in. P3 has since merged (#33) and
+> P4 is rebased onto `main`, so both modules now live in one tree and
+> `test_url_lexing_stays_in_step_with_the_grounding_validator` asserts they
+> agree. Copying from a doc is no longer possible or necessary.
 
 - **Files:** `tests/test_advisor_linkify.py`
 - **Gate:** none

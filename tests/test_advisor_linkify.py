@@ -334,3 +334,43 @@ def test_link_label_lowercases_the_host_but_not_the_path() -> None:
     """A shouty host is a spelling accident; path case is significant."""
     result = str(_linkify("See HTTPS://GitHub.com/k/Examples now.", 3))
     assert ">github.com/k/Examples</a>" in result
+
+
+def test_url_lexing_stays_in_step_with_the_grounding_validator() -> None:
+    """The renderer must find exactly the URLs the validator approved.
+
+    These two stay independent in policy — the validator decides what may be
+    stored, this decides what is clickable — but a divergence in *lexing* means
+    a stored, grounded citation renders as dead text. That is not theoretical:
+    the renderer's copy of this pattern was case-sensitive while the
+    validator's was not, so a tip citing "HTTPS://..." passed grounding and
+    rendered unclickable. Asserting on the pattern itself is what turns the
+    next such drift into a failing test rather than a review finding.
+    """
+    from scout.sub_agents.coach import grounding
+    from scout.sub_agents.advisor import report
+
+    assert report._URL_PATTERN.pattern == grounding._URL_PATTERN.pattern
+    assert report._URL_PATTERN.flags == grounding._URL_PATTERN.flags
+    assert report._TRAILING_PUNCTUATION == grounding._TRAILING_PUNCTUATION
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Start with https://github.com/k/examples for demos.",
+        "Start with HTTPS://github.com/k/examples for demos.",
+        "Start with https://GitHub.com/k/examples for demos.",
+        "Read (https://github.com/k/examples) then build one.",
+        "Read [the demos](https://github.com/k/examples) then build one.",
+        "Clone https://github.com/k/examples/ and read the README.",
+    ],
+)
+def test_renderer_finds_every_url_the_validator_leaves_behind(text: str) -> None:
+    """End-to-end on the contract: whatever survives grounding must linkify."""
+    from scout.sub_agents.coach.grounding import extract_urls, validate_grounding
+
+    stored = validate_grounding(text, ["https://github.com/k/examples"])
+    assert stored.cited_urls, "fixture should survive grounding"
+    rendered = str(_linkify(stored.text, 3))
+    assert rendered.count("<a href=") == len(extract_urls(stored.text))

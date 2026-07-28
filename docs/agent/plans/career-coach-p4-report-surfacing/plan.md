@@ -1,7 +1,7 @@
 # Plan: Career Coach P4 — Report Surfacing of Grounded Tips
 
 > **Status:** In progress
-> **Created:** 2026-07-27 · **Last updated:** 2026-07-27
+> **Created:** 2026-07-27 · **Last updated:** 2026-07-28
 > **Spec:** [spec.md](../../specs/career-coach-p4-report-surfacing/spec.md)
 
 ---
@@ -49,12 +49,12 @@ itself, with no templated generic advice anywhere on the page.
 
 | Risk / unknown | Impact if wrong | Resolution |
 |----------------|-----------------|------------|
-| The URL regex may mis-handle the shapes real tip prose contains — a trailing full stop, a URL in parentheses, a trailing comma before "and" — either swallowing punctuation into the `href` or truncating a legitimate path. | A citation links to a 404 (`…/kubernetes.` ) or a real link renders broken, which is the visible half of the trust the grounding work exists to build. | **Spike — Phase 1, Task 1.** Pin the extractor against a fixture list of real shapes before any wrapping logic exists. Tests are the deliverable either way. P3's validator has already solved this lexing problem, so Phase 1 Task 1 copies its pattern rather than inventing a second one — the two stay independent in policy but must agree on where a URL starts and ends. Note the module (`scout/sub_agents/coach/grounding.py`) does not exist yet, since P3's Phase 2 is unbuilt; take the pattern from its phase doc and re-check against the merged module once it lands. |
+| The URL regex may mis-handle the shapes real tip prose contains — a trailing full stop, a URL in parentheses, a trailing comma before "and" — either swallowing punctuation into the `href` or truncating a legitimate path. | A citation links to a 404 (`…/kubernetes.` ) or a real link renders broken, which is the visible half of the trust the grounding work exists to build. | **Spike — Phase 1, Task 1.** Pin the extractor against a fixture list of real shapes before any wrapping logic exists. **Materialised, then closed.** Phase 1 copied the pattern from P3's phase doc because the module was unbuilt, and the merged validator had since gained `re.IGNORECASE` — so a stored tip citing `HTTPS://…` rendered unclickable. Fixed in `3257518`, and now guarded: P3 merged (#33), P4 is rebased onto `main`, and a test asserts the two patterns are identical, so the next drift fails the suite rather than reaching a page. |
 | P3 leaves Markdown link syntax intact for any URL it does **not** strip, so `listing_tips.tip` can contain `[label](url)`. | Brackets and parentheses render literally around the link — visibly broken output on the feature's headline surface. | Phase 1 Task 3 renders the construct as one anchor labelled `label`. Phase 2 Task 3 case (c) asserts it through real rendered HTML. |
 | P3 dedupes `cited_urls` but not the prose, so one resource can appear twice in a tip. | One resource consumes the whole three-link budget while reading as three recommendations. | Phase 1 Task 4 counts the cap in distinct URLs; a repeat is still linked but spends no budget. |
 | Returning `Markup` from `linkify` opts the tip text out of Jinja's autoescape, so escaping becomes the filter's job. | LLM-authored text renders as live markup — a stored-XSS-shaped bug on a local page, and the same class of defect the existing description test guards against. | Phase 1, Task 2 is escape-first-then-wrap with an explicit injection test. The existing `markdown` filter (`html=False`) and `test_advisor_report.py:355-386` are the precedent to match. |
-| `detail.gaps` and `detail.tips` join on raw stored wording; if P3's phases 2–3 ever normalise `gap_skill` on write, the join silently yields nothing and every tip disappears from the page. | Page renders as if the corpus had no coverage — a silent, total failure with no error. | Accepted risk, guarded by test: Phase 2, Task 1 asserts the join on the exact wording, so a change to P3's write path fails a P4 test rather than blanking the page. `GroundedTip`'s docstring already states the contract. |
-| P3's phases 2 and 3 (grounding validator, generation) are unbuilt, so no real run produces tips yet. | This phase cannot be verified end to end against live data before merge. | Accepted and planned around: every phase here is verified against seeded tips, which is how `test_advisor_report.py` already works. The end-to-end manual check moves to after P3 lands — see Definition of Done. |
+| `detail.gaps` and `detail.tips` join on raw stored wording; if P3's phases 2–3 ever normalise `gap_skill` on write, the join silently yields nothing and every tip disappears from the page. | Page renders as if the corpus had no coverage — a silent, total failure with no error. | **Closed.** The merged `_validate_tips` stores `gap_skill=item.gap_skill` verbatim and the prompt instructs the model to copy the skill value exactly, so no normalisation happens on write. Phase 2, Task 1 still asserts the join on exact wording, now as a regression guard on merged behaviour rather than a bet on unbuilt code. |
+| ~~P3's phases 2 and 3 are unbuilt, so no real run produces tips yet.~~ | — | **Closed 2026-07-28.** P3 merged as #33 and P4 is rebased onto `main`, so the whole chain exists. Phases 2 and 3 still develop against seeded tips, which is how `test_advisor_report.py` already works, but the end-to-end check in the Definition of Done is now runnable rather than deferred. |
 | Deleting the positioning section changes every historical page on the next `rerender.py` run. | Pages that used to end with advice end with an empty-state line. | Intended, and the reason the empty state exists. Reversible — see Rollout & Reversibility. |
 
 ## Blast Radius
@@ -157,9 +157,9 @@ itself, with no templated generic advice anywhere on the page.
 - [ ] All phase verification steps pass
 - [ ] Feature verified manually: a rendered job-detail page from seeded tips
       opens in a browser with the tip under its gap and a working citation
-- [ ] End-to-end check deferred and recorded: once P3's phases 2–3 land and a
-      real run generates tips, re-render and confirm the live page — this
-      phase must not claim end-to-end verification before then
+- [ ] End-to-end check: P3 merged (#33) and P4 is rebased onto `main`, so this
+      is now runnable — a real run generating tips, re-rendered, confirmed on
+      the live page. Still unticked; it has not been done.
 - [ ] `docs/project/architecture-pipeline-overview.md` updated where the
       report's coaching behaviour is described
 - [ ] No new lint or type-check warnings
