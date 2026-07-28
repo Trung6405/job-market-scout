@@ -687,6 +687,13 @@ async def get_resources_for_skills(
     empty list. The dict is pre-seeded to guarantee that, because
     ``CROSS JOIN LATERAL`` emits no row at all for a skill with no matches
     rather than a null-filled one.
+
+    Two independent staleness rules apply: ``max_age_days`` ages a resource
+    out automatically once its last successful check is too old, while
+    ``dead_since`` is set deliberately by the link-health checker (P5) the
+    moment a resource fails verification — the same resource can be excluded
+    by either without the other, and a NULL in each column means "not
+    excluded on this basis" (never-checked and never-dead, respectively).
     """
     if not skills:
         return {}
@@ -710,6 +717,7 @@ async def get_resources_for_skills(
               AND embedding IS NOT NULL
               AND (last_verified IS NULL
                    OR last_verified > now() - make_interval(days => $3))
+              AND dead_since IS NULL
             ORDER BY embedding <=> q.vec::vector
             LIMIT $4
         ) r

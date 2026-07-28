@@ -25,18 +25,21 @@ async def _seed_resource(
     embedding: list[float] | None,
     last_verified: datetime | None = None,
     title: str | None = None,
+    dead_since: datetime | None = None,
 ) -> None:
     await conn.execute(
         """
         INSERT INTO resources
-            (url, title, resource_type, skills, summary, embedding, source, last_verified)
-        VALUES ($1, $2, 'repo', $3, 'Seeded test resource.', $4::vector, 'test', $5)
+            (url, title, resource_type, skills, summary, embedding, source,
+             last_verified, dead_since)
+        VALUES ($1, $2, 'repo', $3, 'Seeded test resource.', $4::vector, 'test', $5, $6)
         """,
         url,
         title or url.rsplit("/", 1)[-1],
         skills,
         None if embedding is None else vector_text(embedding),
         last_verified,
+        dead_since,
     )
 
 
@@ -112,11 +115,10 @@ async def test_empty_skill_list_returns_empty_mapping(db_pool):
 async def test_excludes_stale_and_unrankable_resources(db_pool):
     """Only live, rankable rows come back.
 
-    A NULL `last_verified` means "never checked", which is every row P1
-    writes — those are trusted. Once P5 begins stamping successful checks, a
-    URL that fails re-verification stops receiving a fresh stamp and ages out
-    on its own, which is how FR-CC-10 is satisfied without the retriever
-    changing.
+    A NULL `last_verified` means "never checked" — trusted, since a freshly
+    aggregated resource must be retrievable before its first link-health
+    check. A resource whose last successful check has aged past
+    `max_age_days` is excluded independently of link health (FR-CC-10).
     """
     now = datetime.now(timezone.utc)
     async with db_pool.acquire() as conn:
@@ -147,6 +149,48 @@ async def test_excludes_stale_and_unrankable_resources(db_pool):
         "https://example.com/never",
         "https://example.com/fresh",
     }
+
+
+@pytest.mark.asyncio
+async def test_excludes_dead_resources(db_pool):
+    """A resource marked dead by the link-health checker (P5) is never
+    returned, even though it is otherwise a perfect, freshly-embedded match."""
+    now = datetime.now(timezone.utc)
+    async with db_pool.acquire() as conn:
+        await _seed_resource(conn, "https://example.com/alive", ["kubernetes"], _unit(0))
+        await _seed_resource(
+            conn,
+            "https://example.com/dead",
+            ["kubernetes"],
+            _unit(0),
+            dead_since=now,
+        )
+
+        results = await get_resources_for_skills(
+            conn, ["kubernetes"], [_unit(0)], k=10, max_age_days=90
+        )
+
+    assert {str(r.url) for r in results["kubernetes"]} == {
+        "https://example.com/alive",
+    }
+
+
+@pytest.mark.asyncio
+async def test_skill_with_only_a_dead_resource_maps_to_empty_list(db_pool):
+    async with db_pool.acquire() as conn:
+        await _seed_resource(
+            conn,
+            "https://example.com/onlydead",
+            ["rust"],
+            _unit(0),
+            dead_since=datetime.now(timezone.utc),
+        )
+
+        results = await get_resources_for_skills(
+            conn, ["rust"], [_unit(0)], k=10, max_age_days=90
+        )
+
+    assert results["rust"] == []
 
 
 @pytest.mark.asyncio
