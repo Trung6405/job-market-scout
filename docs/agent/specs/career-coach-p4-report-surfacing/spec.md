@@ -275,4 +275,29 @@ anticipated.
 
 ## Amendments *(only after approval — never silently edit approved content)*
 
-- *(none yet)*
+- **2026-07-28 — the citation budget is removed; every citation is linked.**
+  The spec required a per-listing budget of three links divided across tipped
+  gaps, with URLs beyond a gap's share left as inert text. Re-rendering the
+  real corpus at the end of P4 showed the assumption underneath it was wrong:
+  `COACH_TOP_K` defaults to 3 and the prompt asks for *at least* one URL, so
+  **93% of generated tips cite two or three resources** (65 of 70), and the
+  budget left **84 of 162 citations** as bare unclickable URLs sitting in
+  prose beside linked ones.
+
+  That is the same defect this spec used to reject the hard-budget
+  alternative — *"advice naming a resource the reader cannot open reads as a
+  broken page, which costs more trust than an extra link costs attention"* —
+  applied per-gap while missing that it applies per-citation. The principle is
+  unchanged; only its consequence was mis-derived, because the budget was
+  designed against imagined tips rather than real ones.
+
+  Every citation is now linked. The cost is real and accepted: a median of 7
+  links per page and 15 on the busiest. Link volume is better controlled by
+  `COACH_TOP_K`, which bounds what a tip can cite at all, than by a renderer
+  that displays some citations and not others. `_CITATION_BUDGET` and the
+  `citation_cap` filter are removed rather than left unused.
+
+  Superseded by this: the Must-have bullets on the budget and its floor, the
+  Should-have bullet making the budget a named constant, and the
+  corresponding Alternatives rows, which recorded a decision between
+  budget variants that no longer exists.

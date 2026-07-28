@@ -271,6 +271,14 @@ them changes no rendered output.
   the `markdown` filter to fix — that would fight `linkify` for the same text.
   Left as a known limit for P4's manual verification to judge against real
   tips.
+- **Tasks 4 and 6 were undone by the end-to-end check.** The link cap and
+  `citation_cap` are gone; every citation is linked. Re-rendering the real
+  corpus showed 93% of tips cite two or three resources, so the budget left
+  more than half of all citations as bare unclickable URLs. The work was not
+  wasted — the extraction, escaping and Markdown handling it was built around
+  all stand — but the budget itself was designed against imagined tips, and
+  one render against real ones settled it. Recorded in the spec's 2026-07-28
+  amendment.
 - **Task 5 passed on write, as predicted.** The pattern copied from the
   validator is anchored to `https?://`, so no other scheme was ever eligible
   to become an anchor. The tests were kept as regression guards rather than

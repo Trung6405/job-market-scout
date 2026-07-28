@@ -261,9 +261,6 @@
     <div class="coach">
       Closing these gaps — especially the must-have ones — would meaningfully lift this candidacy.
     </div>
-    {# One page-wide citation budget, divided evenly across the gaps that have
-       advice, so several tipped gaps share links rather than stacking them. #}
-    {% set link_cap = detail|citation_cap %}
     {# Must-haves lead, so priority reads off position and pill rather than a
        sentence restating the list. Concatenated explicitly rather than sorted
        on requirement_level, which would work only by the alphabetical accident
@@ -284,7 +281,7 @@
         {% endif %}
       </div>
       {% if gap_tips %}
-      <p class="tip">{{ gap_tips[0].tip|linkify(link_cap) }}</p>
+      <p class="tip">{{ gap_tips[0].tip|linkify }}</p>
       {% endif %}
     </div>
     {% endfor %}

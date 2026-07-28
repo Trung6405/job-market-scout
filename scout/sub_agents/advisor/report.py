@@ -116,8 +116,18 @@ def _link_label(url: str) -> str:
     return f"{host}{parts.path.rstrip('/')}"
 
 
-def _linkify(text: str, limit: int) -> Markup:
-    """Render a tip's prose with its first ``limit`` distinct URLs linked.
+def _linkify(text: str) -> Markup:
+    """Render a tip's prose with every citation in it linked.
+
+    Every URL is linked, deliberately without a per-page budget. An earlier
+    version capped them and left the rest as bare text, on the theory that a
+    page should not stack links. Re-rendering the real corpus showed that
+    theory backwards: 93% of generated tips cite two or three resources, so
+    the cap left more than half of all citations as unclickable URLs sitting
+    in prose beside linked ones — advice naming a resource the reader cannot
+    open, which is the very failure the grounding chain exists to prevent.
+    Link volume is better controlled upstream by ``COACH_TOP_K``, which bounds
+    how many resources a tip can cite at all.
 
     Escaping is this function's own responsibility: returning ``Markup`` opts
     the value out of Jinja's autoescape, so nothing downstream will do it. The
@@ -130,16 +140,7 @@ def _linkify(text: str, limit: int) -> Markup:
 
     out: list[str] = []
     cursor = 0
-    linked: set[str] = set()
     for start, end, url in _iter_urls(text):
-        # The budget counts distinct resources, not mentions: the validator
-        # dedupes ``cited_urls`` but leaves the prose alone, so a tip naming one
-        # repo twice would otherwise spend two links looking like two
-        # recommendations. A repeat of something already linked is free.
-        if url not in linked and len(linked) >= limit:
-            continue
-        linked.add(url)
-
         markdown = _MARKDOWN_LABEL.search(text, cursor, start)
         if markdown is not None and text[end : end + 1] == ")":
             # Swallow the whole ``[label](url)`` construct, not just the URL,
@@ -158,36 +159,6 @@ def _linkify(text: str, limit: int) -> Markup:
         cursor = end
     out.append(str(escape(text[cursor:])))
     return Markup("".join(out))
-
-
-# How many citations one job-detail page may show in total. A gap's advice can
-# name at most COACH_TOP_K resources, which defaults to 3, so this is exactly
-# one gap's worth: a single tipped gap may cite everything it was given, while
-# several gaps share the allowance rather than stacking a dozen links no reader
-# will treat as a recommendation. A layout judgement, not a deployment knob.
-_CITATION_BUDGET = 3
-
-
-def _citation_cap(detail: RunListingDetail) -> int:
-    """How many links each of this listing's tipped gaps may show.
-
-    Divided evenly, and deliberately without spending the remainder: handing a
-    spare link to whichever gap happens to sort first would make two otherwise
-    equal gap blocks visibly unequal for a reason the reader cannot see.
-
-    The floor of one is a ceiling on stacking, not on coverage — with more
-    tipped gaps than budget the page carries more than ``_CITATION_BUDGET``
-    links, because advice naming a resource the reader cannot open reads as a
-    broken page, which costs more trust than an extra link costs attention.
-    """
-    tipped = sum(
-        1
-        for gap in detail.gaps
-        if any(tip.gap_skill == gap.skill for tip in detail.tips)
-    )
-    if not tipped:
-        return 0
-    return max(1, _CITATION_BUDGET // tipped)
 
 
 def _format_salary(listing: Listing) -> str:
@@ -210,7 +181,6 @@ def _get_env() -> Environment:
     env.filters["format_salary"] = _format_salary
     env.filters["markdown"] = _render_markdown
     env.filters["linkify"] = _linkify
-    env.filters["citation_cap"] = _citation_cap
     return env
 
 

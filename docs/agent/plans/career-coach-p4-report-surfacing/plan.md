@@ -27,10 +27,11 @@ itself, with no templated generic advice anywhere on the page.
       with the scheme and `www.` stripped; the anchor's `href` is the full URL.
 - [x] A `[label](url)` citation renders as one anchor labelled `label`, with no
       literal brackets or parentheses left on the page.
-- [x] URLs beyond the gap's citation cap render as visible, unlinked text.
-- [x] The per-gap cap is `max(1, 3 // tipped_gaps)` counted in **distinct**
-      URLs: one tipped gap gets 3, two get 1 each, three get 1 each, five get
-      1 each; a tip naming one resource twice spends one unit of budget.
+- [x] ~~URLs beyond the gap's citation cap render as visible, unlinked text.~~
+      **Superseded** — there is no cap, so no URL is left unlinked.
+- [x] ~~The per-gap cap is `max(1, 3 // tipped_gaps)`~~ — **superseded**, see
+      the spec's 2026-07-28 amendment. Every citation is linked; no tip leaves
+      a bare unclickable URL in its prose.
 - [x] URL spans match what `scout/sub_agents/coach/grounding.py` finds, so
       every URL P3 stored is one P4 can linkify.
 - [x] Markup in tip text is escaped, and a non-`http(s)` scheme

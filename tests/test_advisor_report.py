@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -604,9 +605,7 @@ async def test_job_detail_renders_only_the_first_tip_stored_for_a_gap(
 
 
 @pytest.mark.asyncio
-async def test_job_detail_gives_a_lone_tipped_gap_the_whole_citation_budget(
-    db_pool, tmp_path
-):
+async def test_job_detail_links_every_citation_in_a_tip(db_pool, tmp_path):
     async with db_pool.acquire() as conn:
         html = await _render_with_tips(
             conn,
@@ -631,30 +630,28 @@ async def test_job_detail_gives_a_lone_tipped_gap_the_whole_citation_budget(
 
 
 @pytest.mark.asyncio
-async def test_job_detail_splits_the_citation_budget_across_tipped_gaps(
+async def test_job_detail_leaves_no_bare_url_unlinked_across_several_tips(
     db_pool, tmp_path
 ):
-    """Three tipped gaps get one link each — the budget divides, it does not
-    multiply."""
-    gaps = [
-        SkillGap(skill=skill, requirement_level="must_have")
-        for skill in ("Kubernetes", "Terraform", "Go")
-    ]
+    """The regression the real corpus exposed: with a per-page link budget,
+    every gap past the first showed its second citation as unclickable text."""
+    skills = ("Kubernetes", "Terraform", "Go")
+    gaps = [SkillGap(skill=s, requirement_level="must_have") for s in skills]
     tips = [
         GroundedTip(
-            gap_skill=skill,
-            tip=f"Start at https://github.com/x/{skill.lower()} and then https://github.com/y/{skill.lower()}.",
+            gap_skill=s,
+            tip=f"Start at https://github.com/x/{s.lower()} and then https://github.com/y/{s.lower()}.",
             cited_urls=[],
         )
-        for skill in ("Kubernetes", "Terraform", "Go")
+        for s in skills
     ]
     async with db_pool.acquire() as conn:
         html = await _render_with_tips(conn, tmp_path, gaps, tips)
 
-    for skill in ("Kubernetes", "Terraform", "Go"):
-        assert _gap_block(html, skill).count("<a href=") == 1
-    # The second URL in each tip stays readable, just not clickable.
-    assert "https://github.com/y/kubernetes" in html
+    for skill in skills:
+        assert _gap_block(html, skill).count("<a href=") == 2
+    tips_markup = "".join(re.findall(r'<p class="tip">(.*?)</p>', html, re.S))
+    assert "https://" not in re.sub(r"<a [^>]*>.*?</a>", "", tips_markup)
 
 
 @pytest.mark.asyncio
