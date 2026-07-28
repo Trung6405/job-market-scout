@@ -3,7 +3,12 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from scout.shared.schemas import RetrievedResource, Resource, ResourceTags
+from scout.shared.schemas import (
+    LinkHealthSummary,
+    RetrievedResource,
+    Resource,
+    ResourceTags,
+)
 
 
 def test_resource_accepts_minimal_fields():
@@ -72,3 +77,20 @@ def test_retrieved_resource_requires_similarity():
             skills=["kubernetes"],
             summary="Container orchestration platform.",
         )
+
+
+def test_link_health_summary_carries_every_transition_count():
+    summary = LinkHealthSummary(
+        checked=10,
+        verified=6,
+        recovered=1,
+        newly_dead=1,
+        still_dead=1,
+        failing=1,
+    )
+    assert summary.checked == 10
+    assert summary.verified == 6
+    assert summary.recovered == 1
+    assert summary.newly_dead == 1
+    assert summary.still_dead == 1
+    assert summary.failing == 1

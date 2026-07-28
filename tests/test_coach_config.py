@@ -17,6 +17,9 @@ def _clear_coach_env(monkeypatch):
         "COACH_RESOURCE_MAX_AGE_DAYS",
         "COACH_TIPS_RESOURCES_PER_GAP",
         "COACH_TIPS_MAX_GAPS_PER_LISTING",
+        "COACH_LINK_HEALTH_BATCH",
+        "COACH_LINK_HEALTH_MAX_FAILURES",
+        "COACH_LINK_HEALTH_TIMEOUT_SECONDS",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -79,3 +82,20 @@ def test_coach_tips_settings_read_env(monkeypatch):
     settings = Settings()
     assert settings.coach_tips_resources_per_gap == 2
     assert settings.coach_tips_max_gaps_per_listing == 8
+
+
+def test_coach_link_health_settings_default():
+    settings = Settings()
+    assert settings.coach_link_health_batch == 50
+    assert settings.coach_link_health_max_failures == 3
+    assert settings.coach_link_health_timeout_seconds == 10
+
+
+def test_coach_link_health_settings_read_env(monkeypatch):
+    monkeypatch.setenv("COACH_LINK_HEALTH_BATCH", "20")
+    monkeypatch.setenv("COACH_LINK_HEALTH_MAX_FAILURES", "5")
+    monkeypatch.setenv("COACH_LINK_HEALTH_TIMEOUT_SECONDS", "15")
+    settings = Settings()
+    assert settings.coach_link_health_batch == 20
+    assert settings.coach_link_health_max_failures == 5
+    assert settings.coach_link_health_timeout_seconds == 15

@@ -47,6 +47,24 @@ async def test_resources_embedding_roundtrips(db_pool):
 
 
 @pytest.mark.asyncio
+async def test_resources_link_health_columns_default_healthy(db_pool):
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO resources (url, title, resource_type, skills, source) "
+            "VALUES ($1, $2, $3, $4, $5)",
+            "https://example.com/health", "Health", "repo", ["python"], "test",
+        )
+        row = await conn.fetchrow(
+            "SELECT consecutive_failures, dead_since, last_check_error "
+            "FROM resources WHERE url = $1",
+            "https://example.com/health",
+        )
+    assert row["consecutive_failures"] == 0
+    assert row["dead_since"] is None
+    assert row["last_check_error"] is None
+
+
+@pytest.mark.asyncio
 async def test_resources_url_is_unique(db_pool):
     async with db_pool.acquire() as conn:
         await conn.execute(

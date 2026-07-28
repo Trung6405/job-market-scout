@@ -79,3 +79,12 @@ CREATE TABLE IF NOT EXISTS resources (
     last_verified TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Link-health state (P5). consecutive_failures counts transient failures
+-- since the last success; dead_since is set the moment a resource is
+-- excluded from retrieval (either on a permanent 404/410, or once
+-- consecutive_failures reaches the configured threshold) and cleared on the
+-- next successful check, so exclusion is always reversible.
+ALTER TABLE resources ADD COLUMN IF NOT EXISTS consecutive_failures INT NOT NULL DEFAULT 0;
+ALTER TABLE resources ADD COLUMN IF NOT EXISTS dead_since TIMESTAMPTZ;
+ALTER TABLE resources ADD COLUMN IF NOT EXISTS last_check_error TEXT;

@@ -11,6 +11,7 @@ from scout.config import Settings
 from scout.config import settings as default_settings
 from scout.shared.schemas import (
     GroundedTip,
+    LinkVerdict,
     Listing,
     ListingRequirements,
     MatchResult,
@@ -22,6 +23,10 @@ from scout.shared.schemas import (
     RunSummary,
     SkillGap,
 )
+
+LinkCheckTransition = Literal[
+    "verified", "recovered", "newly_dead", "still_dead", "failing"
+]
 
 _SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 
@@ -682,6 +687,13 @@ async def get_resources_for_skills(
     empty list. The dict is pre-seeded to guarantee that, because
     ``CROSS JOIN LATERAL`` emits no row at all for a skill with no matches
     rather than a null-filled one.
+
+    Two independent staleness rules apply: ``max_age_days`` ages a resource
+    out automatically once its last successful check is too old, while
+    ``dead_since`` is set deliberately by the link-health checker (P5) the
+    moment a resource fails verification — the same resource can be excluded
+    by either without the other, and a NULL in each column means "not
+    excluded on this basis" (never-checked and never-dead, respectively).
     """
     if not skills:
         return {}
@@ -705,6 +717,7 @@ async def get_resources_for_skills(
               AND embedding IS NOT NULL
               AND (last_verified IS NULL
                    OR last_verified > now() - make_interval(days => $3))
+              AND dead_since IS NULL
             ORDER BY embedding <=> q.vec::vector
             LIMIT $4
         ) r
@@ -727,3 +740,101 @@ async def get_distinct_gap_skills(conn: asyncpg.Connection) -> list[str]:
         "SELECT DISTINCT skill FROM listing_gaps WHERE kind = 'skill' AND NOT met"
     )
     return [row["skill"] for row in rows]
+
+
+async def get_resources_to_check(
+    conn: asyncpg.Connection, limit: int
+) -> list[asyncpg.Record]:
+    """Return the next `limit` resources due a link-health check.
+
+    Ordered oldest-checked first, with never-checked (`last_verified` NULL)
+    rows first of all — a freshly aggregated resource is exactly as overdue
+    as one nobody has looked at in months. Every row starts NULL, so the
+    ordering among them is otherwise unspecified; the `id` tiebreak makes
+    consecutive runs advance through the corpus deterministically instead of
+    repeatedly revisiting the same subset.
+    """
+    return await conn.fetch(
+        "SELECT id, url FROM resources ORDER BY last_verified ASC NULLS FIRST, id LIMIT $1",
+        limit,
+    )
+
+
+async def record_link_check(
+    conn: asyncpg.Connection,
+    resource_id: int,
+    verdict: LinkVerdict,
+    reason: str | None,
+    max_failures: int,
+) -> LinkCheckTransition:
+    """Apply one link-check verdict to a resource and report the transition.
+
+    A `healthy` verdict always wins: it stamps `last_verified` and clears
+    every failure signal, whether the resource was previously clean
+    (`"verified"`) or already excluded (`"recovered"`) — a resource returns
+    to retrieval on its own, with no manual reinstatement.
+    """
+    if verdict == "healthy":
+        was_dead = await conn.fetchval(
+            "SELECT dead_since IS NOT NULL FROM resources WHERE id = $1", resource_id
+        )
+        await conn.execute(
+            """
+            UPDATE resources
+            SET last_verified = now(),
+                consecutive_failures = 0,
+                dead_since = NULL,
+                last_check_error = NULL
+            WHERE id = $1
+            """,
+            resource_id,
+        )
+        return "recovered" if was_dead else "verified"
+
+    if verdict == "gone":
+        # COALESCE preserves the first dead_since across repeat checks, so
+        # the record of *when* a resource died survives being re-observed
+        # dead — only a healthy check ever clears it.
+        was_dead = await conn.fetchval(
+            "SELECT dead_since IS NOT NULL FROM resources WHERE id = $1", resource_id
+        )
+        await conn.execute(
+            """
+            UPDATE resources
+            SET consecutive_failures = consecutive_failures + 1,
+                dead_since = COALESCE(dead_since, now()),
+                last_check_error = $2
+            WHERE id = $1
+            """,
+            resource_id,
+            reason,
+        )
+        return "still_dead" if was_dead else "newly_dead"
+
+    # verdict == "transient": increment and mark dead only once the
+    # incremented count reaches the threshold. The comparison runs in SQL
+    # against the stored count (not a value read back into Python first) so
+    # two concurrent runs checking the same resource can't disagree about
+    # whether this observation was the one that crossed the line.
+    was_dead = await conn.fetchval(
+        "SELECT dead_since IS NOT NULL FROM resources WHERE id = $1", resource_id
+    )
+    row = await conn.fetchrow(
+        """
+        UPDATE resources
+        SET consecutive_failures = consecutive_failures + 1,
+            dead_since = CASE
+                WHEN consecutive_failures + 1 >= $3 THEN COALESCE(dead_since, now())
+                ELSE dead_since
+            END,
+            last_check_error = $2
+        WHERE id = $1
+        RETURNING dead_since
+        """,
+        resource_id,
+        reason,
+        max_failures,
+    )
+    if row["dead_since"] is None:
+        return "failing"
+    return "still_dead" if was_dead else "newly_dead"
