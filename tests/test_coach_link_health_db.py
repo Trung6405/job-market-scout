@@ -177,3 +177,46 @@ async def test_record_link_check_gone_twice_keeps_original_dead_since(db_pool):
     assert transition == "still_dead"
     assert row["dead_since"] == first_dead_since
     assert row["consecutive_failures"] == 2
+
+
+@pytest.mark.asyncio
+async def test_record_link_check_transient_failing_until_threshold(db_pool):
+    async with db_pool.acquire() as conn:
+        resource_id = await _insert(conn, "https://example.com/flaky")
+
+        first = await record_link_check(
+            conn, resource_id, verdict="transient", reason="Timeout", max_failures=3
+        )
+        second = await record_link_check(
+            conn, resource_id, verdict="transient", reason="Timeout", max_failures=3
+        )
+        third = await record_link_check(
+            conn, resource_id, verdict="transient", reason="Timeout", max_failures=3
+        )
+        row = await _row(conn, resource_id)
+
+    assert [first, second, third] == ["failing", "failing", "newly_dead"]
+    assert row["dead_since"] is not None
+    assert row["consecutive_failures"] == 3
+
+
+@pytest.mark.asyncio
+async def test_record_link_check_healthy_check_resets_transient_streak(db_pool):
+    """One blip must not combine with an unrelated later one to kill a resource."""
+    async with db_pool.acquire() as conn:
+        resource_id = await _insert(conn, "https://example.com/blip")
+
+        await record_link_check(
+            conn, resource_id, verdict="transient", reason="Timeout", max_failures=3
+        )
+        await record_link_check(
+            conn, resource_id, verdict="healthy", reason=None, max_failures=3
+        )
+        transition = await record_link_check(
+            conn, resource_id, verdict="transient", reason="Timeout", max_failures=3
+        )
+        row = await _row(conn, resource_id)
+
+    assert transition == "failing"
+    assert row["dead_since"] is None
+    assert row["consecutive_failures"] == 1

@@ -803,4 +803,30 @@ async def record_link_check(
         )
         return "still_dead" if was_dead else "newly_dead"
 
-    raise NotImplementedError
+    # verdict == "transient": increment and mark dead only once the
+    # incremented count reaches the threshold. The comparison runs in SQL
+    # against the stored count (not a value read back into Python first) so
+    # two concurrent runs checking the same resource can't disagree about
+    # whether this observation was the one that crossed the line.
+    was_dead = await conn.fetchval(
+        "SELECT dead_since IS NOT NULL FROM resources WHERE id = $1", resource_id
+    )
+    row = await conn.fetchrow(
+        """
+        UPDATE resources
+        SET consecutive_failures = consecutive_failures + 1,
+            dead_since = CASE
+                WHEN consecutive_failures + 1 >= $3 THEN COALESCE(dead_since, now())
+                ELSE dead_since
+            END,
+            last_check_error = $2
+        WHERE id = $1
+        RETURNING dead_since
+        """,
+        resource_id,
+        reason,
+        max_failures,
+    )
+    if row["dead_since"] is None:
+        return "failing"
+    return "still_dead" if was_dead else "newly_dead"
