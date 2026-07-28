@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+import requests
 
 from scout.config import Settings
 from scout.sub_agents.coach.link_health import check_url, classify_status
@@ -121,3 +122,52 @@ def test_check_url_passes_configured_timeout_and_follows_redirects(monkeypatch):
 
     assert captured["timeout"] == 7
     assert captured["allow_redirects"] is True
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        requests.Timeout("timed out"),
+        requests.ConnectionError("connection refused"),
+        requests.TooManyRedirects("too many redirects"),
+    ],
+)
+def test_check_url_network_errors_are_transient(monkeypatch, exc):
+    def _raise(*a, **k):
+        raise exc
+
+    monkeypatch.setattr("scout.sub_agents.coach.link_health.requests.head", _raise)
+    monkeypatch.setattr("scout.sub_agents.coach.link_health.requests.get", _raise)
+
+    result = check_url("https://example.com/repo", _settings())
+
+    assert result.verdict == "transient"
+    assert result.reason is not None
+
+
+def test_check_url_reason_is_truncated(monkeypatch):
+    def _raise(*a, **k):
+        raise requests.ConnectionError("x" * 1000)
+
+    monkeypatch.setattr("scout.sub_agents.coach.link_health.requests.head", _raise)
+
+    result = check_url("https://example.com/repo", _settings())
+
+    assert len(result.reason) <= 300
+
+
+def test_check_url_get_network_error_after_head_transient(monkeypatch):
+    """A HEAD 5xx followed by a GET that raises stays transient, not an exception."""
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.link_health.requests.head",
+        lambda *a, **k: _FakeResponse(503),
+    )
+
+    def _raise_get(*a, **k):
+        raise requests.Timeout("timed out")
+
+    monkeypatch.setattr("scout.sub_agents.coach.link_health.requests.get", _raise_get)
+
+    result = check_url("https://example.com/repo", _settings())
+
+    assert result.verdict == "transient"
