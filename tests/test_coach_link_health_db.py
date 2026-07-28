@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from scout.shared.db import get_resources_to_check
+from scout.shared.db import get_resources_to_check, record_link_check
 from scout.shared.schemas import Resource
 
 
@@ -94,3 +94,49 @@ async def test_get_resources_to_check_breaks_ties_by_id(db_pool):
 
     ids = [row["id"] for row in rows if row["id"] in (first_id, second_id)]
     assert ids == [first_id, second_id]
+
+
+async def _row(conn, resource_id: int):
+    return await conn.fetchrow(
+        "SELECT last_verified, consecutive_failures, dead_since, last_check_error "
+        "FROM resources WHERE id = $1",
+        resource_id,
+    )
+
+
+@pytest.mark.asyncio
+async def test_record_link_check_healthy_verifies_a_clean_row(db_pool):
+    async with db_pool.acquire() as conn:
+        resource_id = await _insert(conn, "https://example.com/clean")
+
+        transition = await record_link_check(
+            conn, resource_id, verdict="healthy", reason=None, max_failures=3
+        )
+        row = await _row(conn, resource_id)
+
+    assert transition == "verified"
+    assert row["last_verified"] is not None
+    assert row["consecutive_failures"] == 0
+    assert row["dead_since"] is None
+    assert row["last_check_error"] is None
+
+
+@pytest.mark.asyncio
+async def test_record_link_check_healthy_recovers_a_dead_row(db_pool):
+    async with db_pool.acquire() as conn:
+        resource_id = await _insert(conn, "https://example.com/recovering")
+        await conn.execute(
+            "UPDATE resources SET dead_since = now(), consecutive_failures = 3, "
+            "last_check_error = 'HTTP 404' WHERE id = $1",
+            resource_id,
+        )
+
+        transition = await record_link_check(
+            conn, resource_id, verdict="healthy", reason=None, max_failures=3
+        )
+        row = await _row(conn, resource_id)
+
+    assert transition == "recovered"
+    assert row["consecutive_failures"] == 0
+    assert row["dead_since"] is None
+    assert row["last_check_error"] is None

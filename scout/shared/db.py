@@ -11,6 +11,7 @@ from scout.config import Settings
 from scout.config import settings as default_settings
 from scout.shared.schemas import (
     GroundedTip,
+    LinkVerdict,
     Listing,
     ListingRequirements,
     MatchResult,
@@ -22,6 +23,10 @@ from scout.shared.schemas import (
     RunSummary,
     SkillGap,
 )
+
+LinkCheckTransition = Literal[
+    "verified", "recovered", "newly_dead", "still_dead", "failing"
+]
 
 _SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 
@@ -745,3 +750,37 @@ async def get_resources_to_check(
         "SELECT id, url FROM resources ORDER BY last_verified ASC NULLS FIRST, id LIMIT $1",
         limit,
     )
+
+
+async def record_link_check(
+    conn: asyncpg.Connection,
+    resource_id: int,
+    verdict: LinkVerdict,
+    reason: str | None,
+    max_failures: int,
+) -> LinkCheckTransition:
+    """Apply one link-check verdict to a resource and report the transition.
+
+    A `healthy` verdict always wins: it stamps `last_verified` and clears
+    every failure signal, whether the resource was previously clean
+    (`"verified"`) or already excluded (`"recovered"`) — a resource returns
+    to retrieval on its own, with no manual reinstatement.
+    """
+    if verdict == "healthy":
+        was_dead = await conn.fetchval(
+            "SELECT dead_since IS NOT NULL FROM resources WHERE id = $1", resource_id
+        )
+        await conn.execute(
+            """
+            UPDATE resources
+            SET last_verified = now(),
+                consecutive_failures = 0,
+                dead_since = NULL,
+                last_check_error = NULL
+            WHERE id = $1
+            """,
+            resource_id,
+        )
+        return "recovered" if was_dead else "verified"
+
+    raise NotImplementedError
