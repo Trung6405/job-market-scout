@@ -134,6 +134,19 @@ jobs:
             "$VM_USER@$VM_HOST" \
             "cd $APP_DIR && docker compose -f docker-compose.yaml -f docker-compose.prod.yaml run --rm app python -m scout.coach_aggregator"
 
+      - name: Run coach link-health check (daily)
+        # Unlike the aggregator above, this runs on every daily fire, not one
+        # weekday — the batch cap bounds each run's cost, and daily cycling is
+        # what lets the check happen *between* weekly aggregations (NFR-CC-4).
+        # continue-on-error so a link-health failure never blocks the
+        # deallocate step below.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "$VM_USER@$VM_HOST" \
+            "cd $APP_DIR && docker compose -f docker-compose.yaml -f docker-compose.prod.yaml run --rm app python -m scout.coach_link_health"
+
       - name: Deallocate VM
         # always(): stop billing even if the run, dashboard pull/deploy, or
         # SSH never came up. Deallocate (not stop) releases the compute so

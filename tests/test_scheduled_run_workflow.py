@@ -61,3 +61,35 @@ def test_coach_aggregator_is_gated_on_a_cron_that_actually_exists():
         s for s in _steps() if s["name"] == "Run coach aggregator (weekly)"
     )
     assert any(f"github.event.schedule == '{cron}'" in coach_step["if"] for cron in _crons())
+
+
+def test_link_health_step_runs_between_coach_aggregator_and_deallocate():
+    names = [step["name"] for step in _steps()]
+    assert "Run coach link-health check (daily)" in names
+    coach_idx = names.index("Run coach aggregator (weekly)")
+    link_health_idx = names.index("Run coach link-health check (daily)")
+    deallocate_idx = names.index("Deallocate VM")
+    assert coach_idx < link_health_idx < deallocate_idx
+
+
+def test_link_health_step_does_not_block_the_job():
+    step = next(
+        s for s in _steps() if s["name"] == "Run coach link-health check (daily)"
+    )
+    assert step.get("continue-on-error") is True
+
+
+def test_link_health_step_invokes_the_module():
+    step = next(
+        s for s in _steps() if s["name"] == "Run coach link-health check (daily)"
+    )
+    assert "python -m scout.coach_link_health" in step["run"]
+
+
+def test_link_health_step_runs_every_scheduled_fire_not_just_one_weekday():
+    """Unlike the weekly aggregator, the link check should run on every daily
+    cron fire — that's what makes it happen *between* aggregations."""
+    step = next(
+        s for s in _steps() if s["name"] == "Run coach link-health check (daily)"
+    )
+    assert "if" not in step or "date -u +%u" not in step["run"]

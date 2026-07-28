@@ -1,7 +1,7 @@
 # Phase 5: Runner, Entrypoint & Scheduling
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete
 > **Depends on:** Phases 1–4 complete (settings, checker, persistence, exclusion)
 
 ---
@@ -34,14 +34,14 @@ fail the pipeline.
 - **Files:** `scout/shared/schemas.py`, `tests/test_coach_schemas.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: `LinkHealthSummary` carries `checked`, `verified`,
+  - [x] Write failing test: `LinkHealthSummary` carries `checked`, `verified`,
         `recovered`, `newly_dead`, `still_dead` and `failing` counts
-  - [ ] Verify it fails (`pytest tests/test_coach_schemas.py -q`)
-  - [ ] Implement the model beside `CoachSummary`, with a docstring saying it
+  - [x] Verify it fails (`pytest tests/test_coach_schemas.py -q`)
+  - [x] Implement the model beside `CoachSummary`, with a docstring saying it
         is what `coach_link_health.py` logs — the counts map one-to-one onto
         the transitions `record_link_check` returns
-  - [ ] Verify it passes (`pytest tests/test_coach_schemas.py -q`)
-  - [ ] Commit: `feat(coach): add LinkHealthSummary`
+  - [x] Verify it passes (`pytest tests/test_coach_schemas.py -q`)
+  - [x] Commit: `feat(coach): add LinkHealthSummary`
 
 ### Task 2: The run loop
 
@@ -49,20 +49,20 @@ fail the pipeline.
   `tests/test_coach_link_health_runner.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test, with the batch query, `check_url`, and
+  - [x] Write failing test, with the batch query, `check_url`, and
         `record_link_check` stubbed: `run_link_health` checks exactly the rows
         the batch returned, passes each verdict through to persistence, tallies
         the returned transitions into the summary, and — the one that matters —
         keeps going when one URL's check raises, counting it as a transient
         failure rather than abandoning the rest of the batch
-  - [ ] Verify it fails (`pytest tests/test_coach_link_health_runner.py -q`)
-  - [ ] Implement `run_link_health(settings=None) -> LinkHealthSummary`:
+  - [x] Verify it fails (`pytest tests/test_coach_link_health_runner.py -q`)
+  - [x] Implement `run_link_health(settings=None) -> LinkHealthSummary`:
         acquire a pool, select `coach_link_health_batch` rows, check each
         sequentially with the aggregator's throttle discipline, record each
         result, and return the tally. An empty batch is a valid, successful,
         zero-count run
-  - [ ] Verify it passes (`pytest tests/test_coach_link_health_runner.py -q`)
-  - [ ] Commit: `feat(coach): add the link-health run loop`
+  - [x] Verify it passes (`pytest tests/test_coach_link_health_runner.py -q`)
+  - [x] Commit: `feat(coach): add the link-health run loop`
 
 ### Task 3: The module entrypoint
 
@@ -70,27 +70,27 @@ fail the pipeline.
   `tests/test_coach_link_health_entrypoint.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test, mirroring `test_coach_aggregator_entrypoint.py`:
+  - [x] Write failing test, mirroring `test_coach_aggregator_entrypoint.py`:
         `run_once` logs the summary counts at INFO, and `main` exits non-zero
         when the run raises
-  - [ ] Verify it fails (`pytest tests/test_coach_link_health_entrypoint.py -q`)
-  - [ ] Implement the entrypoint as a near-copy of `scout/coach_aggregator.py`
+  - [x] Verify it fails (`pytest tests/test_coach_link_health_entrypoint.py -q`)
+  - [x] Implement the entrypoint as a near-copy of `scout/coach_aggregator.py`
         — same logging setup, same `asyncio.run`, same exception-to-exit-code
         handling — so the two coach jobs are operated identically
-  - [ ] Verify it passes (`pytest tests/test_coach_link_health_entrypoint.py -q`)
-  - [ ] Commit: `feat(coach): add the coach_link_health entrypoint`
+  - [x] Verify it passes (`pytest tests/test_coach_link_health_entrypoint.py -q`)
+  - [x] Commit: `feat(coach): add the coach_link_health entrypoint`
 
 ### Task 4: A runnable link-health audit
 
 - **Files:** `scripts/audit_link_health.py`, `tests/test_audit_link_health.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: the audit's reporting function turns a set of
+  - [x] Write failing test: the audit's reporting function turns a set of
         resource rows into the counts it prints — live, dead, never-checked,
         and failing-but-not-yet-dead — and reports cleanly on an empty corpus
         rather than implying an empty corpus passed
-  - [ ] Verify it fails (`pytest tests/test_audit_link_health.py -q`)
-  - [ ] Implement, following `scripts/audit_rendered_citations.py`: a read-only
+  - [x] Verify it fails (`pytest tests/test_audit_link_health.py -q`)
+  - [x] Implement, following `scripts/audit_rendered_citations.py`: a read-only
         `python -m scripts.audit_link_health` that queries the corpus and prints
         the health distribution plus every dead resource's URL, `dead_since`
         and `last_check_error`. Reads only — it never issues a check or writes
@@ -99,8 +99,8 @@ fail the pipeline.
         the test author imagined, and what real hosts do to a `HEAD` request is
         exactly what the suite cannot see — the same blind spot that made P4's
         link budget pass every fixture test while being wrong
-  - [ ] Verify it passes (`pytest tests/test_audit_link_health.py -q`)
-  - [ ] Commit: `feat(scripts): add a link-health audit for the Coach corpus`
+  - [x] Verify it passes (`pytest tests/test_audit_link_health.py -q`)
+  - [x] Commit: `feat(scripts): add a link-health audit for the Coach corpus`
 
 ### Task 5: The scheduled step
 
@@ -111,35 +111,35 @@ fail the pipeline.
   writing health state to real rows. Confirm the manual run below looked right
   first.
 - **Steps:**
-  - [ ] Write failing test: the workflow has a link-health step that runs on
+  - [x] Write failing test: the workflow has a link-health step that runs on
         the daily cron slot (not gated to one weekday, unlike the aggregator),
         invokes `python -m scout.coach_link_health` over SSH in the app
         container, and is `continue-on-error: true`
-  - [ ] Verify it fails (`pytest tests/test_scheduled_run_workflow.py -q`)
-  - [ ] Implement: add the step after the aggregator step and before
+  - [x] Verify it fails (`pytest tests/test_scheduled_run_workflow.py -q`)
+  - [x] Implement: add the step after the aggregator step and before
         `Deallocate VM`, with a comment explaining the daily-vs-weekly
         difference — the batch cap is what bounds each run, and daily cycling
         is what makes the check happen *between* aggregations (NFR-CC-4).
         Document the manual invocation in `docs/commands.md` next to the
         aggregator's
-  - [ ] Verify it passes (`pytest tests/test_scheduled_run_workflow.py -q`)
-  - [ ] Commit: `feat(coach): run the link-health check on the daily schedule`
+  - [x] Verify it passes (`pytest tests/test_scheduled_run_workflow.py -q`)
+  - [x] Commit: `feat(coach): run the link-health check on the daily schedule`
 
 ---
 
 ## Verification
 
-- [ ] All phase tests pass:
+- [x] All phase tests pass:
       `pytest tests/test_coach_schemas.py tests/test_coach_link_health_runner.py tests/test_coach_link_health_entrypoint.py tests/test_audit_link_health.py tests/test_scheduled_run_workflow.py -q`
-- [ ] Full suite green: `pytest -q`
-- [ ] **Manual, before Task 5's commit:** run
+- [x] Full suite green: `pytest -q`
+- [x] **Manual, before Task 5's commit:** run
       `python -m scout.coach_link_health` once against the live corpus, then
       `python -m scripts.audit_link_health`, and confirm the picture is
       plausible — nearly everything verified, few or no newly-dead, and no
       whole-batch failure (which would indicate rate limiting or a `HEAD`
       problem rather than genuinely dead links). Open two or three of the URLs
       the audit reports as dead and confirm they really are.
-- [ ] Re-run it a second time and confirm the batch advances to different rows
+- [x] Re-run it a second time and confirm the batch advances to different rows
       rather than rechecking the first ones.
 
 ## Observability
@@ -163,4 +163,32 @@ until that is reverted too. To restore every excluded resource, use the
 
 ## Notes / Learnings
 
-<Filled in during execution.>
+Manual verification against production (2026-07-28): the production
+`resources` corpus is currently **empty** (0 rows) — pre-existing and
+unrelated to P5, likely the P1 aggregator's weekly step never successfully
+populating it (its scheduled step is `continue-on-error`, so a failure there
+is silent; `GITHUB_PAT` on the VM is one candidate cause, per the comment
+already on that step). Confirmed the schema migration itself had never been
+applied to prod either — `apply_schema` only runs from `scout.main`'s pipeline
+path, not from either coach entrypoint alone, so it was applied by hand ahead
+of this verification (idempotent `ADD COLUMN IF NOT EXISTS`, matches plan.md).
+
+With the real corpus empty, `check_url`'s real-URL result (Phase 2) plus a
+throwaway three-row round trip proved the full stack end-to-end against real
+Postgres and the real internet: `coach_link_health` reported
+`3 checked, 2 verified, 0 recovered, 1 newly dead, 0 still dead, 0 failing` on
+first run (one row a deliberately fake GitHub path) and
+`3 checked, 2 verified, 0 recovered, 0 newly dead, 1 still dead, 0 failing` on
+a second run, matching the spec's verdict table exactly. The read-only audit
+reported the same 1 dead / 2 live / 0 never-checked split with the correct URL
+and `HTTP 404` reason. The test rows were deleted afterward, restoring the
+corpus to its pre-existing empty state. Batch-advancement across runs (Phase 5
+Verification's last item) wasn't separately observable with only 3 rows inside
+a batch cap of 50 — that ordering (`NULLS FIRST`, `id` tiebreak) is already
+proven by Phase 3's DB-backed tests.
+
+The VM's app image is build-only (no source volume mount), so a manual test
+against a feature branch required a full `docker compose build` — its layer
+count is close to the VM's disk limit (see D-CC-4's noted image-size risk);
+had to `docker builder prune` first to fit. Worth remembering for future
+manual verification on other coach-related branches.

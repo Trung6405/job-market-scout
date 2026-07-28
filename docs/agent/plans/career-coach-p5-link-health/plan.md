@@ -1,7 +1,7 @@
 # Plan: Career Coach P5 — Link-Health Checker
 
-> **Status:** Not started
-> **Created:** 2026-07-28 · **Last updated:** 2026-07-28 (rebased onto `main` after the P3 and P4 merges)
+> **Status:** Complete
+> **Created:** 2026-07-28 · **Last updated:** 2026-07-28 (all 5 phases implemented, manually verified against production, and scheduled)
 > **Spec:** [spec.md](../../specs/career-coach-p5-link-health/spec.md)
 
 ---
@@ -18,18 +18,18 @@ existing daily scheduled run and never able to fail the pipeline.
 
 ## Acceptance Criteria
 
-- [ ] A run verifies a bounded batch of resources, oldest-checked first, and
+- [x] A run verifies a bounded batch of resources, oldest-checked first, and
       leaves each one with an updated verification time or failure state.
-- [ ] A resource returning 404/410 is excluded from retrieval on the first
+- [x] A resource returning 404/410 is excluded from retrieval on the first
       observation; a resource returning 5xx/timeout/429/403 is excluded only
       after the configured number of consecutive failures.
-- [ ] A previously-excluded resource is retrievable again after one successful
+- [x] A previously-excluded resource is retrievable again after one successful
       check, with its failure count reset.
-- [ ] `retrieve_for_skills` never returns a resource marked dead.
-- [ ] A never-checked resource (`last_verified IS NULL`) is still retrievable.
-- [ ] The job is invocable as its own module, logs a per-run summary, exits
+- [x] `retrieve_for_skills` never returns a resource marked dead.
+- [x] A never-checked resource (`last_verified IS NULL`) is still retrievable.
+- [x] The job is invocable as its own module, logs a per-run summary, exits
       non-zero on failure, and its scheduled step cannot fail the pipeline run.
-- [ ] A read-only audit command reports the corpus's health distribution and
+- [x] A read-only audit command reports the corpus's health distribution and
       every dead resource with its reason, safe to run against production.
 
 ---
@@ -71,11 +71,11 @@ existing daily scheduled run and never able to fail the pipeline.
 
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
-| 1 | Health-state schema & settings | [phase-1-schema-and-settings.md](phase-1-schema-and-settings.md) | Not started |
-| 2 | Link checker | [phase-2-link-checker.md](phase-2-link-checker.md) | Not started |
-| 3 | Health-state persistence | [phase-3-persistence.md](phase-3-persistence.md) | Not started |
-| 4 | Retrieval exclusion | [phase-4-retrieval-exclusion.md](phase-4-retrieval-exclusion.md) | Not started |
-| 5 | Runner, entrypoint, audit & scheduling | [phase-5-runner-and-scheduling.md](phase-5-runner-and-scheduling.md) | Not started |
+| 1 | Health-state schema & settings | [phase-1-schema-and-settings.md](phase-1-schema-and-settings.md) | Complete |
+| 2 | Link checker | [phase-2-link-checker.md](phase-2-link-checker.md) | Complete |
+| 3 | Health-state persistence | [phase-3-persistence.md](phase-3-persistence.md) | Complete |
+| 4 | Retrieval exclusion | [phase-4-retrieval-exclusion.md](phase-4-retrieval-exclusion.md) | Complete |
+| 5 | Runner, entrypoint, audit & scheduling | [phase-5-runner-and-scheduling.md](phase-5-runner-and-scheduling.md) | Complete |
 
 > All phases are planned in advance — every row above has a written,
 > human-approved phase doc before phase 1 execution starts. If executing
@@ -181,12 +181,15 @@ existing daily scheduled run and never able to fail the pipeline.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All phase verification steps pass
-- [ ] Feature verified manually in a running environment (one real run against
-      the live corpus, summary counts inspected)
-- [ ] Docs / README updated where behaviour changed
-- [ ] No new lint or type-check warnings
+- [x] All acceptance criteria met
+- [x] All phase verification steps pass
+- [x] Feature verified manually in a running environment (real runs against
+      production Postgres and the real internet — see phase-5's Notes /
+      Learnings; the live corpus itself is empty, a pre-existing P1 gap, so
+      verification used throwaway rows inserted and removed for the purpose)
+- [x] Docs / README updated where behaviour changed (`docs/commands.md`)
+- [x] No new lint or type-check warnings (project has no lint/type-check
+      tooling configured)
 
 ## Update Rules
 

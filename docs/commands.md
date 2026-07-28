@@ -45,6 +45,23 @@ docker compose -f docker-compose.yaml -f docker-compose.prod.yaml \
   run --rm app python -m scout.rerender
 ```
 
+### Career Coach jobs (aggregator, link-health)
+The scheduled run wires these in automatically (aggregator weekly, link-health
+daily); run either manually against the compose stack:
+```bash
+docker compose -f docker-compose.yaml -f docker-compose.prod.yaml \
+  run --rm app python -m scout.coach_aggregator
+
+docker compose -f docker-compose.yaml -f docker-compose.prod.yaml \
+  run --rm app python -m scout.coach_link_health
+```
+Read-only audit of the corpus's link-health distribution, safe to run against
+production at any time — never issues a check or writes a row:
+```bash
+docker compose -f docker-compose.yaml -f docker-compose.prod.yaml \
+  run --rm app python -m scripts.audit_link_health
+```
+
 ### Manage the stack
 ```bash
 docker compose up -d              # start in the background
