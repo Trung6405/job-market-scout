@@ -17,7 +17,7 @@ from scout.shared.db import (
     get_run_details,
     get_run_summaries,
 )
-from scout.shared.schemas import Listing, Profile, RunListingDetail
+from scout.shared.schemas import Listing, Profile, Run, RunListingDetail
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
@@ -203,10 +203,25 @@ async def render_run(
     conn: asyncpg.Connection,
     run_id: int,
     settings: Settings,
+    *,
+    run: Run | None = None,
+    adjacent: tuple[Run | None, Run | None] | None = None,
+    dashboard_only: bool = False,
 ) -> dict[str, Path]:
-    run = await get_run(conn, run_id)
+    """Render a run's dashboard and (unless ``dashboard_only``) its job-detail pages.
+
+    ``run``/``adjacent`` let callers that already hold those rows (rerender's
+    ordered run list, the agent's prev-day lookup) skip re-querying them.
+    ``dashboard_only`` exists for the previous-day re-render: only the
+    dashboard's next-day link changes, so its job-detail pages would be
+    rewritten byte-identically.
+    """
+    if run is None:
+        run = await get_run(conn, run_id)
     details = await get_run_details(conn, run_id)
-    prev_run, next_run = await get_adjacent_runs(conn, run.run_date)
+    prev_run, next_run = (
+        adjacent if adjacent is not None else await get_adjacent_runs(conn, run.run_date)
+    )
 
     run_dir = Path(settings.report_output_dir) / str(run.run_date)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -225,6 +240,9 @@ async def render_run(
     dashboard_path = run_dir / "dashboard.html"
     dashboard_path.write_text(dashboard_html, encoding="utf-8")
     paths["dashboard"] = dashboard_path
+
+    if dashboard_only:
+        return paths
 
     job_detail_template = _env.get_template("job-detail.html.jinja")
     for detail in details:

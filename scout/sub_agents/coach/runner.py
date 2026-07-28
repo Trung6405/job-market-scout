@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 
@@ -56,9 +57,14 @@ def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:
             if url not in seen:
                 seen.add(url)
                 candidates.append(url)
-    for index, skill in enumerate(skills):
-        if index > 0:
-            time.sleep(_SEARCH_THROTTLE_SECONDS)
+    last_search_at: float | None = None
+    for skill in skills:
+        if last_search_at is not None:
+            # Sleep only for what's left of the throttle window: request
+            # latency already spent counts toward the 30/min pacing.
+            elapsed = time.monotonic() - last_search_at
+            time.sleep(max(0.0, _SEARCH_THROTTLE_SECONDS - elapsed))
+        last_search_at = time.monotonic()
         try:
             skill_urls = search_candidates(skill, settings)
         except requests.HTTPError as exc:
@@ -86,7 +92,12 @@ async def run_coach_aggregator(settings: Settings | None = None) -> CoachSummary
             skills = await get_distinct_gap_skills(conn)
             existing_urls = await get_resource_urls(conn)
 
-        candidate_urls = _gather_candidate_urls(active_settings, skills)
+        # Runs in a worker thread: the gather loop is throttled requests +
+        # time.sleep, which must not block the event loop while the asyncpg
+        # pool is open.
+        candidate_urls = await asyncio.to_thread(
+            _gather_candidate_urls, active_settings, skills
+        )
         # Dedup happens once, up front, against a single snapshot of stored
         # URLs — an already-stored candidate is skipped before any
         # README fetch, LLM tagging, or embedding call (spec requirement).
@@ -94,27 +105,32 @@ async def run_coach_aggregator(settings: Settings | None = None) -> CoachSummary
 
         inserted = 0
         duplicates = 0
-        for url in new_urls:
-            readme = fetch_readme(url, active_settings)
-            if readme is None:
-                continue
-            tags = await tag_readme(readme, active_settings)
-            resource = Resource(
-                url=url,
-                title=_title_from_url(url),
-                resource_type=tags.resource_type,
-                skills=_canonical_skills(tags.skills),
-                level=tags.level,
-                summary=tags.summary,
-                source="github",
-            )
-            embedding = embed(tags.summary)
-            async with pool.acquire() as conn:
+        # One connection for the whole ingest loop rather than one
+        # acquire/release per row; the blocking README fetch goes through a
+        # worker thread so the loop's awaits stay serviceable.
+        async with pool.acquire() as conn:
+            for url in new_urls:
+                readme = await asyncio.to_thread(
+                    fetch_readme, url, active_settings
+                )
+                if readme is None:
+                    continue
+                tags = await tag_readme(readme, active_settings)
+                resource = Resource(
+                    url=url,
+                    title=_title_from_url(url),
+                    resource_type=tags.resource_type,
+                    skills=_canonical_skills(tags.skills),
+                    level=tags.level,
+                    summary=tags.summary,
+                    source="github",
+                )
+                embedding = embed(tags.summary)
                 result = await insert_resource(conn, resource, embedding)
-            if result == "new":
-                inserted += 1
-            else:
-                duplicates += 1
+                if result == "new":
+                    inserted += 1
+                else:
+                    duplicates += 1
         return CoachSummary(
             candidates_seen=len(candidate_urls),
             inserted=inserted,

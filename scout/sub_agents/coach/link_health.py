@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 
@@ -19,6 +20,10 @@ _MAX_REASON_LENGTH = 300
 # Sequential, like the aggregator's GitHub Search throttle — the corpus is
 # GitHub-heavy today, and this keeps one run from bursting requests at it.
 _CHECK_THROTTLE_SECONDS = 1.0
+# One keep-alive session for the whole batch — per-call requests.head/get
+# would pay a fresh TCP+TLS handshake per request, including between the
+# HEAD and its follow-up GET to the very same URL.
+_session = requests.Session()
 
 
 def classify_status(status_code: int) -> LinkVerdict:
@@ -59,7 +64,7 @@ def check_url(url: str, settings: Settings) -> LinkCheck:
     """
     timeout = settings.coach_link_health_timeout_seconds
     try:
-        head_response = requests.head(url, timeout=timeout, allow_redirects=True)
+        head_response = _session.head(url, timeout=timeout, allow_redirects=True)
     except requests.RequestException as exc:
         return LinkCheck(verdict="transient", reason=_reason(exc))
 
@@ -68,7 +73,7 @@ def check_url(url: str, settings: Settings) -> LinkCheck:
         return LinkCheck(verdict=verdict)
 
     try:
-        get_response = requests.get(
+        get_response = _session.get(
             url, timeout=timeout, allow_redirects=True, stream=True
         )
     except requests.RequestException as exc:
@@ -78,6 +83,18 @@ def check_url(url: str, settings: Settings) -> LinkCheck:
     get_verdict = classify_status(get_response.status_code)
     reason = None if get_verdict == "healthy" else f"HTTP {get_response.status_code}"
     return LinkCheck(verdict=get_verdict, reason=reason)
+
+
+def _throttled_check(url: str, settings: Settings, throttle: bool) -> LinkCheck:
+    """Pace and run one check in a worker thread.
+
+    Both the inter-request sleep and the blocking HTTP calls run off the
+    event loop, so an open asyncpg pool keeps getting serviced while a slow
+    host times out.
+    """
+    if throttle:
+        time.sleep(_CHECK_THROTTLE_SECONDS)
+    return check_url(url, settings)
 
 
 async def run_link_health(settings: Settings | None = None) -> LinkHealthSummary:
@@ -106,10 +123,10 @@ async def run_link_health(settings: Settings | None = None) -> LinkHealthSummary
                 "failing": 0,
             }
             for index, row in enumerate(batch):
-                if index > 0:
-                    time.sleep(_CHECK_THROTTLE_SECONDS)
                 try:
-                    check = check_url(row["url"], active_settings)
+                    check = await asyncio.to_thread(
+                        _throttled_check, row["url"], active_settings, index > 0
+                    )
                 except Exception as exc:  # noqa: BLE001 - one row must not sink the batch
                     check = LinkCheck(verdict="transient", reason=_reason(exc))
 

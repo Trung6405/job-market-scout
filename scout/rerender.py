@@ -33,8 +33,15 @@ async def rerender_all() -> None:
     try:
         async with pool.acquire() as conn:
             runs = await list_runs(conn, _ALL_RUNS_LIMIT)
-            for run in runs:
-                await render_run(conn, run.id, settings)
+            # list_runs is run_date DESC, so a run's neighbours are its list
+            # neighbours — pass them in rather than re-querying per run.
+            for index, run in enumerate(runs):
+                prev_run = runs[index + 1] if index + 1 < len(runs) else None
+                next_run = runs[index - 1] if index > 0 else None
+                await render_run(
+                    conn, run.id, settings,
+                    run=run, adjacent=(prev_run, next_run),
+                )
                 logger.info("re-rendered run %s (%s)", run.id, run.run_date)
 
             await render_history(conn, settings)

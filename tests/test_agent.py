@@ -192,7 +192,7 @@ async def test_scout_pipeline_agent_reports_progress_for_full_run(monkeypatch):
             ("finish_run", run_id, listings_scraped, listings_scored)
         )
 
-    async def _fake_render_run(conn, run_id, settings):
+    async def _fake_render_run(conn, run_id, settings, **kwargs):
         calls.append(("render_run", run_id))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
@@ -347,7 +347,7 @@ async def test_scout_pipeline_agent_renders_report_after_persisting_run(
     async def _fake_record_listing_tips(conn, run_id, tips_by_match):
         pass
 
-    async def _fake_render_run(conn, run_id, settings):
+    async def _fake_render_run(conn, run_id, settings, **kwargs):
         calls.append(("render_run", conn, run_id, settings))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
@@ -489,7 +489,7 @@ async def test_scout_pipeline_agent_persists_grounded_tips(monkeypatch):
         call_order.append("record")
         recorded.append((run_id, tips_by_match))
 
-    async def _fake_render_run(conn, run_id, settings):
+    async def _fake_render_run(conn, run_id, settings, **kwargs):
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
     async def _fake_render_history(conn, settings):
@@ -608,7 +608,7 @@ async def test_scout_pipeline_agent_survives_a_failing_coach_stage(monkeypatch):
     async def _fake_record_listing_tips(conn, run_id, tips_by_match):
         calls.append(("record_listing_tips", tips_by_match))
 
-    async def _fake_render_run(conn, run_id, settings):
+    async def _fake_render_run(conn, run_id, settings, **kwargs):
         calls.append("render_run")
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
@@ -757,7 +757,7 @@ async def test_scout_pipeline_agent_persists_run(monkeypatch, db_pool):
 
     render_calls = []
 
-    async def _fake_render_run(conn, run_id, settings):
+    async def _fake_render_run(conn, run_id, settings, **kwargs):
         render_calls.append(("render_run", run_id))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
@@ -851,7 +851,7 @@ async def test_scout_pipeline_agent_rerenders_previous_day_so_its_next_link_fill
 
     render_calls = []
 
-    async def _fake_render_run(conn, run_id, settings):
+    async def _fake_render_run(conn, run_id, settings, **kwargs):
         render_calls.append(("render_run", run_id))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
@@ -938,7 +938,7 @@ async def test_scout_pipeline_agent_warns_when_extraction_drops_listings(monkeyp
     async def _fake_run_requirements_extraction(listings, settings=None):
         return []
 
-    async def _fake_render_run(conn, run_id, settings):
+    async def _fake_render_run(conn, run_id, settings, **kwargs):
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
     async def _fake_render_history(conn, settings):
@@ -1006,7 +1006,7 @@ async def test_scout_pipeline_agent_same_date_rerun_is_idempotent(
     def _fake_render_profile(profile, settings):
         return Path("reports/profile.html")
 
-    async def _fake_render_run(conn, run_id, settings):
+    async def _fake_render_run(conn, run_id, settings, **kwargs):
         return {"dashboard": Path("reports/x/dashboard.html")}
 
     async def _fake_render_history(conn, settings):
@@ -1078,7 +1078,7 @@ async def test_scout_pipeline_agent_rolls_back_on_mid_persist_failure(
     def _fake_render_profile(profile, settings):
         return Path("reports/profile.html")
 
-    async def _fake_render_run(conn, run_id, settings):
+    async def _fake_render_run(conn, run_id, settings, **kwargs):
         return {"dashboard": Path("reports/x/dashboard.html")}
 
     async def _fake_render_history(conn, settings):
@@ -1183,7 +1183,7 @@ async def test_scout_pipeline_agent_records_gaps_when_profile_exists(monkeypatch
     async def _fake_record_listing_tips(conn, run_id, tips_by_match):
         calls.append(("record_listing_tips", run_id, tips_by_match))
 
-    async def _fake_render_run(conn, run_id, settings):
+    async def _fake_render_run(conn, run_id, settings, **kwargs):
         calls.append(("render_run", run_id))
         return {"dashboard": Path("reports/2026-07-21/dashboard.html")}
 
