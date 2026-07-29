@@ -346,3 +346,32 @@ only the first pays the wake, and the corpus is small — but the budget is now
 being asserted against a materially weaker set of assumptions than when it was
 written. Region selection should minimise the distance from the VM, and this
 should be measured rather than assumed once the instance exists.
+
+### A7 — The `resources` corpus is empty, which weakens this spec's own reasoning *(2026-07-29)*
+
+Measuring the database for A5's storage question turned up something the spec
+had assumed away: **`resources` holds 0 rows and 0 embeddings.** The whole
+database is 12 MB, of which `listings` is 3.5 MB across 880 rows; `runs` holds
+8 rows spanning 2026-07-22 to 2026-07-29.
+
+Three claims in the approved text are affected:
+
+- The Alternatives table rejected "start fresh on the new instance without
+  copying anything" partly because "the corpus was accumulated by weekly
+  aggregation runs that cost GitHub API budget and LLM tagging spend to
+  produce." **There is no corpus.** The other half of that reasoning — the run
+  history is what the dashboard's history page displays — still holds, and is
+  reason enough to migrate rather than start fresh.
+- The Success Criterion "every resource in the corpus is still retrievable with
+  its embedding intact" is satisfiable only vacuously.
+- The Must-have "with vector embeddings preserved … verified by comparing row
+  counts" likewise. The embedding count check in phase 3 was singled out in the
+  plan as the one part of the copy whose failure would be silent; against an
+  empty table it compares 0 to 0 and proves nothing. It is kept, because it
+  costs nothing and becomes meaningful the moment the corpus fills.
+
+This is recorded, not fixed. It means P6 delivers the *reachability* half of
+FR-CC-13 while the resource half stays unanswerable until aggregation actually
+populates the corpus — which P7's `/resources <skill>` will need. Human
+decision on 2026-07-29 was to continue: an empty table migrates fine, and the
+aggregator will write to whichever database is current.

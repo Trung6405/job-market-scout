@@ -1,8 +1,16 @@
-# infra/ — Azure infrastructure-as-code
+# infra/ — infrastructure-as-code
 
 Bicep templates that create the single Azure VM hosting the job-market-scout
-containers. This folder is **IaC only** — no secrets, no CI/CD YAML (those live
-in `.github/workflows/`: `deploy.yml`, `scheduled-run.yml`, `infra-provision.yml`).
+containers, plus a script that provisions the managed Postgres the pipeline
+uses as its system of record. This folder is **IaC only** — no secrets, no
+CI/CD YAML (those live in `.github/workflows/`: `deploy.yml`,
+`scheduled-run.yml`, `infra-provision.yml`).
+
+Not everything here is Bicep: the database is a **Neon** project, because
+pricing Azure Database for PostgreSQL against this subscription came to
+$24.57/month on a $100 student credit. See
+[`docs/agent/specs/career-coach-p6-managed-postgres/spec.md`](../docs/agent/specs/career-coach-p6-managed-postgres/spec.md),
+Amendments A1–A3.
 
 Implements the CI/CD-for-Azure-VM design in
 [`docs/agent/specs/tracker-orchestration/spec.md`, Appendix C](../docs/agent/specs/tracker-orchestration/spec.md)
@@ -16,6 +24,7 @@ Implements the CI/CD-for-Azure-VM design in
 | `main.bicepparam` | Fill-in parameters. Public SSH key only — safe to commit. |
 | `cloud-init.yaml` | First-boot script: installs Docker + Compose plugin + rsync and creates `/opt/job-market-scout` (the `deploy.yml` workflow rsyncs the code in later). |
 | `azure-deployment.drawio` | 2-page diagram: deployment/CI-CD flow + network topology. |
+| `provision_neon.py` | Idempotently ensures the Neon project backing the pipeline exists (Free plan, Postgres 16, `aws-ap-southeast-2`). Run by `infra-provision.yml`; re-running reuses the existing project. Prints a connection string only behind `--print-connection-string`, so the CI step cannot leak a DSN into its log. |
 
 ## Prerequisites
 
@@ -45,8 +54,12 @@ These are account/portal steps, outside the Bicep:
 2. **GitHub Actions — secrets & variables** (repo → Settings → Secrets and
    variables → Actions):
    - **Secrets:** the keys from [`scout/.env.example`](../scout/.env.example),
-     plus `VM_SSH_PRIVATE_KEY` and
-     `AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID`.
+     plus `VM_SSH_PRIVATE_KEY`,
+     `AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID`,
+     and `NEON_API_KEY` (created at
+     <https://console.neon.tech> → Account settings → API keys) with
+     `NEON_DATABASE_URL` holding the Neon DSN until the P6 cutover moves it
+     into `DATABASE_URL`.
      The candidate source is `scout/profile.json`, which is committed and
      reaches the VM via rsync — no resume secret is needed.
    - **Variables:** `VM_HOST` (VM public IP), `VM_USER` (default `azureuser`),

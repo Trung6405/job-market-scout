@@ -45,7 +45,7 @@ while the pipeline is still writing to the old database.
   or growing fast enough to reach it soon, this plan does not work as written
   and the decision returns to the human.
 - **Steps:**
-  - [ ] Start the VM and measure. The whole database, the per-table breakdown,
+  - [x] Start the VM and measure. The whole database, the per-table breakdown,
     and the growth rate all matter — a comfortable total with a `listings`
     table growing megabytes a day is not comfortable:
 
@@ -64,7 +64,7 @@ while the pipeline is still writing to the old database.
             ORDER BY pg_total_relation_size(c.oid) DESC\""
     ```
 
-  - [ ] Estimate growth from the run history — bytes per run is the number that
+  - [x] Estimate growth from the run history — bytes per run is the number that
     decides how long 0.5 GB lasts:
 
     ```bash
@@ -75,40 +75,34 @@ while the pipeline is still writing to the old database.
         \"SELECT count(*) AS listings, pg_size_pretty(avg(length(description))::bigint) AS avg_description FROM listings\""
     ```
 
-  - [ ] Deallocate again immediately — the VM is not meant to be up:
+  - [x] Deallocate again immediately — the VM is not meant to be up:
 
     ```bash
     az vm deallocate -g "$RG" -n scout-vm
     ```
 
-  - [ ] Confirm Neon serves a region near `newzealandnorth`. Sydney
-    (`aws-ap-southeast-2`) is the expected answer; verify rather than assume,
-    since it sets the per-query latency that spec A6 flags:
+  - [x] Confirm Neon serves a region near `newzealandnorth`, from
+    <https://neon.com/docs/introduction/regions> — no API key needed, so
+    this runs before Task 3. It sets the per-query latency spec A6 flags.
 
-    ```bash
-    curl -s -H "Authorization: Bearer $NEON_API_KEY" \
-      https://console.neon.tech/api/v2/api_keys >/dev/null && echo "key OK"
-    ```
-
-    Region availability is listed at
-    <https://neon.com/docs/introduction/regions>; record the chosen region id.
-
-  - [ ] Record in Notes: total size, per-table sizes, row counts, run count and
+  - [x] Record in Notes: total size, per-table sizes, row counts, run count and
     date span, implied growth per run, headroom against 0.5 GB, and the region.
-  - [ ] **STOP.** Do not proceed until the human has accepted the headroom.
-  - [ ] No commit.
+  - [x] **STOP.** Do not proceed until the human has accepted the headroom.
+  - [x] No commit.
 
 ### Task 2: The provisioning script
 
 - **Files:**
   - Create: `infra/provision_neon.py`
   - Create: `tests/test_provision_neon.py`
+  - No `infra/__init__.py` — `scripts/` already imports as a namespace package
+    (`from scripts.audit_link_health import …`), so `infra/` does too.
   - Modify: `.github/workflows/infra-provision.yml`
   - Modify: `infra/README.md`
 - **Gate:** none — committing the script provisions nothing.
 - **Steps:**
 
-  - [ ] **Step 1: Write the failing test**
+  - [x] **Step 1: Write the failing test**
 
     Create `tests/test_provision_neon.py`. The API round-trip is not worth
     faking; what is worth testing is the idempotency decision and the
@@ -181,13 +175,13 @@ while the pipeline is still writing to the old database.
         assert "scout:***@h" in redact(uri)
     ```
 
-  - [ ] **Step 2: Run the test to verify it fails**
+  - [x] **Step 2: Run the test to verify it fails**
 
     Run: `pytest tests/test_provision_neon.py -v`
     Expected: FAIL at collection — `ModuleNotFoundError: No module named
     'infra.provision_neon'`
 
-  - [ ] **Step 3: Write the script**
+  - [x] **Step 3: Write the script**
 
     Create `infra/provision_neon.py`:
 
@@ -342,8 +336,6 @@ while the pipeline is still writing to the old database.
         sys.exit(main())
     ```
 
-    Add `infra/__init__.py` (empty) so `infra.provision_neon` imports in tests.
-
     In `.github/workflows/infra-provision.yml`, add a step after the dashboard
     one. Note it deliberately omits `--print-connection-string`:
 
@@ -357,12 +349,12 @@ while the pipeline is still writing to the old database.
               python infra/provision_neon.py
     ```
 
-  - [ ] **Step 4: Run the test to verify it passes**
+  - [x] **Step 4: Run the test to verify it passes**
 
     Run: `pytest tests/test_provision_neon.py -v`
     Expected: PASS (6 tests)
 
-  - [ ] **Step 5: Commit**
+  - [x] **Step 5: Commit**
 
     ```bash
     git add infra/provision_neon.py infra/__init__.py tests/test_provision_neon.py \
@@ -522,5 +514,32 @@ names it.
 - Neon Free is **0.5 GB storage / 100 CU-hours per month**, and **IP Allow is
   Scale-only** — no network restriction is possible on this plan, which is the
   one capability the rejected Azure design had and this one does not.
+
+### Task 1 measurements *(2026-07-29)*
+
+Total database: **12 MB** — 2.3% of the 512 MB ceiling.
+
+| Table | Size | Rows |
+|-------|------|------|
+| `listings` | 3,544 kB | 880 (avg description 4,667 bytes) |
+| `run_listings` | 384 kB | |
+| `listing_gaps` | 312 kB | |
+| `resources` | 48 kB | **0** (0 with embeddings) |
+| `runs` | 40 kB | 8 (2026-07-22 → 2026-07-29) |
+| `listing_tips` | 24 kB | |
+
+Growth is ~1.5 MB/day over 8 days of history, so 0.5 GB is roughly **11 months**
+of runway — a ceiling with a date on it, not headroom to ignore. `listings`
+never deletes: a closed listing keeps its description forever, so the largest
+table only grows. If this needs extending later, dropping descriptions from
+long-closed listings is the obvious lever, and it is out of scope here.
+
+Region: **`aws-ap-southeast-2`** (Sydney), the nearest Neon offers to the VM's
+`newzealandnorth`. Neon's own Azure regions are deprecated to new projects, so
+co-locating inside Azure was not available even in principle.
+
+**`resources` is empty** — see spec Amendment A7. Human decision: carry on with
+P6 regardless, since reachability is what this phase delivers and the
+aggregator will populate whichever database is current.
 
 *(remaining findings filled in during execution)*
