@@ -69,7 +69,7 @@ history and corpus are intact on it, and reverting is a one-line secret change.
 
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
-| 1 | Configuration seam | [phase-1-configuration-seam.md](phase-1-configuration-seam.md) | Not started |
+| 1 | Configuration seam | [phase-1-configuration-seam.md](phase-1-configuration-seam.md) | In progress |
 | 2 | Provision the instance | [phase-2-provision-instance.md](phase-2-provision-instance.md) | Not started |
 | 3 | Migrate and verify | [phase-3-migrate-and-verify.md](phase-3-migrate-and-verify.md) | Not started |
 | 4 | Cutover and documentation | [phase-4-cutover-and-docs.md](phase-4-cutover-and-docs.md) | Not started |

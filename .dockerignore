@@ -45,4 +45,5 @@ scout/profile.json
 # Docker itself
 Dockerfile
 docker-compose.yaml
+docker-compose.override.yaml
 .dockerignore

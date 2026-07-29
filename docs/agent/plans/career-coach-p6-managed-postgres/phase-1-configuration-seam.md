@@ -1,7 +1,7 @@
 # Phase 1: Configuration Seam
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** In progress
 > **Depends on:** nothing
 
 ---
@@ -35,13 +35,13 @@ if the pin ever comes back.
   so the current value cannot be recorded first; it is unused today (the
   compose file shadows it), so overwriting it changes nothing that runs.
 - **Steps:**
-  - [ ] Confirm the secret exists and note its current `Updated` timestamp:
+  - [x] Confirm the secret exists and note its current `Updated` timestamp:
 
     ```bash
     gh secret list --repo Trung6405/job-market-scout | grep DATABASE_URL
     ```
 
-  - [ ] Set it to the VM's in-network DSN — the exact value
+  - [x] Set it to the VM's in-network DSN — the exact value
     `docker-compose.yaml` pins today, so the deploy in Task 4 is a no-op in
     behaviour:
 
@@ -50,13 +50,15 @@ if the pin ever comes back.
       --body 'postgresql://scout:scout@postgres:5432/scout'
     ```
 
-  - [ ] Verify the `Updated` timestamp moved:
+  - [x] Verify the `Updated` timestamp moved (`2026-07-22T04:39:42Z` →
+    `2026-07-29T04:32:49Z`):
 
     ```bash
     gh secret list --repo Trung6405/job-market-scout | grep DATABASE_URL
     ```
 
-  - [ ] No commit — nothing in the repo changed.
+  - [x] No commit — nothing in the repo changed (these ticks ride with Task 2's
+    commit, since Task 1 produces none of its own).
 
 ### Task 2: Remove the pin, move the local value to an override file
 
@@ -69,7 +71,7 @@ if the pin ever comes back.
 - **Gate:** none
 - **Steps:**
 
-  - [ ] **Step 1: Write the failing test**
+  - [x] **Step 1: Write the failing test**
 
     Create `tests/test_compose_database_url.py`:
 
@@ -168,14 +170,14 @@ if the pin ever comes back.
         assert _PROD_COMPOSE_FLAGS in _compose_run_scripts()[step_key]
     ```
 
-  - [ ] **Step 2: Run the test to verify it fails**
+  - [x] **Step 2: Run the test to verify it fails**
 
     Run: `pytest tests/test_compose_database_url.py -v`
     Expected: FAIL — `test_base_compose_does_not_pin_database_url` asserts
     against the pinned value, and `test_local_override_supplies_the_in_network_url`
     errors with `FileNotFoundError` for `docker-compose.override.yaml`.
 
-  - [ ] **Step 3: Make the change**
+  - [x] **Step 3: Make the change**
 
     In `docker-compose.yaml`, delete the `DATABASE_URL` line so the `app`
     service's environment block keeps only the MCP URL:
@@ -228,23 +230,34 @@ if the pin ever comes back.
     .dockerignore
     ```
 
-  - [ ] **Step 4: Run the test to verify it passes**
+  - [x] **Step 4: Run the test to verify it passes**
 
     Run: `pytest tests/test_compose_database_url.py -v`
     Expected: PASS (9 tests — 4 file assertions, the discovery guard, and 4
     parametrized invocation checks)
 
-  - [ ] **Step 5: Verify the local stack still starts against its own Postgres**
+  - [x] **Step 5: Verify both merges resolve the way they have to**
+
+    As originally written this step was `docker compose up -d postgres app`,
+    which is wrong: the `app` service's default command is `python -m
+    scout.main`, so bringing it up would have run a full pipeline — a live
+    scrape and the LLM spend that goes with it — to read one variable.
+    `config` renders the same merge without starting anything.
 
     ```bash
-    docker compose up -d postgres app
-    docker compose exec app python -c "from scout.config import Settings; print(Settings().database_url)"
-    docker compose down
+    cp scout/.env.example scout/.env   # gitignored; the worktree had none
+    docker compose config | grep DATABASE_URL
+    docker compose -f docker-compose.yaml -f docker-compose.prod.yaml config | grep DATABASE_URL
     ```
 
-    Expected: `postgresql://scout:scout@postgres:5432/scout`
+    Expected, and observed: `postgresql://scout:scout@postgres:5432/scout` for
+    the local merge (the override applies) and
+    `postgresql://scout:scout@localhost:5433/scout` for the production merge —
+    the value from `scout/.env`, proving the production path now reads the
+    rendered file and nothing else. On the VM that file is rendered from the
+    `DATABASE_URL` secret, which is the whole point.
 
-  - [ ] **Step 6: Commit**
+  - [x] **Step 6: Commit**
 
     ```bash
     git add docker-compose.yaml docker-compose.override.yaml .dockerignore \
@@ -458,4 +471,22 @@ its previous behaviour. The Task 3 commit is independent and can stay. The
 
 ## Notes / Learnings
 
-*(filled in during execution)*
+- **Task 1:** the `DATABASE_URL` secret was last written `2026-07-22T04:39:42Z`
+  and is now `2026-07-29T04:32:49Z`. Its previous value is unrecoverable, as
+  expected — it was shadowed by the compose pin, so nothing depended on it.
+- **Task 2 Step 5 was wrong as planned** and was corrected in place. It said
+  `docker compose up -d postgres app`, but `app`'s default command is
+  `python -m scout.main`: bringing the service up would have run a live scrape
+  and a full LLM cycle to read one environment variable. `docker compose config`
+  renders the identical merge and starts nothing. Worth carrying forward — any
+  later step that reaches for `up`/`exec` on `app` to inspect configuration
+  wants `config` or `run --rm` with an explicit command instead.
+- The worktree had no `scout/.env` (gitignored, and it is a fresh checkout), so
+  Compose refused to resolve `env_file` at all. Seeded it from
+  `scout/.env.example`. That file is what stands in for the deploy-rendered one
+  locally, which is why the production merge below reads `localhost:5433`.
+- The two merges resolve as required: local (no `-f`) →
+  `postgresql://scout:scout@postgres:5432/scout` from the override; production
+  (`-f docker-compose.yaml -f docker-compose.prod.yaml`) →
+  `postgresql://scout:scout@localhost:5433/scout`, i.e. straight from
+  `scout/.env` with the override correctly ignored.

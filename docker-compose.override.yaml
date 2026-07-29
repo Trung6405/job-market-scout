@@ -1,0 +1,15 @@
+# Local-development overlay. Compose auto-loads this file only when no -f
+# flag is given, so `docker compose up` picks it up and the production
+# invocation (-f docker-compose.yaml -f docker-compose.prod.yaml) does not.
+#
+# It exists because DATABASE_URL can no longer be pinned in the base file:
+# on the VM that variable has to come from scout/.env, which the deploy
+# renders from the DATABASE_URL secret, and an inline environment value
+# would beat the env_file and shadow it (that shadow is exactly what P6
+# removed). Locally scout/.env holds the host-side DSN (localhost:5433) so
+# pytest can reach Postgres from outside Docker, which is not reachable
+# from inside the app container — hence this in-network value.
+services:
+  app:
+    environment:
+      DATABASE_URL: postgresql://scout:scout@postgres:5432/scout
