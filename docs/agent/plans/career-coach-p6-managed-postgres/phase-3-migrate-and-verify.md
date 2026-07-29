@@ -3,6 +3,10 @@
 > **Parent plan:** [plan.md](plan.md)
 > **Status:** Not started
 > **Depends on:** Phase 2 complete (the instance exists, TLS and pgvector proven)
+>
+> **This is the last phase that executes in the current pass.** Scope is
+> evaluation only (spec A1): the cutover in phase 4 is deferred, so this phase
+> now ends by tearing the instance down rather than handing it on.
 
 ---
 
@@ -402,6 +406,49 @@ DSNs come from the environment, not argv, so neither lands in shell history."
 
   - [ ] Paste the full report into Notes below.
   - [ ] No commit.
+
+### Task 4: Record the evaluation and tear the instance down
+
+- **Files:** findings recorded in this doc's Notes.
+- **Gate:** ⚠️ human sign-off before deletion — it is irreversible, and it is
+  the point at which the evaluation's cost stops accruing. Confirm the numbers
+  are captured first; they are the whole return on this pass.
+- **Steps:**
+  - [ ] Confirm every measurement is written into Notes: the verification
+    report, the observed Postgres and pgvector versions, the TLS result, and
+    the latency figures from phase 2 Task 4. Once the server is gone these
+    cannot be re-derived without paying again.
+  - [ ] Confirm nothing points at the instance — `DATABASE_URL` must still name
+    the VM's container, since phase 4 never ran:
+
+    ```bash
+    ssh -i ~/.ssh/scout_vm azureuser@"$VM_HOST"       "cd /opt/job-market-scout && docker compose -f docker-compose.yaml -f docker-compose.prod.yaml         run --rm app python -c \"
+    from urllib.parse import urlparse
+    from scout.config import Settings
+    print(urlparse(Settings().database_url).hostname)\""
+    ```
+
+    Expected: `postgres`. Anything else means a cutover happened and deleting
+    the server would strand data — stop.
+
+  - [ ] Delete the server:
+
+    ```bash
+    az postgres flexible-server delete -g "$RESOURCE_GROUP" -n trung6405-scout-pg --yes
+    ```
+
+  - [ ] Confirm the cost stopped:
+
+    ```bash
+    az postgres flexible-server list -g "$RESOURCE_GROUP" -o table
+    ```
+
+    Expected: no rows.
+
+  - [ ] Leave `infra/postgres.bicep` and its guards committed. The template is
+    the deliverable that makes re-provisioning a dispatch rather than a
+    redesign when the standing cost is funded.
+  - [ ] No commit beyond the Notes update.
 
 ---
 

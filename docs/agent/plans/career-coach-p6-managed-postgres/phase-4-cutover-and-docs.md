@@ -1,8 +1,20 @@
 # Phase 4: Cutover and Documentation
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
-> **Depends on:** Phase 3 complete (counts verified and read by the human)
+> **Status:** Deferred — not part of the current pass
+> **Depends on:** Phase 3 complete (counts verified and read by the human), and
+> a funded decision to carry the instance's standing cost
+
+> **Deferred 2026-07-29 (spec A1).** The instance costs $24.57/month against a
+> $100 student credit, so it is being run as a days-long evaluation and torn
+> down at the end of phase 3. This phase moves the system of record, which is
+> exactly the step that must not happen to an instance with a deletion date:
+> rolling the `DATABASE_URL` secret back restores the connection, not the data,
+> so any run recorded here would be lost on teardown.
+>
+> Nothing below is wrong — it is the plan for when the cost is funded. What it
+> would additionally need at that point is a migrate-back step, since "delete
+> the instance" stops being free once it holds the only copy of anything.
 
 ---
 

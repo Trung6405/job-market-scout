@@ -288,7 +288,12 @@ Two readings, and they lead to different work:
   that requires migrating the data back first, which is a restore rather than
   a configuration flip and needs its own step in the plan.
 
-Unresolved as of this amendment; it must be answered before phase 4 executes.
+**Resolved 2026-07-29: evaluation only.** Phases 1–3 execute — provision,
+migrate, probe, verify — and the instance is then torn down. Phase 4 does not
+run in this pass, so nothing is ever cut over and no data can be stranded.
+This buys every answer the plan was uncertain about (real cost, real latency,
+pgvector behaviour, restore fidelity) for a few dollars, and defers only the
+irreversible step, which was always the one needing a funded decision.
 
 ### A2 — The `resources` corpus is empty *(2026-07-29)*
 
