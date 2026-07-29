@@ -20,6 +20,7 @@ async def _fetch_role(
     results_wanted: int,
     hours_old: int,
     site_names: str,
+    country_indeed: str,
 ):
     logger.info("Scraping role=%r location=%r sites=%r ...", role, location, site_names)
     jobs = await fetch_jobs(
@@ -29,6 +30,7 @@ async def _fetch_role(
         resultsWanted=results_wanted,
         hoursOld=hours_old,
         siteNames=site_names,
+        countryIndeed=country_indeed,
         format="json",
     )
     logger.info("Scraped role=%r: %d raw jobs", role, len(jobs))
@@ -60,6 +62,7 @@ async def run_scraper(settings: Settings | None = None) -> list[Listing]:
                 active_settings.results_wanted,
                 active_settings.hours_old,
                 site_names,
+                active_settings.country_indeed,
             )
             for role in active_settings.search_roles
         )

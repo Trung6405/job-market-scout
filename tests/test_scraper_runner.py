@@ -38,6 +38,7 @@ async def test_run_scraper_calls_fetch_jobs_once_per_role(monkeypatch):
         search_locations=["Remote", "Sydney, AU"],
         results_wanted=15,
         hours_old=48,
+        country_indeed="Australia",
     )
 
     await run_scraper(settings)
@@ -47,6 +48,27 @@ async def test_run_scraper_calls_fetch_jobs_once_per_role(monkeypatch):
         assert params["location"] == "Remote, Sydney, AU"
         assert params["resultsWanted"] == 15
         assert params["hoursOld"] == 48
+        assert params["countryIndeed"] == "Australia"
+
+
+@pytest.mark.asyncio
+async def test_run_scraper_always_sends_country_indeed(monkeypatch):
+    """Absent the parameter the MCP schema defaults Indeed to the US index,
+    which returns nothing for non-US locations — so it must always be sent."""
+    calls = []
+
+    async def _fake_fetch_jobs(url, **params):
+        calls.append(params)
+        return []
+
+    monkeypatch.setattr(
+        "scout.sub_agents.scraper.runner.fetch_jobs", _fake_fetch_jobs
+    )
+    monkeypatch.delenv("COUNTRY_INDEED", raising=False)
+
+    await run_scraper(Settings(search_roles=["backend engineer"]))
+
+    assert calls[0]["countryIndeed"] == "USA"
 
 
 @pytest.mark.asyncio

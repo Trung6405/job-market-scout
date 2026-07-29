@@ -66,6 +66,13 @@ class Settings:
             "indeed,linkedin,zip_recruiter,glassdoor,google",
         )
     )
+    # jobspy's Indeed backend searches one country's index at a time, and the
+    # MCP server defaults it to "USA" when the parameter is absent — which
+    # silently returns nothing for non-US SEARCH_LOCATIONS. Mirror that default
+    # here so the value is always sent explicitly and stays configurable.
+    country_indeed: str = field(
+        default_factory=partial(_env_str, "COUNTRY_INDEED", "USA")
+    )
     results_wanted: int = field(
         default_factory=partial(_env_int, "RESULTS_WANTED", 20)
     )
