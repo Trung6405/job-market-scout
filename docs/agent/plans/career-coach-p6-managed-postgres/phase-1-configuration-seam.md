@@ -284,7 +284,7 @@ because a reintroduced environment block would be silent in normal operation."
 - **Gate:** none
 - **Steps:**
 
-  - [ ] **Step 1: Write the failing test**
+  - [x] **Step 1: Write the failing test**
 
     Create `tests/test_local_db_guard.py`:
 
@@ -327,13 +327,13 @@ because a reintroduced environment block would be silent in normal operation."
         assert not _is_local_dsn("postgresql://scout:scout@db.example.net:5432/scout")
     ```
 
-  - [ ] **Step 2: Run the test to verify it fails**
+  - [x] **Step 2: Run the test to verify it fails**
 
     Run: `pytest tests/test_local_db_guard.py -v`
     Expected: FAIL at collection with
     `ImportError: cannot import name '_is_local_dsn' from 'tests.conftest'`
 
-  - [ ] **Step 3: Write minimal implementation**
+  - [x] **Step 3: Write minimal implementation**
 
     In `tests/conftest.py`, add the import and the helper below
     `_test_database_url`:
@@ -371,12 +371,12 @@ because a reintroduced environment block would be silent in normal operation."
             await _ensure_test_database(dev_database_url)
     ```
 
-  - [ ] **Step 4: Run the test to verify it passes**
+  - [x] **Step 4: Run the test to verify it passes**
 
     Run: `pytest tests/test_local_db_guard.py -v`
     Expected: PASS (5 tests)
 
-  - [ ] **Step 5: Verify the fixture itself still works**
+  - [x] **Step 5: Verify the fixture itself still works**
 
     ```bash
     docker compose up -d postgres
@@ -385,7 +385,7 @@ because a reintroduced environment block would be silent in normal operation."
 
     Expected: PASS — the fixture still reaches the local Postgres unchanged.
 
-  - [ ] **Step 6: Commit**
+  - [x] **Step 6: Commit**
 
     ```bash
     git add tests/conftest.py tests/test_local_db_guard.py
@@ -490,3 +490,15 @@ its previous behaviour. The Task 3 commit is independent and can stay. The
   (`-f docker-compose.yaml -f docker-compose.prod.yaml`) →
   `postgresql://scout:scout@localhost:5433/scout`, i.e. straight from
   `scout/.env` with the override correctly ignored.
+- **Task 3:** the helper is unit-tested, but the fixture wiring was checked
+  separately by running `tests/test_db.py` with `DATABASE_URL` set to a managed
+  host — it fails with the intended message, and does so before any connection
+  is attempted, so a wrong DSN cannot even open a socket to the system of
+  record. Against a real local Postgres the DB suites still pass unchanged
+  (74 tests across `test_db`, `test_coach_db`, `test_coach_retrieval_db`,
+  `test_coach_tips_db`, `test_coach_link_health_db`).
+- Full suite before Postgres was running: 465 passed, 114 skipped — the skips
+  are exactly the DB-touching tests, which then passed once the container was
+  up. Worth knowing that a green local run means much less than it looks like
+  when Docker is down; CI always has a live Postgres, so it does not have this
+  blind spot.

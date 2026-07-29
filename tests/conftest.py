@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 import asyncpg
 import pytest
@@ -21,6 +22,23 @@ def _test_database_url(dev_database_url: str) -> str:
     return f"{base}/{_TEST_DB_NAME}"
 
 
+# Local Postgres hosts: the host-side published port, loopback, and the
+# compose service name reachable from inside the app container.
+_LOCAL_DB_HOSTS = {"localhost", "127.0.0.1", "::1", "postgres"}
+
+
+def _is_local_dsn(dsn: str) -> bool:
+    """True when `dsn` points at Postgres on this machine or the compose network.
+
+    Since P6 the DATABASE_URL setting can name the managed instance, which is
+    the system of record — and the fixture below CREATEs a database and
+    TRUNCATEs tables on whatever it is handed. An allow-list rather than a
+    deny-list of cloud hostnames: a host nobody thought about should be
+    refused, not permitted.
+    """
+    return urlparse(dsn).hostname in _LOCAL_DB_HOSTS
+
+
 async def _ensure_test_database(dev_database_url: str) -> None:
     conn = await asyncpg.connect(dsn=dev_database_url, timeout=2)
     try:
@@ -36,6 +54,12 @@ async def _ensure_test_database(dev_database_url: str) -> None:
 @pytest_asyncio.fixture
 async def db_pool():
     dev_database_url = Settings().database_url
+    if not _is_local_dsn(dev_database_url):
+        pytest.fail(
+            "DATABASE_URL points at "
+            f"{urlparse(dev_database_url).hostname!r}; these fixtures create and "
+            "truncate tables, so they refuse to run anywhere but a local Postgres."
+        )
     try:
         await _ensure_test_database(dev_database_url)
         pool = await asyncpg.create_pool(
