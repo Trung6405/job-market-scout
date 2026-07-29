@@ -1,7 +1,7 @@
 # Plan: Career Coach P1 — Resource Aggregator
 
-> **Status:** Not started
-> **Created:** 2026-07-25 · **Last updated:** 2026-07-25
+> **Status:** Complete — merged as #28 (2026-07-27)
+> **Created:** 2026-07-25 · **Last updated:** 2026-07-29
 > **Spec:** [spec.md](../../specs/career-coach-p1-aggregator/spec.md)
 
 ---

@@ -2,13 +2,19 @@
 
 | | |
 |---|---|
-| **Version** | 1.1 |
-| **Status** | Draft |
+| **Version** | 1.2 |
+| **Status** | Stage 1 delivered; Stage 2 gated |
 | **Author** | Trung |
 | **Reviewer** | Anh Phuc |
-| **Last updated** | 2026-07-24 |
+| **Last updated** | 2026-07-29 |
 
 > **Revision history:**
+> - **v1.2** — Records delivery: all six Stage 1 phases (P0–P5) are **Built**
+>   and merged (§8 status table updated); the pre-implementation "static Jinja
+>   tips" note is retired; Q1 is resolved by the shipped default awesome-list
+>   set in `scout/config.py`. Stage 2 (P6–P7) remains gated and un-started.
+>   The superseded loose draft `career-coach-agent.md` has been deleted from
+>   the repo (recoverable from git history).
 > - **v1.1** — Decomposes the feature into **two gated delivery stages** and
 >   **eight phases (P0–P7)**, each phase delivered as its own `spec.md` +
 >   `plan.md` (§4). Resolves the one planning-blocking open question — Q2, the
@@ -27,19 +33,19 @@
 >   the note below and D-CC-9.
 
 > **Feature-level PRS.** This document extends the product-level
-> `product-requirements-spec.md` (v2.1) for one new initiative. Where it adds
+> `product-requirements-spec.md` for one new initiative. Where it adds
 > or changes scope, FRs, or decisions, it does so only for the Career Coach
-> Agent; the six-stage core pipeline is unchanged. On conflict about the core
+> Agent; the pre-existing core pipeline stages are unchanged (the Coach stage
+> runs between Advisor and persistence). On conflict about the core
 > pipeline, the product PRS wins; on conflict about this feature, this file
 > wins.
 
-> **Note for AI coding assistants (Claude Code):** As of this writing the
-> Advisor's "coaching tips" are **static Jinja template branches**
-> (`scout/sub_agents/advisor/templates/job-detail.html.jinja`), **not** an LLM
-> call. There is no Advisor tip-generation LLM stage today. This PRS therefore
-> requires *building* that stage (FR-CC-8, D-CC-9), not merely "updating a
-> prompt." The `listing_gaps` table, `normalize_skill()`, DeepSeek/LiteLLM
-> wiring, and a one-way Discord push notifier already exist and are reused.
+> **Note for AI coding assistants (Claude Code):** Stage 1 is built. The
+> grounded coaching-tip stage (FR-CC-8, D-CC-9) exists at
+> `scout/sub_agents/coach/` and replaced the Advisor's earlier static Jinja
+> template tips; grounded tips now render in the per-role detail page. Stage 2
+> (P6 always-on Postgres, P7 interactive Discord bot) is **not built** and
+> remains behind the §4.3 gate.
 
 ---
 
@@ -253,18 +259,19 @@ and until that cost is explicitly accepted.
 
 ## 8. Deployment & operations
 
-Nothing in this feature is built yet; all components are **Planned**. The
-**Stage** column ties each component to the delivery stage in §4.
+All Stage 1 components are **Built** and running in production; Stage 2
+remains gated (§4.3). The **Stage** column ties each component to the delivery
+stage in §4.
 
 | Component | Stage | Status |
 |---|---|---|
-| `resources` table + pgvector extension on the existing VM Postgres | 1 (P0) | **Planned** |
-| Resource aggregator (GitHub Search API + PAT + "awesome-X" bootstrap + LLM tagging) | 1 (P1) | **Planned** |
-| Local embedding pipeline (`all-MiniLM-L6-v2`) — new dependency, not in `requirements.txt` today | 1 (P1) | **Planned** |
-| Retriever module (skills pre-filter + pgvector top-2/3) | 1 (P2) | **Planned** |
-| Advisor grounded tip stage + deterministic URL validator | 1 (P3) | **Planned** |
-| Report surfacing of grounded tips | 1 (P4) | **Planned** |
-| Link-health checker | 1 (P5) | **Planned** |
+| `resources` table + pgvector extension on the existing VM Postgres | 1 (P0) | **Built** |
+| Resource aggregator (GitHub Search API + PAT + "awesome-X" bootstrap + LLM tagging) | 1 (P1) | **Built** — `scout/coach_aggregator.py`, weekly in `scheduled-run.yml` |
+| Local embedding pipeline (`all-MiniLM-L6-v2`) | 1 (P1) | **Built** — `scout/sub_agents/coach/embeddings.py` |
+| Retriever module (skills pre-filter + pgvector top-2/3) | 1 (P2) | **Built** — `scout/sub_agents/coach/retriever.py` |
+| Coach grounded tip stage + deterministic URL validator | 1 (P3) | **Built** — `scout/sub_agents/coach/tips.py`, `grounding.py` |
+| Report surfacing of grounded tips | 1 (P4) | **Built** |
+| Link-health checker | 1 (P5) | **Built** — `scout/coach_link_health.py`, daily in `scheduled-run.yml` |
 | Always-on Postgres (fresh Azure DB for PostgreSQL Flexible Server, Burstable) + migration off the VM | 2 (P6) | **Planned — gated** |
 | Discord coach bot (Azure Function behind the Interactions endpoint, slash commands) | 2 (P7) | **Planned — gated** |
 
@@ -278,7 +285,7 @@ non-blocking for Stage 1 and do not gate writing its phase specs/plans.
 
 | # | Question | Blocks planning | Status |
 |---|---|---|---|
-| Q1 | Which specific "awesome-X" meta-lists to harvest for bootstrap coverage (draft proposes Python / FastAPI / React / TypeScript / Docker / Azure). | No — a default set can start; refine later. | Open (P1) |
+| Q1 | Which specific "awesome-X" meta-lists to harvest for bootstrap coverage. | No — a default set can start; refine later. | **Resolved** — shipped defaults in `scout/config.py`: python, fastapi, react, typescript, docker, azure. |
 | Q2 | Provision a fresh Flexible Server and migrate, or reconfigure the existing instance? Any downtime window constraint for the core pipeline during the switch? | Was **Yes**. | **Resolved** — fresh instance + migrate (D-CC-8, P6); no downtime for the core pipeline before cutover since the VM Postgres stays live until migration succeeds. |
 | Q3 | Beyond `/tips <listing_id>` and `/resources <skill>`, which slash commands to define up front (e.g. `/status`, `/history`)? | No — the two named commands are enough to start. | Open (P7) |
 | Q4 | Do docs/courses/notes resource types get added in a later phase, or is `resource_type` variety deferred until repos prove out the pipeline? | No — schema already allows the variety; only `repo` is populated first. | Open (P0/P1) |
@@ -288,11 +295,16 @@ non-blocking for Stage 1 and do not gate writing its phase specs/plans.
 ## 10. Related documents
 
 - Product-level PRS this feature extends: `product-requirements-spec.md` (v2.1)
-- Original loose feature draft this supersedes: `career-coach-agent.md` (Draft v0.2)
+- Original loose feature draft this superseded: `career-coach-agent.md`
+  (Draft v0.2) — deleted from the repo as of v1.2; recover from git history if
+  ever needed.
 - Current architecture and module structure: `docs/project/architecture-pipeline-overview.md` (living document)
 - Static-dashboard hosting rationale (VM deallocation cost model): `docs/agent/plans/static-dashboard-hosting/plan.md`
 - **Per-phase specs & plans:** each phase P0–P7 (§4) gets its own
   `docs/agent/specs/<phase-slug>/spec.md` and
   `docs/agent/plans/<phase-slug>/plan.md`, authored when that phase is
-  undertaken. This umbrella PRS and its blocking question (Q2) are resolved, so
-  Stage 1 phase authoring can begin with **P0**.
+  undertaken. All six Stage 1 phases (`career-coach-p0-schema` …
+  `career-coach-p5-link-health`) are authored and delivered. P6
+  (`career-coach-p6-managed-postgres`) is authored but **not started** — it
+  stays behind the §4.3 gate until that gate is passed. P7 is not yet
+  authored.

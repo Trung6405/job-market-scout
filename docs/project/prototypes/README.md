@@ -1,8 +1,17 @@
 # Job Market Scout — Advisor UI Prototypes
 
-Clickable, self-contained HTML mockups of the **Advisor report UI** (the Phase 3
-deliverable from `agent_plans/260721-1041-advisor-sub-agent/`). Throwaway — for
-reacting to layout/flow before the real Jinja2 report is built.
+> **Historical — superseded.** These mockups did their job: the real report UI
+> now lives in `scout/sub_agents/advisor/templates/` (Jinja2), rendered by
+> `scout/sub_agents/advisor/report.py` and published to the live dashboard
+> after each run. They are kept only as a design-history record for the
+> `advisor-report` initiative (`docs/agent/specs/advisor-report/spec.md`,
+> `docs/agent/plans/advisor-report/`). Details below describe the mockups as
+> designed, not the shipped product — e.g. the static "How to position your
+> application" section survives only here (deliberately retired in Career
+> Coach P4), and per-gap resources ship via the Coach stage, not the Advisor.
+
+Clickable, self-contained HTML mockups of the **Advisor report UI**. Throwaway —
+built for reacting to layout/flow before the real Jinja2 report was built.
 
 Open any file directly in a browser (no build step, no network). Screens link
 to each other.

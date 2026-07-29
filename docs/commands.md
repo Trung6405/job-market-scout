@@ -15,8 +15,11 @@ up runs one full cycle:
 ```bash
 docker compose up --build
 ```
-- Builds the app, the vendored `jobspy` scraper, `jobspy-mcp`, and `postgres`.
+- Builds the `app`, `jobspy-scraper`, and `jobspy-mcp` images and pulls the
+  `postgres` (pgvector) image.
 - Applies the Postgres schema automatically on first run.
+- All `docker compose` commands require `scout/.env` to exist (see the setup
+  section in the top-level `README.md`) — compose loads it via `env_file`.
 - Writes HTML into `./reports/` and posts matches above `MIN_MATCH_SCORE`
   to Discord.
 
@@ -26,9 +29,11 @@ docker compose up
 ```
 
 Run the pipeline directly on the host (needs `postgres` reachable at the
-`DATABASE_URL`, default `localhost:5433`, and `jobspy-mcp` running):
+`DATABASE_URL`, default `localhost:5433`, and `jobspy-mcp` running). The
+default `JOBSPY_MCP_URL` points at the compose-internal hostname, so override
+it with the published port:
 ```bash
-python -m scout.main
+JOBSPY_MCP_URL=http://localhost:9423 python -m scout.main
 ```
 
 ### Re-render reports only (no scrape, no LLM calls)
@@ -55,12 +60,28 @@ docker compose -f docker-compose.yaml -f docker-compose.prod.yaml \
 docker compose -f docker-compose.yaml -f docker-compose.prod.yaml \
   run --rm app python -m scout.coach_link_health
 ```
-Read-only audit of the corpus's link-health distribution, safe to run against
-production at any time — never issues a check or writes a row:
+Read-only audits, safe to run against production at any time — they never
+issue a check or write a row:
 ```bash
+# link-health distribution of the resource corpus
 docker compose -f docker-compose.yaml -f docker-compose.prod.yaml \
   run --rm app python -m scripts.audit_link_health
+
+# citations actually rendered into the reports (companion to the above)
+docker compose -f docker-compose.yaml -f docker-compose.prod.yaml \
+  run --rm app python -m scripts.audit_rendered_citations
 ```
+
+### Maintenance one-offs
+Recompute every stored `content_hash` after a change to the hash definition,
+so the next run doesn't re-analyse the whole table (idempotent, safe to
+re-run):
+```bash
+python -m scout.backfill_hashes
+```
+Other one-off migration scripts live in `scripts/` (each documents its own
+usage in its docstring); they have already been run against production and are
+kept for reference.
 
 ### Manage the stack
 ```bash
@@ -113,6 +134,10 @@ start reports/history.html
 # Linux
 xdg-open reports/history.html
 ```
+Or serve the directory (avoids `file://` quirks):
+```bash
+python -m http.server 8080 --directory reports
+```
 - `reports/history.html` — all past days
 - `reports/<YYYY-MM-DD>/dashboard.html` — a day's scored listings
 - `reports/<YYYY-MM-DD>/job-detail-<id>.html` — one role's detail + gaps
@@ -133,12 +158,18 @@ to the Azure VM and rebuilds the stack (see
 ```bash
 git push origin main        # triggers test + deploy
 ```
-The deploy can also be run manually from the Actions tab (`workflow_dispatch`).
+The deploy can also be run manually from the Actions tab (`workflow_dispatch`);
+on a branch other than `main` a manual dispatch runs the tests only.
 
-To force a report refresh on the server after a deploy (without waiting for the
-next scheduled pipeline run), SSH to the VM and run the re-render one-off:
-```bash
-cd /opt/job-market-scout
-docker compose -f docker-compose.yaml -f docker-compose.prod.yaml \
-  run --rm app python -m scout.rerender
-```
+Related workflows, both in `.github/workflows/`:
+- [scheduled-run.yml](../.github/workflows/scheduled-run.yml) — the daily
+  pipeline run on the VM; it also publishes the rendered reports to the Azure
+  Storage static website (the live dashboard).
+- [infra-provision.yml](../.github/workflows/infra-provision.yml) — manual
+  (`workflow_dispatch`) provisioning of the Azure infra from `infra/*.bicep`.
+
+To force a refresh of the live dashboard after a deploy (without waiting for
+the next scheduled run), manually dispatch **Scheduled run** from the Actions
+tab — publishing happens from that workflow, not from the VM. Running
+`scout.rerender` on the VM only rewrites the VM's local `./reports` and does
+not update the live dashboard.
