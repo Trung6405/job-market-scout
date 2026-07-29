@@ -110,9 +110,14 @@ match is a partial score, not a full one. Likewise, meeting every
 required skill is not enough to score high if the resume is
 overqualified for the listing's stated seniority level.
 
-Give one short sentence of reasoning per listing that names the most
-significant missing required skill or seniority mismatch, if any. Do
-not invent listings beyond the ones provided, and do not call any tool.
+Give one to two short sentences of reasoning per listing that justify
+the score: name the specific resume skills or experience that match
+the listing's stated requirements — what makes this a fit — and name
+the most significant missing required skill or seniority mismatch, if
+any — what holds it back. Be concrete: cite actual skills, tools, or
+experience from the resume and listing rather than vague phrases like
+"good fit" or "relevant background". Do not invent listings beyond the
+ones provided, and do not call any tool.
 
 Candidate profile:
 {render_profile_text(settings.profile)}
@@ -120,8 +125,9 @@ Candidate profile:
 Return a JSON object with a single key "scores" containing a list of
 objects, each with "source" and "external_id" (copied exactly from the
 listing — together they identify it, since external_id alone may repeat
-across sources), "score" (integer 0-100), and "reasoning" (one short
-sentence). Return only the JSON object, no commentary.
+across sources), "score" (integer 0-100), and "reasoning" (one to two
+short sentences citing concrete matched skills and any significant
+gap). Return only the JSON object, no commentary.
 
 {_listings_block(settings, listings)}
 """
