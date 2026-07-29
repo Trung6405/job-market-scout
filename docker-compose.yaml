@@ -10,7 +10,6 @@ services:
         condition: service_healthy
     environment:
       JOBSPY_MCP_URL: http://jobspy-mcp:9423
-      DATABASE_URL: postgresql://scout:scout@postgres:5432/scout
     volumes:
       - ./reports:/app/reports
       - ./scout/profile.json:/app/scout/profile.json:ro
