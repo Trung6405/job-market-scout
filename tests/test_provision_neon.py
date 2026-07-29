@@ -13,7 +13,12 @@ from pathlib import Path
 
 import yaml
 
-from infra.provision_neon import build_connection_uri, find_project, redact
+from infra.provision_neon import (
+    build_connection_uri,
+    check_project_shape,
+    find_project,
+    redact,
+)
 
 _ROOT = Path(__file__).resolve().parent.parent
 
@@ -60,6 +65,46 @@ def test_redact_hides_the_password():
     uri = "postgresql://scout:supersecret@h/scout?sslmode=require"
     assert "supersecret" not in redact(uri)
     assert "scout:***@h" in redact(uri)
+
+
+def test_matching_project_shape_reports_nothing():
+    project = {"region_id": "aws-ap-southeast-2", "pg_version": 16}
+    assert check_project_shape(
+        project, expected_region="aws-ap-southeast-2", expected_pg_version=16
+    ) == []
+
+
+def test_wrong_region_is_reported():
+    """Region is fixed at creation, so catching it late means migrating twice."""
+    project = {"region_id": "aws-us-east-2", "pg_version": 16}
+    problems = check_project_shape(
+        project, expected_region="aws-ap-southeast-2", expected_pg_version=16
+    )
+    assert len(problems) == 1
+    assert "aws-us-east-2" in problems[0]
+
+
+def test_wrong_major_version_is_reported():
+    """The source is pgvector/pgvector:pg16 and CI runs pg16; a different major
+    in production means the suite stops being a faithful regression net."""
+    project = {"region_id": "aws-ap-southeast-2", "pg_version": 18}
+    problems = check_project_shape(
+        project, expected_region="aws-ap-southeast-2", expected_pg_version=16
+    )
+    assert len(problems) == 1
+    assert "18" in problems[0]
+
+
+def test_both_wrong_are_both_reported():
+    project = {"region_id": "aws-us-east-2", "pg_version": 18}
+    assert (
+        len(
+            check_project_shape(
+                project, expected_region="aws-ap-southeast-2", expected_pg_version=16
+            )
+        )
+        == 2
+    )
 
 
 def test_ci_step_does_not_print_the_connection_string():

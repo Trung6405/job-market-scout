@@ -65,6 +65,11 @@ jobs:
       - name: Ensure Neon project (provision_neon.py)
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          # Project-scoped keys cannot list or create projects, which is
+          # exactly why they are the right credential to hand CI — the key
+          # cannot touch anything but this one project. The script reads this
+          # as its --project-id default.
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
         run: |
           set -euo pipefail
           # The always-on Postgres (P6) is Neon, not Azure — the cost gate
