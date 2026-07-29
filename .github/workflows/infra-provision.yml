@@ -18,7 +18,7 @@ jobs:
       RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
       AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Azure login (OIDC)
         uses: azure/login@v2
