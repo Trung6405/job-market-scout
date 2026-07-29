@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import asyncpg
 import pytest
 import pytest_asyncio
+import requests
 
 from scout.config import Settings
 from scout.shared.db import apply_schema
@@ -31,6 +32,33 @@ async def _ensure_test_database(dev_database_url: str) -> None:
             await conn.execute(f'CREATE DATABASE "{_TEST_DB_NAME}"')
     finally:
         await conn.close()
+
+
+@pytest.fixture(autouse=True)
+def block_real_network(monkeypatch):
+    """Turn an unstubbed HTTP call into a loud failure instead of a live request.
+
+    The coach's HTTP callers (`link_health`, `github_search`) hold a
+    module-level `requests.Session` and are stubbed per-test by patching
+    `_session.head` / `_session.get`. When such a patch fails to apply, the
+    call doesn't error — it silently reaches the real internet and the test
+    then asserts on whatever the live host returned. That failure mode is
+    actively misleading: `https://example.com/repo` answers 404, so
+    `check_url` reports a perfectly plausible `gone` verdict and the test
+    reads as a broken classifier rather than a missed stub.
+
+    Patching `Session.request` (which every `head`/`get`/`post` helper funnels
+    through) leaves the per-test instance-attribute stubs working untouched,
+    while anything they miss names itself.
+    """
+
+    def _unstubbed_request(self, method, url, *args, **kwargs):
+        raise AssertionError(
+            f"unstubbed real network call: {method} {url} — stub the caller's "
+            "session instead of letting the test reach the internet"
+        )
+
+    monkeypatch.setattr(requests.Session, "request", _unstubbed_request)
 
 
 @pytest_asyncio.fixture
