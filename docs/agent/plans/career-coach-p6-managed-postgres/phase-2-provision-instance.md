@@ -93,7 +93,7 @@ while the pipeline is still writing to the old database.
 - **Gate:** none — committing a template provisions nothing.
 - **Steps:**
 
-  - [ ] **Step 1: Write the failing test**
+  - [x] **Step 1: Write the failing test**
 
     Create `tests/test_infra_postgres_template.py`:
 
@@ -178,13 +178,13 @@ while the pipeline is still writing to the old database.
         assert "infra/postgres.bicep" in scripts
     ```
 
-  - [ ] **Step 2: Run the test to verify it fails**
+  - [x] **Step 2: Run the test to verify it fails**
 
     Run: `pytest tests/test_infra_postgres_template.py -v`
     Expected: FAIL at collection with `FileNotFoundError` for
     `infra/postgres.bicep`.
 
-  - [ ] **Step 3: Write the template**
+  - [x] **Step 3: Write the template**
 
     Create `infra/postgres.bicep`:
 
@@ -338,12 +338,12 @@ while the pipeline is still writing to the old database.
                 --query "properties.outputs" -o json
     ```
 
-  - [ ] **Step 4: Run the test to verify it passes**
+  - [x] **Step 4: Run the test to verify it passes**
 
     Run: `pytest tests/test_infra_postgres_template.py -v`
     Expected: PASS (7 tests)
 
-  - [ ] **Step 5: Compile the template**
+  - [x] **Step 5: Compile the template**
 
     ```bash
     az bicep build --file infra/postgres.bicep --stdout > /dev/null
@@ -353,7 +353,7 @@ while the pipeline is still writing to the old database.
     means the pinned `2024-08-01` is not in the local Bicep type index — run
     `az bicep upgrade` and re-check before changing the API version.
 
-  - [ ] **Step 6: Commit**
+  - [x] **Step 6: Commit**
 
     ```bash
     git add infra/postgres.bicep infra/postgres.bicepparam \
@@ -403,6 +403,18 @@ Provisions nothing on its own — infra-provision.yml is manual dispatch."
 
     Expected: the two match. If not, fix `VM_HOST` first — the deploy and
     scheduled-run workflows use it to reach the VM as well.
+
+  - [ ] Preflight with `what-if` first — it validates against ARM and creates
+    nothing, so a policy denial or a bad SKU surfaces before any billing
+    starts. The dummy password is never used to create anything:
+
+    ```bash
+    POSTGRES_ADMIN_PASSWORD='Dummy-WhatIf-Only' VM_HOST="$VM_HOST"       az deployment group what-if --resource-group "$RESOURCE_GROUP"       --template-file infra/postgres.bicep --parameters infra/postgres.bicepparam
+    ```
+
+    Expected: `Succeeded`, with `Create` for the server, its `scout` database,
+    the `azure.extensions` configuration and the `allow-scout-vm` firewall
+    rule — and nothing else changing.
 
   - [ ] Dispatch the provisioning workflow and watch it:
 
@@ -536,6 +548,34 @@ VM's container throughout this phase.
   single-IP restriction for a database guarded by its password alone. That
   work is parked on the `feat/career-coach-p6-neon` branch if the cost
   question is ever revisited.
+
+### Task 2 — the template *(2026-07-29)*
+
+- `az bicep build` compiles clean, no warnings — the pinned `2024-08-01` API
+  version is recognised by the local Bicep type index.
+- `az bicep build-params` was run **both ways** to check the fail-closed
+  intent, not just the happy path. With `POSTGRES_ADMIN_PASSWORD` and
+  `VM_HOST` set it resolves and renders the password as `securestring`;
+  without them it fails with `BCP427 — Environment variable … does not exist
+  and there's no default value set`. That is the desired behaviour: a missing
+  secret stops the deployment rather than creating a server with an empty
+  password or a firewall rule open to everything.
+- The compiled ARM confirms the `dependsOn` chain came out as intended —
+  database → `azure.extensions` → firewall rule — which is what keeps Flexible
+  Server from rejecting concurrent child writes.
+- **ARM `what-if` was run as a preflight, and it creates nothing.** It reported
+  `status: Succeeded, error: None` with exactly four `Create` operations —
+  the server, `databases/scout`, `configurations/azure.extensions` and
+  `firewallRules/allow-scout-vm` — and `Ignore` for every existing resource
+  (VM, NIC, NSG, public IP, VNet, disk, storage account, managed identity).
+  Worth doing before the gate specifically because this subscription's region
+  policy has silently refused a resource type before (Static Web Apps, see
+  `infra/dashboard.bicep`); a policy denial would have surfaced here rather
+  than half-way through a real deployment.
+- The shape guards were rewritten before use. They originally justified
+  pinning `Standard_B1ms` by free-tier eligibility, which A1 disproved; the
+  reason now stated is cost, since `Standard_B2s` is $0.10920/hr against
+  B1ms's $0.02730/hr and nothing else in the repo would catch that drift.
 
 ### Database measurements *(2026-07-29)*
 
