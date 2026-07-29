@@ -322,9 +322,9 @@ DSNs come from the environment, not argv, so neither lands in shell history."
     grep -c 'CREATE TABLE' /tmp/scout-migration.sql
     ```
 
-    `--no-owner --no-privileges` because the administrative role on the managed
-    instance (`scoutadmin`) is not the container's (`scout`), so ownership and
-    grant statements would fail on restore. Plain format rather than custom:
+    `--no-owner --no-privileges` because the role on the managed instance is
+    not the container's, so ownership and grant statements would fail on
+    restore. Plain format rather than custom:
     this database is small and an inspectable file is worth more here than
     `pg_restore`'s parallelism.
 
@@ -340,11 +340,14 @@ DSNs come from the environment, not argv, so neither lands in shell history."
       psql "$TARGET_DSN" -v ON_ERROR_STOP=1 -f - < /tmp/scout-migration.sql
     ```
 
-    Expected: `CREATE TABLE` / `COPY` output and exit 0. An error on
-    `CREATE EXTENSION vector` means the `azure.extensions` allow-list from
-    Phase 2 did not apply — fix that before retrying rather than creating the
-    extension by hand, or the next deployment will silently differ from the
-    template.
+    Expected: `CREATE TABLE` / `COPY` output and exit 0. `CREATE EXTENSION
+    vector` needs no allow-list step on Neon (spec A4) — it either works or the
+    project was created without pgvector available, which Phase 2 Task 4
+    already proved otherwise.
+
+    Note the dump is restored over a TLS connection to a database that scales
+    to zero: the first statement pays the wake, which looks like a stall of
+    about a second before output starts. That is not a hang.
 
   - [ ] Shred the dump — it holds the entire listings corpus and every scored
     result:

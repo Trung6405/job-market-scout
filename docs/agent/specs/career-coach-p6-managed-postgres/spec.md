@@ -235,4 +235,114 @@ written against a same-host database, as above.
 
 ## Amendments *(only after approval — never silently edit approved content)*
 
-- *(none yet)*
+### A1 — The instance is Neon, not Azure Database for PostgreSQL *(2026-07-29)*
+
+Execution stopped at the cost gate, which is what the gate was for. Measured
+against this subscription rather than assumed:
+
+| Item | Rate | Monthly |
+|------|------|---------|
+| `Standard_B1ms` compute | $0.02730/hr × 730 h | $19.93 |
+| Storage, 32 GiB (the floor) | $0.14490/GB/month | $4.64 |
+| Backup up to provisioned size | included | $0.00 |
+| | | **$24.57 USD/month** |
+
+Region and SKU were fine — `newzealandnorth` serves `Standard_B1ms`, version 16,
+32 GiB minimum, exactly the shape the approach described. The problem is the
+allowance. This subscription is **Azure for Students**: a one-off $100 credit,
+not the Azure free account that the 12-month free B1ms offer attaches to. A
+`Compute - Free vCore` meter exists at $0.00, but it is the meter that offer
+bills against, not something a subscription elects into. At $24.57/month
+against a credit that also funds the VM, the runway is roughly four months,
+after which the project stops rather than degrades.
+
+The Alternatives table already recorded the response: *"a free managed Postgres
+outside Azure (Neon, Supabase) … remains the fallback if the Azure instance
+proves to carry unacceptable cost."* This is that case, and Neon is chosen over
+Supabase — it is Postgres and nothing else, where Supabase bundles auth,
+storage and a REST API we would not use, and its free projects pause after
+about a week of inactivity where Neon scales to zero and wakes in about a
+second. The coherence objection recorded against this alternative still stands
+and is now simply accepted: the system of record moves outside the subscription
+holding the rest of the infrastructure, and gains a second credential domain.
+
+### A2 — Reachability is no longer restricted by IP allow-list *(2026-07-29)*
+
+The approach specified "a public endpoint restricted by an IP allow-list … a
+single rule covers the pipeline." Neon's **IP Allow is a Scale-plan feature**,
+absent from Free and from Launch; private networking likewise. Supabase gates
+its equivalent behind a paid plan too, so this is a consequence of choosing a
+free tier rather than of choosing Neon.
+
+Access control therefore degrades from *one permitted IP address* to *whoever
+holds the connection string*. **Accepted risk**, mitigated only by: TLS is
+mandatory and non-negotiable on Neon (a stronger guarantee than the
+`sslmode=require` the Azure design opted into); the password is high-entropy
+and supplied by secret (NFR-CC-7); and rotation is the response to any
+suspected leak. Recorded rather than solved — the thing that solves it is
+paying, which is the decision this amendment exists to avoid.
+
+Sources: [Neon plans](https://neon.com/docs/introduction/plans),
+[IP Allow](https://neon.com/docs/introduction/ip-allow).
+
+### A3 — Provisioning is a committed API script, not a Bicep template *(2026-07-29)*
+
+The Must-have "provisioning expressed as infrastructure-as-code alongside the
+existing templates, not clicked together in a portal" **stands**, but cannot be
+met with Bicep against a non-Azure provider. It is satisfied instead by a
+committed, idempotent provisioning script driven by the Neon API, invoked from
+`infra-provision.yml` beside the existing Bicep deployments.
+
+Terraform's Neon provider was considered and rejected for this phase: its value
+is state-based drift detection, and buying that means introducing a toolchain
+the repo does not have plus a remote state backend to provision and secure —
+infrastructure work to enable infrastructure work, for one project holding one
+database.
+
+### A4 — The pgvector allow-list step does not apply *(2026-07-29)*
+
+The approach devoted a paragraph to `azure.extensions`: pgvector had to be
+allow-listed as a server parameter before `CREATE EXTENSION` could succeed, and
+this was called out as easy to overlook. That is an Azure Flexible Server
+constraint with no Neon equivalent — `CREATE EXTENSION vector` works directly,
+so `scout/shared/schema.sql` needs nothing special.
+
+This changes what P6 owes the umbrella PRS. The correction listed as "the PRS
+does not mention that pgvector requires an allow-list step" is withdrawn; in
+its place, D-CC-8's naming of "Azure DB for PostgreSQL Flexible Server
+(Burstable)" is itself now wrong and is what needs amending there.
+
+### A5 — Sizing is replaced by the Neon Free plan's limits *(2026-07-29)*
+
+"Sized to the smallest shape that serves the workload, so that free-tier
+eligibility is possible" no longer describes a choice — the Free plan is a
+fixed shape: **0.5 GB storage per project, 100 CU-hours per month**, with
+compute scaling to zero when idle.
+
+Compute is comfortable: a daily cycle active for ten to fifteen minutes is
+roughly 7 CU-hours a month, leaving ample headroom for P7's queries. **Storage
+is the new ceiling risk.** 0.5 GB is far tighter than 32 GiB, and `listings`
+holds a description per row and grows every day. The spec's own note that the
+storage ceiling "is tight against a listings table that grows daily" was
+recorded against this alternative and is now live. Measuring the current
+database size becomes the first task of the revised phase 2, and headroom must
+be re-checked before this is treated as settled.
+
+Consequently the Won't-haves for high availability, geo-redundant backup, read
+replicas and private networking are moot rather than chosen — none exist on
+this plan.
+
+### A6 — The latency note is strengthened, not merely retained *(2026-07-29)*
+
+The approach recorded that retrieval stops being same-host and starts crossing
+a network with TLS, while arguing NFR-CC-2's sub-100 ms budget still holds
+because the instance "sits in the same region as the VM". That premise is gone:
+Neon is a different cloud in a different region from `newzealandnorth`, and
+scale-to-zero means the first query after an idle period pays a cold start of
+roughly a second before any work happens.
+
+Neither is expected to break the pipeline — a batch run issues many queries and
+only the first pays the wake, and the corpus is small — but the budget is now
+being asserted against a materially weaker set of assumptions than when it was
+written. Region selection should minimise the distance from the VM, and this
+should be measured rather than assumed once the instance exists.

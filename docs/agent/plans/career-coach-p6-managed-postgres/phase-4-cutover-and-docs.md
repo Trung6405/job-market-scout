@@ -58,8 +58,9 @@ and the VM's container is still sitting there holding its data.
     unset MANAGED_DSN
     ```
 
-    The value is
-    `postgresql://scoutadmin:<password>@trung6405-scout-pg.postgres.database.azure.com:5432/scout?sslmode=require`.
+    The value is the one stored in the `NEON_DATABASE_URL` secret by phase 2
+    Task 3. Copying it across is the entire cutover; copying the VM's DSN back
+    is the entire rollback.
 
   - [ ] Redeploy so the VM's `scout/.env` is re-rendered from it:
 
@@ -80,7 +81,8 @@ and the VM's container is still sitting there holding its data.
     print(urlparse(Settings().database_url).hostname)\""
     ```
 
-    Expected: `trung6405-scout-pg.postgres.database.azure.com`
+    Expected: the Neon endpoint host recorded in phase 2's Notes (an
+    `ep-*.neon.tech` name), not `postgres`.
 
   - [ ] No commit.
 
@@ -148,21 +150,23 @@ and the VM's container is still sitting there holding its data.
 
   - [ ] **Step 1: `infra/README.md`**
 
-    Add `postgres.bicep` and `postgres.bicepparam` to the Files table:
+    Add `provision_neon.py` to the Files table, and note that this folder is
+    no longer Bicep-only:
 
     | File | What it is |
     |------|------------|
-    | `postgres.bicep` | Azure Database for PostgreSQL Flexible Server (Burstable `Standard_B1ms`, 32 GiB, no HA, locally-redundant backup), the `scout` database, the `azure.extensions` allow-list entry pgvector needs, and a firewall rule admitting only the VM's static IP. |
-    | `postgres.bicepparam` | Server name and region. The admin password and the allowed client IP are read from the environment at deploy time (`POSTGRES_ADMIN_PASSWORD`, `VM_HOST`) — never committed. |
+    | `provision_neon.py` | Idempotently ensures the Neon project backing the pipeline exists (Free plan, major 16, region nearest the VM). Not Bicep, because the provider is not Azure — see spec Amendment A3. Prints a connection string only behind `--print-connection-string`, so the CI step cannot leak a DSN into a log. |
 
-    Add `POSTGRES_ADMIN_PASSWORD` to the secrets list in the one-time setup
-    section, and add a subsection recording the topology and the rollback:
+    Add `NEON_API_KEY` and `NEON_DATABASE_URL` to the secrets list in the
+    one-time setup section, and add a subsection recording the topology and the
+    rollback:
 
     ````markdown
     ## The database lives on managed Postgres (P6)
 
-    Since the P6 cutover the pipeline's system of record is the Flexible Server
-    in `postgres.bicep`, not the `postgres` container on the VM. The container
+    Since the P6 cutover the pipeline's system of record is the Neon project
+    created by `infra/provision_neon.py`, not the `postgres` container on the
+    VM. The container
     is still running and still holds its pre-cutover data: it is the rollback
     target for the grace period, and it is deliberately not retired here.
 
@@ -180,9 +184,11 @@ and the VM's container is still sitting there holding its data.
       back. The pipeline is idempotent per run date, so the cost is at most one
       re-run.
 
-    - **Access** is one firewall rule for the VM's static IP. `VM_HOST` feeds
-      both that rule and the deploy's SSH target, so changing the VM's public
-      IP means re-running `Provision infra` as well as updating the variable.
+    - **Access is not network-restricted.** Neon's IP allow-list is a
+      Scale-plan feature, so anyone holding the connection string can reach the
+      database (spec A2). TLS is mandatory and the password lives only in the
+      `DATABASE_URL` / `NEON_DATABASE_URL` secrets; if either is ever exposed,
+      rotate the role password in the Neon console and re-run `Deploy`.
     - **Local development and CI never touch it:** `docker-compose.override.yaml`
       supplies the in-network DSN for local runs, `deploy.yml`'s test job sets
       `DATABASE_URL` to its own service container, and `tests/conftest.py`
@@ -224,9 +230,9 @@ and the VM's container is still sitting there holding its data.
     - §4.2 P6 row and D-CC-8 both name `resources` / `listing_gaps` /
       `run_listings` / `runs` — replace with all six of `listings`, `runs`,
       `run_listings`, `listing_gaps`, `listing_tips`, `resources`.
-    - D-CC-8 gains the pgvector allow-list step: the extension must be added to
-      the server's `azure.extensions` parameter before `CREATE EXTENSION` can
-      succeed, which has no counterpart in the container image.
+    - D-CC-8 names "Azure Database for PostgreSQL Flexible Server (Burstable)"
+      as the target. That is no longer what P6 built — the cost gate rejected
+      it and the spec's recorded fallback was taken instead (spec A1).
     - NFR-CC-2's sub-100 ms retrieval budget was written against a same-host
       database; after P6 every query crosses a network with TLS. The budget
       still holds — small corpus, selective pre-filter, same region — but the
@@ -242,7 +248,7 @@ and the VM's container is still sitting there holding its data.
     | PRS said | Now | Why |
     |---|---|---|
     | §4.2 / D-CC-8: migrate `resources` / `listing_gaps` / `run_listings` / `runs` — four tables. | Six tables: adds `listings` and `listing_tips`. | The four named are not a closed set under their foreign keys: `run_listings` references `listings`, and `listing_tips` references `run_listings`. Migrating four would have restored a database whose gap rows point at listings that aren't there. |
-    | D-CC-8 describes provisioning a Flexible Server with pgvector, as though the extension is available the way it is in the container image. | pgvector must first be added to the server's `azure.extensions` parameter; only then can `CREATE EXTENSION vector` run. | The allow-list is a managed-service step with no counterpart in `pgvector/pgvector:pg16`, and it fails at exactly the point that looks like it should work: `scout/shared/schema.sql` runs `CREATE EXTENSION IF NOT EXISTS vector` on every startup and would simply error. |
+    | D-CC-8 and §4.2 name an **Azure Database for PostgreSQL Flexible Server (Burstable)** as the target, and §7 assumes the standing cost is acceptable. | The always-on database is a **Neon** project on the Free plan. | The subscription is Azure for Students — a $100 credit, not the free account the 12-month B1ms allowance attaches to. Measured cost was $24.57/month (compute $19.93 + 32 GiB storage $4.64), roughly four months of runway shared with the VM. The PRS's own contingency language and the spec's Alternatives table both recorded a free non-Azure Postgres as the fallback for exactly this; spec Amendments A1–A6 record what changed with it, including that access is no longer IP-restricted (Neon's IP Allow is Scale-only) and that the storage ceiling is now 0.5 GB rather than 32 GiB. |
     | NFR-CC-2: typical top-k retrieval < 100 ms, written when Postgres was a container on the same host as the pipeline. | Budget unchanged, assumption recorded: retrieval now crosses a network and does TLS on every query, and a run issues many queries. | Still comfortably met — the corpus is small, the `skills @>` pre-filter is selective, and the instance is in the VM's region — but a future latency surprise should be diagnosed against the real topology rather than rediscovered. |
     ```
 
@@ -261,16 +267,16 @@ and the VM's container is still sitting there holding its data.
       docs/agent/plans/career-coach-p6-managed-postgres/
     git commit -m "docs: record the managed Postgres topology and its rollback (P6)
 
-The pipeline's system of record is now the Flexible Server, and the VM's
+The pipeline's system of record is now the Neon project, and the VM's
 postgres container is the rollback target rather than dead weight — which
 makes 'docker compose down -v on the VM' a destructive command it wasn't
 before, so it is called out where someone would reach for it.
 
 Also carries three corrections into the career-coach PRS rather than diverging
 from it silently: the foreign-key-connected set is six tables, not the four it
-names; pgvector needs an azure.extensions allow-list entry before CREATE
-EXTENSION can succeed; and NFR-CC-2's latency budget was written against a
-same-host database that no longer exists."
+names; the target is Neon rather than an Azure Flexible Server, because the
+cost gate rejected the latter on a student subscription; and NFR-CC-2's latency
+budget was written against a same-host database that no longer exists."
     ```
 
 ---
@@ -296,8 +302,9 @@ same-host database that no longer exists."
 - A failed cutover is loud, not silent: `asyncpg` raises at pool creation and
   the `Run scout cycle` step fails before any stage runs, so a half-written
   day is not a failure mode here.
-- A firewall or TLS regression surfaces the same way — `Run scout cycle` fails
-  at connect. If the VM's public IP ever changes, that is what it looks like.
+- A TLS or credential regression surfaces the same way — `Run scout cycle`
+  fails at connect. Since nothing is IP-restricted, a connect failure means the
+  DSN or the role, not the network.
 
 ## Rollback
 
