@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from scout.config import Settings
 from scout.prompts import (
+    TRUNCATION_MARKER,
     build_briefing_instruction,
     build_requirements_instruction,
     build_scorer_instruction,
@@ -117,6 +118,56 @@ def test_scorer_and_requirements_put_listings_last(listing_factory):
     # Scorer's invariant prefix carries the rubric + profile.
     assert scorer.index("Candidate profile:") < scorer.index("Listings:\n")
     assert scorer.index("90-100") < scorer.index("Listings:\n")
+
+
+def test_truncated_description_is_marked_as_truncated(listing_factory):
+    """A silent cut reads as a complete posting.
+
+    Descriptions are cut to description_char_limit, and the cut lands
+    mid-sentence. Without a marker the model has no way to tell an elided
+    posting from a whole one, so it fills the gap — inferring requirements
+    (commonly a seniority bar) the visible text never states.
+    """
+    settings = Settings(description_char_limit=20)
+    listings = [listing_factory(description="x" * 100)]
+
+    for instruction in (
+        build_scorer_instruction(settings, listings),
+        build_requirements_instruction(settings, listings),
+    ):
+        assert "x" * 100 not in instruction
+        assert "x" * 20 in instruction
+        assert TRUNCATION_MARKER in instruction
+
+
+def test_untruncated_description_is_not_marked(listing_factory):
+    """The marker must mean something — never attach it to a whole posting."""
+    settings = Settings(description_char_limit=20)
+    listings = [listing_factory(description="y" * 20)]
+
+    for instruction in (
+        build_scorer_instruction(settings, listings),
+        build_requirements_instruction(settings, listings),
+    ):
+        listings_block = instruction.split("Listings:\n", 1)[1]
+        assert "y" * 20 in listings_block
+        # Scoped to the listings — the explanatory prefix always cites the
+        # marker, so an unscoped check would contradict the test below.
+        assert TRUNCATION_MARKER not in listings_block
+
+
+def test_both_prompts_tell_the_model_what_the_marker_means(listing_factory):
+    """The marker only changes behaviour if the prompt says how to read it."""
+    settings = Settings()
+    listings = [listing_factory()]
+
+    for instruction in (
+        build_scorer_instruction(settings, listings),
+        build_requirements_instruction(settings, listings),
+    ):
+        head = instruction.split("Listings:\n", 1)[0]
+        # The explanation belongs in the cacheable invariant prefix.
+        assert TRUNCATION_MARKER in head
 
 
 def test_requirements_instruction_never_includes_the_profile(listing_factory):
