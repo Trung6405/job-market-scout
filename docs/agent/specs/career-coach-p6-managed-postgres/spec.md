@@ -235,4 +235,83 @@ written against a same-host database, as above.
 
 ## Amendments *(only after approval — never silently edit approved content)*
 
-- *(none yet)*
+### A1 — The instance is not free, and that is accepted *(2026-07-29)*
+
+The Must-have "the actual cost confirmed before the instance is provisioned"
+has been discharged. Measured against this subscription rather than assumed:
+
+| Item | Rate | Monthly |
+|------|------|---------|
+| `Standard_B1ms` compute | $0.02730/hr × 730 h | $19.93 |
+| Storage, 32 GiB (the floor) | $0.14490/GB/month | $4.64 |
+| Backup up to provisioned size | included | $0.00 |
+| | | **$24.57 USD/month** — about **$0.81/day** |
+
+Region and SKU are fine: `newzealandnorth` serves `Standard_B1ms` under the
+Burstable tier, offers major version 16, and has a 32 GiB storage floor — the
+shape the approach describes is buildable exactly as written.
+
+**The free allowance does not apply.** This subscription is *Azure for
+Students*: a one-off $100 credit, not the Azure free account that the 12-month
+free B1ms offer attaches to. A `Compute - Free vCore` meter exists at $0.00,
+but that is the meter the free-account offer bills against, not something a
+subscription elects into. So the Should-have "sized to the smallest shape …
+so that free-tier eligibility is possible" is moot: the shape is right, but
+no allowance covers it.
+
+At $24.57/month against a credit that also funds the VM, running this
+indefinitely is roughly four months of runway. **The decision taken is to
+proceed on a short-lived basis** — days rather than months — at a cost of a
+few dollars, rather than take the spec's recorded Neon/Supabase fallback.
+That fallback was explored and rejected on 2026-07-29 after establishing that
+Neon's Free plan has no IP allow-list (a Scale-plan feature), which would have
+traded the single-IP restriction this design has for a database guarded by its
+password alone.
+
+**This adds an open question the approved text does not have, and it gates the
+cutover:** *what happens to the instance after the trial days?*
+
+The spec's rollback story assumes the managed instance persists and the VM's
+container is the fallback. A deliberately short-lived instance inverts the
+risk: if the pipeline is cut over and the instance is then deleted, every run
+recorded on it between cutover and deletion is lost — rolling the
+`DATABASE_URL` secret back restores the *connection*, not the *data*, and the
+VM's copy will have stood still meanwhile.
+
+Two readings, and they lead to different work:
+
+- **Evaluation only** — provision, migrate, probe, measure latency, and *stop
+  before phase 4*. Nothing is cut over, no data can be stranded, and the
+  instance is deleted at the end. Phases 2 and 3 deliver their value; phase 4
+  waits for a funded decision.
+- **Trial with intent to keep** — cut over, and treat deletion as a decision
+  that requires migrating the data back first, which is a restore rather than
+  a configuration flip and needs its own step in the plan.
+
+Unresolved as of this amendment; it must be answered before phase 4 executes.
+
+### A2 — The `resources` corpus is empty *(2026-07-29)*
+
+Measuring the database turned up something this spec assumed away:
+**`resources` holds 0 rows and 0 embeddings.** The whole database is 12 MB —
+`listings` 3,544 kB across 880 rows (average description 4,667 bytes),
+`run_listings` 384 kB, `listing_gaps` 312 kB, `runs` 40 kB across 8 rows
+spanning 2026-07-22 to 2026-07-29, `listing_tips` 24 kB.
+
+Three claims in the approved text are affected:
+
+- The Alternatives table rejected "start fresh … without copying anything"
+  partly because "the corpus was accumulated by weekly aggregation runs that
+  cost GitHub API budget and LLM tagging spend to produce." **There is no
+  corpus.** The other half — the run history is what the dashboard's history
+  page displays — still holds, and is reason enough to migrate.
+- The Success Criterion "every resource in the corpus is still retrievable
+  with its embedding intact" is satisfiable only vacuously.
+- The Must-have's embedding verification likewise. The plan singled that check
+  out as the one part of the copy whose failure would be silent; against an
+  empty table it compares 0 to 0 and proves nothing. It is kept, because it
+  costs nothing and becomes meaningful the moment the corpus fills.
+
+Recorded, not fixed. P6 delivers the *reachability* half of FR-CC-13 while the
+resource half stays unanswerable until aggregation actually populates the
+corpus — which P7's `/resources <skill>` will need.

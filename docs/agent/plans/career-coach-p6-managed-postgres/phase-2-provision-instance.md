@@ -39,14 +39,14 @@ while the pipeline is still writing to the old database.
   stop and return to the human — the spec's recorded fallback is a free managed
   Postgres outside Azure (Neon/Supabase), which is a different plan.
 - **Steps:**
-  - [ ] Log in and select the subscription the rest of the infra lives in:
+  - [x] Log in and select the subscription the rest of the infra lives in:
 
     ```bash
     az login
     az account show --query "{name:name, id:id, state:state}" -o json
     ```
 
-  - [ ] Confirm the VM's region serves Flexible Server at the smallest
+  - [x] Confirm the VM's region serves Flexible Server at the smallest
     Burstable shape. `newzealandnorth` is the region `infra/main.bicepparam`
     pins, and this subscription's policy already blocked Static Web Apps
     outright, so availability is not assumed:
@@ -61,7 +61,7 @@ while the pipeline is still writing to the old database.
     which serve it — a non-co-located instance changes the latency note in the
     spec and is a decision to bring back, not absorb.
 
-  - [ ] Price the compute and the storage on this subscription's currency:
+  - [x] Price the compute and the storage on this subscription's currency:
 
     ```bash
     curl -s "https://prices.azure.com/api/retail/prices?\$filter=serviceName%20eq%20'Azure%20Database%20for%20PostgreSQL'%20and%20armRegionName%20eq%20'newzealandnorth'%20and%20skuName%20eq%20'B1ms'" \
@@ -70,18 +70,18 @@ while the pipeline is still writing to the old database.
       | python -m json.tool
     ```
 
-  - [ ] Check whether this subscription's free allowance covers the shape
+  - [x] Check whether this subscription's free allowance covers the shape
     (12 months of `Standard_B1ms` at 750 h/month plus 32 GiB storage is
     documented for the Azure free account, and this subscription's offer type
     is exactly what is unverified). In the portal: **Subscriptions → this
     subscription → Overview** for the offer, then **Cost Management → Free
     services** for what remains of any allowance.
-  - [ ] Record in Notes below: region, SKU availability, monthly compute price,
+  - [x] Record in Notes below: region, SKU availability, monthly compute price,
     monthly storage price, whether the free allowance applies, and the human's
     decision.
-  - [ ] **STOP.** Do not proceed to Task 2 until the human has accepted the
+  - [x] **STOP.** Do not proceed to Task 2 until the human has accepted the
     cost in conversation.
-  - [ ] No commit.
+  - [x] No commit.
 
 ### Task 2: Add the Bicep template and its guards
 
@@ -518,7 +518,43 @@ VM's container throughout this phase.
 
 ## Notes / Learnings
 
-*(filled in during execution — record: region and SKU availability, monthly
-compute and storage price, whether the free allowance applies, the human's
-cost decision, the server FQDN, the observed Postgres and pgvector versions,
-and the TLS probe result)*
+### Task 1 — cost and region *(2026-07-29)*
+
+- **Region and SKU: available.** `newzealandnorth` serves `Standard_B1ms`
+  (and `Standard_B2s`) under the Burstable tier; supported majors are 11–18, so
+  16 is pinnable; the storage floor is 32768 MB = 32 GiB. The shape this phase
+  describes is buildable exactly as written.
+- **Price: $24.57 USD/month**, about **$0.81/day** — `B1MS` compute at
+  $0.02730/hr × 730 h = $19.93, plus 32 GiB at $0.14490/GB = $4.64. Backup up
+  to provisioned size is included. Note the retail-price meter is named
+  `B1MS` (uppercase) under "Burstable BS Series Compute", not `B1ms`.
+- **The free allowance does not apply.** The subscription is *Azure for
+  Students* — a $100 credit, not the Azure free account the 12-month free
+  B1ms offer attaches to. Decision: proceed on a short-lived basis (spec A1).
+- **Neon was explored and rejected** in between. Its Free plan has no IP
+  allow-list (Scale-plan feature), which would have traded this design's
+  single-IP restriction for a database guarded by its password alone. That
+  work is parked on the `feat/career-coach-p6-neon` branch if the cost
+  question is ever revisited.
+
+### Database measurements *(2026-07-29)*
+
+Total **12 MB**, so 32 GiB is not a constraint at any horizon that matters.
+
+| Table | Size | Rows |
+|-------|------|------|
+| `listings` | 3,544 kB | 880 (avg description 4,667 bytes) |
+| `run_listings` | 384 kB | |
+| `listing_gaps` | 312 kB | |
+| `resources` | 48 kB | **0** (0 with embeddings) |
+| `runs` | 40 kB | 8 (2026-07-22 → 2026-07-29) |
+| `listing_tips` | 24 kB | |
+
+Growth is ~1.5 MB/day across 8 days of history. `listings` never deletes — a
+closed listing keeps its description — so the largest table only grows.
+
+`resources` being empty is spec Amendment A2, and it makes this phase's
+embedding verification vacuous for now.
+
+*(Tasks 2–4 findings filled in during execution — the server FQDN, the observed
+Postgres and pgvector versions, and the TLS probe result)*
