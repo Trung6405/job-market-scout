@@ -209,3 +209,130 @@ def test_gather_candidate_urls_skips_skill_on_rate_limit_and_continues(monkeypat
         "https://github.com/org/kubernetes",
         "https://github.com/org/docker",
     ]
+
+
+def _repo_payload(stars: int = 5_000, archived: bool = False) -> dict:
+    """A metadata payload that clears the quality bar unless a test says not."""
+    from datetime import datetime, timedelta, timezone
+
+    fresh = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    return {
+        "stargazers_count": stars,
+        "archived": archived,
+        "pushed_at": fresh.replace("+00:00", "Z"),
+    }
+
+
+def test_gather_filters_bootstrap_candidates_through_the_quality_bar(monkeypatch):
+    """Every existing gather test runs with coach_awesome_lists=[], which
+    bypasses the bootstrap filter entirely — the whole suite stayed green while
+    the filter was unwired. This drives the harvested path: links below the bar
+    or gone from GitHub must not survive to the (expensive) ingest phase."""
+    monkeypatch.setattr(runner.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.harvest_awesome_list",
+        lambda list_url, settings: [
+            "https://github.com/org/popular",
+            "https://github.com/org/obscure",
+            "https://github.com/org/deleted",
+            "https://github.com/org/archived",
+        ],
+    )
+    metadata = {
+        "https://github.com/org/popular": _repo_payload(),
+        "https://github.com/org/obscure": _repo_payload(stars=12),
+        "https://github.com/org/deleted": None,
+        "https://github.com/org/archived": _repo_payload(archived=True),
+    }
+    metadata_calls: list[str] = []
+
+    def _fake_metadata(url, settings):
+        metadata_calls.append(url)
+        return metadata[url]
+
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.fetch_repo_metadata", _fake_metadata
+    )
+    search_urls: list[str] = []
+
+    def _fake_search(skill, settings):
+        search_urls.append(skill)
+        return [f"https://github.com/search/{skill}"]
+
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.search_candidates", _fake_search
+    )
+
+    candidates = runner._gather_candidate_urls(
+        _test_settings(coach_awesome_lists=["https://github.com/org/awesome-x"]),
+        ["kubernetes"],
+    )
+
+    assert candidates == [
+        "https://github.com/org/popular",
+        "https://github.com/search/kubernetes",
+    ]
+    # The bar is asked about harvested links only. Search results already
+    # passed the same filters server-side (stars/archived in the query,
+    # freshness client-side) — metadata calls for them would be pure waste.
+    assert metadata_calls == list(metadata)
+
+
+def test_gather_asks_github_once_per_unique_harvested_url(monkeypatch):
+    """The filter must run on the deduped pool: a repo linked from two
+    awesome-lists costs one metadata call, not two."""
+    monkeypatch.setattr(runner.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.harvest_awesome_list",
+        lambda list_url, settings: ["https://github.com/org/shared"],
+    )
+    metadata_calls: list[str] = []
+
+    def _fake_metadata(url, settings):
+        metadata_calls.append(url)
+        return _repo_payload()
+
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.fetch_repo_metadata", _fake_metadata
+    )
+
+    candidates = runner._gather_candidate_urls(
+        _test_settings(
+            coach_awesome_lists=[
+                "https://github.com/org/awesome-a",
+                "https://github.com/org/awesome-b",
+            ]
+        ),
+        [],
+    )
+
+    assert candidates == ["https://github.com/org/shared"]
+    assert metadata_calls == ["https://github.com/org/shared"]
+
+
+def test_gather_fails_loudly_when_the_metadata_filter_is_rate_limited(monkeypatch):
+    """Deliberate contrast with the per-skill search loop above, which skips a
+    rate-limited skill and continues. A rate-limited *filter* pass would
+    silently drop every remaining bootstrap candidate — the corpus would come
+    out thin and nothing would say so. fetch_repo_metadata raises on that
+    case, and the gather loop must let it propagate, not swallow it."""
+    monkeypatch.setattr(runner.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.harvest_awesome_list",
+        lambda list_url, settings: ["https://github.com/org/first"],
+    )
+
+    def _rate_limited(url, settings):
+        response = requests.Response()
+        response.status_code = 403
+        raise requests.HTTPError("403 rate limit exhausted", response=response)
+
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.fetch_repo_metadata", _rate_limited
+    )
+
+    with pytest.raises(requests.HTTPError):
+        runner._gather_candidate_urls(
+            _test_settings(coach_awesome_lists=["https://github.com/org/awesome-x"]),
+            [],
+        )

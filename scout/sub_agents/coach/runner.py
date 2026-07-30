@@ -18,7 +18,12 @@ from scout.shared.schemas import CoachSummary, Resource
 from scout.shared.skills import normalize_skills
 from scout.sub_agents.coach.bootstrap import harvest_awesome_list
 from scout.sub_agents.coach.embeddings import embed
-from scout.sub_agents.coach.github_search import fetch_readme, search_candidates
+from scout.sub_agents.coach.github_search import (
+    fetch_readme,
+    fetch_repo_metadata,
+    passes_quality_bar,
+    search_candidates,
+)
 from scout.sub_agents.coach.tagging import tag_readme
 
 logger = logging.getLogger("scout.coach.runner")
@@ -77,6 +82,51 @@ def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:
             len(candidates) - before,
             len(candidates),
         )
+    # Filter the bootstrap pool to FR-CC-2's bar before anything is tagged.
+    # The per-skill searches push those filters into the query and get them for
+    # free; a harvested README link has had no filtering at all, so each one
+    # costs a core-REST metadata call here. That is the cheap side of the trade:
+    # a rejected candidate would otherwise cost an LLM tagging call (~1.5s) and
+    # then sit in the corpus permanently, popular and maintained or not.
+    #
+    # Deliberately after the cross-list dedup above, so a repo linked from two
+    # awesome-lists is asked about once.
+    harvested = candidates
+    candidates = []
+    dropped = 0
+    unavailable = 0
+    filter_started = time.monotonic()
+    for position, url in enumerate(harvested, start=1):
+        metadata = fetch_repo_metadata(url, settings)
+        if metadata is None:
+            unavailable += 1
+            continue
+        if not passes_quality_bar(metadata):
+            dropped += 1
+            continue
+        candidates.append(url)
+        if position % 100 == 0 or position == len(harvested):
+            logger.info(
+                "Bootstrap filter: %d/%d checked, %d kept, %d below the bar, "
+                "%d gone or inaccessible, %.1f min elapsed.",
+                position,
+                len(harvested),
+                len(candidates),
+                dropped,
+                unavailable,
+                (time.monotonic() - filter_started) / 60,
+            )
+    logger.info(
+        "Bootstrap filter done in %.1f min: %d of %d harvested links kept "
+        "(%d below the bar — that many LLM tagging calls avoided — and "
+        "%d gone or inaccessible, which would have died at the README fetch).",
+        (time.monotonic() - filter_started) / 60,
+        len(candidates),
+        len(harvested),
+        dropped,
+        unavailable,
+    )
+
     bootstrap_total = len(candidates)
     last_search_at: float | None = None
     for index, skill in enumerate(skills, start=1):
