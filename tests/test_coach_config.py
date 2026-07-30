@@ -37,10 +37,17 @@ def test_coach_top_n_per_skill_defaults_to_five():
     assert Settings().coach_top_n_per_skill == 5
 
 
-def test_coach_awesome_lists_has_six_defaults():
+def test_coach_awesome_lists_has_five_defaults():
+    """Five, not six: awesome-azure was removed after the harvest measured it
+    yielding exactly 1 repo link (its README links Azure services and docs,
+    not GitHub repos) against 129-547 from every other list. A source that
+    contributes ~nothing still costs a README fetch every run and implies
+    Azure coverage the corpus does not get that way — Azure rides on the
+    per-skill dynamic search instead."""
     lists = Settings().coach_awesome_lists
-    assert len(lists) == 6
+    assert len(lists) == 5
     assert "https://github.com/vinta/awesome-python" in lists
+    assert not any("awesome-azure" in url for url in lists)
 
 
 def test_coach_awesome_lists_reads_csv_env(monkeypatch):

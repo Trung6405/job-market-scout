@@ -9,6 +9,15 @@
 | **Last updated** | 2026-07-29 |
 
 > **Revision history:**
+> - **v1.3** — P6 status: **evaluated end to end, cutover deferred.** Phases
+>   1–3 of `career-coach-p6-managed-postgres` executed 2026-07-30: the managed
+>   instance was provisioned from committed Bicep, migrated onto,
+>   count-and-structure verified, and deliberately torn down ($0.07 total;
+>   $24.57/month standing cost measured, not covered by any free allowance —
+>   spec amendment A1). The §4.3 gate now holds one question, funding the
+>   standing cost, with every technical unknown retired (spec amendments
+>   A1–A5). P7 remains un-authored; its data source decision depends on that
+>   same funding call.
 > - **v1.2** — Records delivery: all six Stage 1 phases (P0–P5) are **Built**
 >   and merged (§8 status table updated); the pre-implementation "static Jinja
 >   tips" note is retired; Q1 is resolved by the shipped default awesome-list
@@ -44,8 +53,12 @@
 > grounded coaching-tip stage (FR-CC-8, D-CC-9) exists at
 > `scout/sub_agents/coach/` and replaced the Advisor's earlier static Jinja
 > template tips; grounded tips now render in the per-role detail page. Stage 2
-> (P6 always-on Postgres, P7 interactive Discord bot) is **not built** and
-> remains behind the §4.3 gate.
+> is **not in production**: P6's managed Postgres was evaluated end to end and
+> then deliberately deleted (its Bicep template, provisioning workflow
+> `infra-postgres.yml`, and `scripts/verify_migration.py` remain committed and
+> ready), and P7 is not built. Both remain behind the §4.3 gate, which is now
+> purely a funding decision. Do not assume a managed database exists — the
+> system of record is the VM's Postgres container.
 
 ---
 
@@ -272,7 +285,7 @@ stage in §4.
 | Coach grounded tip stage + deterministic URL validator | 1 (P3) | **Built** — `scout/sub_agents/coach/tips.py`, `grounding.py` |
 | Report surfacing of grounded tips | 1 (P4) | **Built** |
 | Link-health checker | 1 (P5) | **Built** — `scout/coach_link_health.py`, daily in `scheduled-run.yml` |
-| Always-on Postgres (fresh Azure DB for PostgreSQL Flexible Server, Burstable) + migration off the VM | 2 (P6) | **Planned — gated** |
+| Always-on Postgres (fresh Azure DB for PostgreSQL Flexible Server, Burstable) + migration off the VM | 2 (P6) | **Evaluated & torn down — gated on funding** (template + `infra-postgres.yml` + migration verifier committed; see that spec's A1–A5) |
 | Discord coach bot (Azure Function behind the Interactions endpoint, slash commands) | 2 (P7) | **Planned — gated** |
 
 ---
@@ -305,6 +318,7 @@ non-blocking for Stage 1 and do not gate writing its phase specs/plans.
   `docs/agent/plans/<phase-slug>/plan.md`, authored when that phase is
   undertaken. All six Stage 1 phases (`career-coach-p0-schema` …
   `career-coach-p5-link-health`) are authored and delivered. P6
-  (`career-coach-p6-managed-postgres`) is authored but **not started** — it
-  stays behind the §4.3 gate until that gate is passed. P7 is not yet
-  authored.
+  (`career-coach-p6-managed-postgres`) is authored and **evaluated end to
+  end** — provisioned, migrated onto, verified, torn down (2026-07-30) — with
+  the cutover deferred behind the §4.3 gate, which is now purely a funding
+  decision (see that spec's amendments A1–A5). P7 is not yet authored.

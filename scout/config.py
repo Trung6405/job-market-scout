@@ -169,12 +169,16 @@ class Settings:
         default_factory=partial(
             _env_csv,
             "COACH_AWESOME_LISTS",
+            # awesome-azure (kristofferandreasen) was in this set and is gone:
+            # its README links Azure services and docs, not GitHub repos — the
+            # harvest measured exactly 1 repo link against 129-547 from every
+            # list below. Azure coverage comes from the per-skill dynamic
+            # search instead (it is among the most frequent gap skills).
             "https://github.com/vinta/awesome-python,"
             "https://github.com/mjhea0/awesome-fastapi,"
             "https://github.com/enaqx/awesome-react,"
             "https://github.com/dzharii/awesome-typescript,"
-            "https://github.com/veggiemonk/awesome-docker,"
-            "https://github.com/kristofferandreasen/awesome-azure",
+            "https://github.com/veggiemonk/awesome-docker",
         )
     )
     # How many resources the retriever returns per gap. The PRS specifies
