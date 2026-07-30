@@ -1,7 +1,7 @@
 # Phase 3: Migrate and Verify
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** In progress — Task 1 done, Task 2 (dump and restore) next
 > **Depends on:** Phase 2 complete (the instance exists, TLS and pgvector proven)
 >
 > **This is the last phase that executes in the current pass.** Scope is
@@ -41,7 +41,7 @@ pipeline.
 - **Gate:** none
 - **Steps:**
 
-  - [ ] **Step 1: Write the failing test**
+  - [x] **Step 1: Write the failing test**
 
     Create `tests/test_verify_migration.py`:
 
@@ -125,13 +125,13 @@ pipeline.
         assert "safe to proceed" in format_report(comparisons)
     ```
 
-  - [ ] **Step 2: Run the test to verify it fails**
+  - [x] **Step 2: Run the test to verify it fails**
 
     Run: `pytest tests/test_verify_migration.py -v`
     Expected: FAIL at collection with
     `ModuleNotFoundError: No module named 'scripts.verify_migration'`
 
-  - [ ] **Step 3: Write minimal implementation**
+  - [x] **Step 3: Write minimal implementation**
 
     Create `scripts/verify_migration.py`:
 
@@ -265,12 +265,12 @@ pipeline.
         sys.exit(asyncio.run(_main()))
     ```
 
-  - [ ] **Step 4: Run the test to verify it passes**
+  - [x] **Step 4: Run the test to verify it passes**
 
     Run: `pytest tests/test_verify_migration.py -v`
     Expected: PASS (7 tests)
 
-  - [ ] **Step 5: Commit**
+  - [x] **Step 5: Commit**
 
     ```bash
     git add scripts/verify_migration.py tests/test_verify_migration.py
@@ -454,7 +454,7 @@ DSNs come from the environment, not argv, so neither lands in shell history."
 
 ## Verification
 
-- [ ] Comparison logic passes: `pytest tests/test_verify_migration.py -v`
+- [x] Comparison logic passes: `pytest tests/test_verify_migration.py -v` — 8 passed
 - [ ] Full suite still passes: `pytest -q`
 - [ ] The dump contains 6 `CREATE TABLE` statements
 - [ ] The restore exits 0 under `ON_ERROR_STOP=1`
@@ -483,5 +483,41 @@ commit as well and re-approach.
 
 ## Notes / Learnings
 
-*(filled in during execution — paste the full verification report, including
-the exit code and the vector_dims spot-check)*
+### Task 1 — one deviation from the specified implementation *(2026-07-30)*
+
+The comparison logic is as planned. `collect_counts` is not, and the reason is
+worth keeping: **as specified, the script could not produce the report for the
+failure it most exists to catch.**
+
+`compare_counts` renders a label missing from the target as `0`, its docstring
+calls that "precisely the failure this exists to surface", and a test asserts a
+missing table "must read as a row, not a traceback". But nothing could reach
+that path through the real entrypoint: `collect_counts` ran
+`SELECT count(*) FROM resources` against the target before any comparison
+happened, so an absent table raised `UndefinedTableError` out of collection.
+The unit test passed because it called `compare_counts` directly.
+
+That absent table is not an exotic case — it is the likeliest way this copy
+fails. `resources.embedding` is typed `VECTOR(384)`, so the table depends on the
+`vector` type existing; a restore in which `CREATE EXTENSION vector` did not
+succeed leaves `resources` missing entirely. The gate would then have shown a
+traceback where it was supposed to show numbers.
+
+So counting now tolerates a missing table or column (`UndefinedTableError`,
+`UndefinedColumnError`) by omitting the label, which is what makes
+`compare_counts`'s documented behaviour reachable. A test drives it through
+`collect_counts` with a stubbed connection and asserts both `resources` and the
+embedding label come back flagged rather than raising. 8 tests, up from the
+planned 7.
+
+Two smaller notes:
+
+- An unset `SOURCE_DSN` / `TARGET_DSN` exits with a bare `KeyError` naming the
+  variable. Unfriendly but unambiguous; left alone.
+- The report's success line reads "safe to proceed to cutover", which is the
+  wording the plan specified and the test pins. Under spec A1 the next step is
+  teardown, not cutover, so read that line as "the copy is faithful" rather
+  than as an instruction.
+
+*(Tasks 2–4 filled in during execution — paste the full verification report,
+including the exit code and the vector_dims spot-check)*
