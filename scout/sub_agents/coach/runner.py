@@ -18,7 +18,12 @@ from scout.shared.schemas import CoachSummary, Resource
 from scout.shared.skills import normalize_skills
 from scout.sub_agents.coach.bootstrap import harvest_awesome_list
 from scout.sub_agents.coach.embeddings import embed
-from scout.sub_agents.coach.github_search import fetch_readme, search_candidates
+from scout.sub_agents.coach.github_search import (
+    fetch_readme,
+    fetch_repo_metadata,
+    passes_quality_bar,
+    search_candidates,
+)
 from scout.sub_agents.coach.tagging import tag_readme
 
 logger = logging.getLogger("scout.coach.runner")
@@ -52,13 +57,79 @@ def _canonical_skills(skills: list[str]) -> list[str]:
 def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:
     seen: set[str] = set()
     candidates: list[str] = []
+    started = time.monotonic()
+    # Throttled at _SEARCH_THROTTLE_SECONDS per skill, serially, so this phase
+    # costs roughly len(skills) * the throttle before anything is written.
+    # Logged up front because that figure is the difference between "working"
+    # and "hung", and there is no way to tell from the outside otherwise.
+    logger.info(
+        "Gather phase starting: %d awesome list(s) + %d distinct gap skill(s); "
+        "search throttle %.1fs/skill implies >= %.0f min in this phase alone.",
+        len(settings.coach_awesome_lists),
+        len(skills),
+        _SEARCH_THROTTLE_SECONDS,
+        len(skills) * _SEARCH_THROTTLE_SECONDS / 60,
+    )
     for list_url in settings.coach_awesome_lists:
+        before = len(candidates)
         for url in harvest_awesome_list(list_url, settings):
             if url not in seen:
                 seen.add(url)
                 candidates.append(url)
+        logger.info(
+            "Harvested %s: +%d new candidate(s) (%d total).",
+            list_url,
+            len(candidates) - before,
+            len(candidates),
+        )
+    # Filter the bootstrap pool to FR-CC-2's bar before anything is tagged.
+    # The per-skill searches push those filters into the query and get them for
+    # free; a harvested README link has had no filtering at all, so each one
+    # costs a core-REST metadata call here. That is the cheap side of the trade:
+    # a rejected candidate would otherwise cost an LLM tagging call (~1.5s) and
+    # then sit in the corpus permanently, popular and maintained or not.
+    #
+    # Deliberately after the cross-list dedup above, so a repo linked from two
+    # awesome-lists is asked about once.
+    harvested = candidates
+    candidates = []
+    dropped = 0
+    unavailable = 0
+    filter_started = time.monotonic()
+    for position, url in enumerate(harvested, start=1):
+        metadata = fetch_repo_metadata(url, settings)
+        if metadata is None:
+            unavailable += 1
+            continue
+        if not passes_quality_bar(metadata):
+            dropped += 1
+            continue
+        candidates.append(url)
+        if position % 100 == 0 or position == len(harvested):
+            logger.info(
+                "Bootstrap filter: %d/%d checked, %d kept, %d below the bar, "
+                "%d gone or inaccessible, %.1f min elapsed.",
+                position,
+                len(harvested),
+                len(candidates),
+                dropped,
+                unavailable,
+                (time.monotonic() - filter_started) / 60,
+            )
+    logger.info(
+        "Bootstrap filter done in %.1f min: %d of %d harvested links kept "
+        "(%d below the bar — that many LLM tagging calls avoided — and "
+        "%d gone or inaccessible, which would have died at the README fetch).",
+        (time.monotonic() - filter_started) / 60,
+        len(candidates),
+        len(harvested),
+        dropped,
+        unavailable,
+    )
+
+    bootstrap_total = len(candidates)
     last_search_at: float | None = None
-    for skill in skills:
+    for index, skill in enumerate(skills, start=1):
         if last_search_at is not None:
             # Sleep only for what's left of the throttle window: request
             # latency already spent counts toward the 30/min pacing.
@@ -77,6 +148,27 @@ def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:
             if url not in seen:
                 seen.add(url)
                 candidates.append(url)
+        # Periodic, not per-skill: hundreds of skills would bury the log.
+        if index % 25 == 0 or index == len(skills):
+            elapsed = time.monotonic() - started
+            remaining = (len(skills) - index) * _SEARCH_THROTTLE_SECONDS
+            logger.info(
+                "Gather progress: %d/%d skills searched, %d candidate(s) so far, "
+                "%.1f min elapsed, ~%.1f min of throttle left.",
+                index,
+                len(skills),
+                len(candidates),
+                elapsed / 60,
+                remaining / 60,
+            )
+    logger.info(
+        "Gather phase done in %.1f min: %d candidate(s) (%d from awesome lists, "
+        "%d from skill search).",
+        (time.monotonic() - started) / 60,
+        len(candidates),
+        bootstrap_total,
+        len(candidates) - bootstrap_total,
+    )
     return candidates
 
 
@@ -102,18 +194,48 @@ async def run_coach_aggregator(settings: Settings | None = None) -> CoachSummary
         # URLs — an already-stored candidate is skipped before any
         # README fetch, LLM tagging, or embedding call (spec requirement).
         new_urls = [url for url in candidate_urls if url not in existing_urls]
+        # This is the phase that dominates a first run, not the throttled
+        # gather above: one README fetch plus one LLM tagging call plus one
+        # embedding per candidate, serially. Stating the count before starting
+        # is what makes the duration predictable instead of alarming.
+        logger.info(
+            "Ingest phase starting: %d new candidate(s) to tag "
+            "(%d of %d already stored).",
+            len(new_urls),
+            len(candidate_urls) - len(new_urls),
+            len(candidate_urls),
+        )
 
         inserted = 0
         duplicates = 0
+        no_readme = 0
+        ingest_started = time.monotonic()
         # One connection for the whole ingest loop rather than one
         # acquire/release per row; the blocking README fetch goes through a
         # worker thread so the loop's awaits stay serviceable.
         async with pool.acquire() as conn:
-            for url in new_urls:
+            for position, url in enumerate(new_urls, start=1):
+                if position % 20 == 0 or position == len(new_urls):
+                    elapsed = time.monotonic() - ingest_started
+                    per_item = elapsed / position
+                    logger.info(
+                        "Ingest progress: %d/%d candidates, %d inserted, "
+                        "%d duplicate(s), %d without a README, %.1f min elapsed "
+                        "(%.1fs each, ~%.1f min left).",
+                        position,
+                        len(new_urls),
+                        inserted,
+                        duplicates,
+                        no_readme,
+                        elapsed / 60,
+                        per_item,
+                        per_item * (len(new_urls) - position) / 60,
+                    )
                 readme = await asyncio.to_thread(
                     fetch_readme, url, active_settings
                 )
                 if readme is None:
+                    no_readme += 1
                     continue
                 tags = await tag_readme(readme, active_settings)
                 resource = Resource(
@@ -125,12 +247,25 @@ async def run_coach_aggregator(settings: Settings | None = None) -> CoachSummary
                     summary=tags.summary,
                     source="github",
                 )
-                embedding = embed(tags.summary)
+                # Off the event loop, for the reason the fetch above already is:
+                # embedding is CPU-bound local inference (D-CC-4), and the first
+                # call also loads the model. Called inline it blocked the loop
+                # while the asyncpg pool was open.
+                embedding = await asyncio.to_thread(embed, tags.summary)
                 result = await insert_resource(conn, resource, embedding)
                 if result == "new":
                     inserted += 1
                 else:
                     duplicates += 1
+        logger.info(
+            "Aggregation complete in %.1f min: %d inserted, %d duplicate(s), "
+            "%d candidate(s) without a README, out of %d seen.",
+            (time.monotonic() - ingest_started) / 60,
+            inserted,
+            duplicates,
+            no_readme,
+            len(candidate_urls),
+        )
         return CoachSummary(
             candidates_seen=len(candidate_urls),
             inserted=inserted,

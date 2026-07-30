@@ -112,24 +112,54 @@ jobs:
             --account-name "$DASHBOARD_STORAGE_ACCOUNT" --auth-mode login \
             --destination '$web' --source dashboard-staging --overwrite
 
-      - name: Run coach aggregator (weekly)
-        # Runs once a week, piggybacking on the daily cron slot, then
-        # self-limits to one weekday inside the script. That weekday is
-        # Sunday *UTC* (date -u +%u = 7), because the 19:00 UTC fire lands at
-        # 05:00 Melbourne the following morning — so Sunday UTC is Monday
-        # local, which is the intended cadence. Manual workflow_dispatch runs
-        # (github.event.schedule == '') always run it, for testing.
-        # continue-on-error so a coach failure (e.g. GITHUB_PAT not yet set on
-        # the VM) never blocks the dashboard deploy above or the deallocate
-        # step below.
-        if: github.event.schedule == '0 19 * * *' || github.event.schedule == ''
-        continue-on-error: true
+      # The weekly gate is decided here, in its own step, so the aggregator step
+      # can be genuinely `skipped` rather than succeeding-without-doing-anything.
+      # It used to `exit 0` inside the script on the wrong weekday, which made
+      # "skipped", "ran fine" and "failed" all report the same green tick — and
+      # that is how a run that did nothing for three days went unnoticed.
+      - name: Decide whether the weekly aggregation is due
+        id: aggregation_due
         run: |
           set -euo pipefail
-          if [ "${GITHUB_EVENT_NAME}" = "schedule" ] && [ "$(date -u +%u)" != "7" ]; then
-            echo "Not Sunday UTC (= Monday Melbourne) — skipping coach aggregator this run."
-            exit 0
+          # Sunday *UTC* (date -u +%u = 7): the 19:00 UTC fire lands at 05:00
+          # Melbourne the following morning, so Sunday UTC is Monday local,
+          # which is the intended cadence. Manual workflow_dispatch runs always
+          # qualify, for testing.
+          if [ "${GITHUB_EVENT_NAME}" != "schedule" ] || [ "$(date -u +%u)" = "7" ]; then
+            echo "due=true" >> "$GITHUB_OUTPUT"
+            echo "Weekly aggregation is due."
+          else
+            echo "due=false" >> "$GITHUB_OUTPUT"
+            echo "Not Sunday UTC (= Monday Melbourne) — aggregator will be skipped."
           fi
+
+      - name: Run coach aggregator (weekly)
+        # success() is explicit because naming an `if:` at all drops the
+        # implicit success() guard — without it this would run even when the
+        # scout cycle above had already failed.
+        if: success() && steps.aggregation_due.outputs.due == 'true'
+        # Measured rather than guessed, by benchmarking each phase in isolation:
+        #   gather  852 distinct unmet gap skills x 2.5s throttle  = 36 min
+        #   ingest  2.08s per candidate (fetch 0.61 + LLM tag 1.45 + embed 0.02)
+        #
+        # Steady state fits this bound: `new_urls` dedups against stored URLs, so
+        # once the corpus is seeded a weekly run tags only genuinely new
+        # candidates — roughly the 36 min of gather plus a handful.
+        #
+        # A FIRST run against an empty corpus does NOT fit: ~5,542 candidates
+        # (1,282 from the awesome-lists plus 5 per skill) x 2.08s is ~3.2 hours,
+        # ~3.8 hours all in. Seed the corpus out-of-band rather than raising this
+        # bound to fit a one-off — a 4-hour timeout would also let a genuinely
+        # stuck weekly run hold the VM for 4 hours, which is the failure this
+        # bound exists to stop.
+        #
+        # Deliberately NOT continue-on-error. It was, which meant a failure
+        # reported green; the two things that protection existed for are both
+        # safe without it — the dashboard deploy already ran above, and the
+        # deallocate step below is `if: always()`.
+        timeout-minutes: 120
+        run: |
+          set -euo pipefail
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
             "$VM_USER@$VM_HOST" \
             "cd $APP_DIR && docker compose -f docker-compose.yaml -f docker-compose.prod.yaml run --rm app python -m scout.coach_aggregator"
@@ -138,9 +168,16 @@ jobs:
         # Unlike the aggregator above, this runs on every daily fire, not one
         # weekday — the batch cap bounds each run's cost, and daily cycling is
         # what lets the check happen *between* weekly aggregations (NFR-CC-4).
-        # continue-on-error so a link-health failure never blocks the
-        # deallocate step below.
-        continue-on-error: true
+        #
+        # Bounded for the same reason as the aggregator: it makes outbound HTTP
+        # calls, so it can block indefinitely too. The cap makes this one tight,
+        # so the bound can be as well. Runs even when the aggregator failed —
+        # verifying existing links does not depend on new ones being added —
+        # but not when the run was cancelled, since that would SSH into a VM
+        # already being torn down. `!cancelled()` is the difference from
+        # `always()`.
+        if: ${{ !cancelled() }}
+        timeout-minutes: 20
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
