@@ -1,8 +1,14 @@
 # Phase 3: Migrate and Verify
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete — all four tasks done. The instance was provisioned,
+> migrated onto, verified, and deleted; the templates that re-create it stay
+> committed.
 > **Depends on:** Phase 2 complete (the instance exists, TLS and pgvector proven)
+>
+> **This is the last phase that executes in the current pass.** Scope is
+> evaluation only (spec A1): the cutover in phase 4 is deferred, so this phase
+> now ends by tearing the instance down rather than handing it on.
 
 ---
 
@@ -37,7 +43,7 @@ pipeline.
 - **Gate:** none
 - **Steps:**
 
-  - [ ] **Step 1: Write the failing test**
+  - [x] **Step 1: Write the failing test**
 
     Create `tests/test_verify_migration.py`:
 
@@ -121,13 +127,13 @@ pipeline.
         assert "safe to proceed" in format_report(comparisons)
     ```
 
-  - [ ] **Step 2: Run the test to verify it fails**
+  - [x] **Step 2: Run the test to verify it fails**
 
     Run: `pytest tests/test_verify_migration.py -v`
     Expected: FAIL at collection with
     `ModuleNotFoundError: No module named 'scripts.verify_migration'`
 
-  - [ ] **Step 3: Write minimal implementation**
+  - [x] **Step 3: Write minimal implementation**
 
     Create `scripts/verify_migration.py`:
 
@@ -261,12 +267,12 @@ pipeline.
         sys.exit(asyncio.run(_main()))
     ```
 
-  - [ ] **Step 4: Run the test to verify it passes**
+  - [x] **Step 4: Run the test to verify it passes**
 
     Run: `pytest tests/test_verify_migration.py -v`
     Expected: PASS (7 tests)
 
-  - [ ] **Step 5: Commit**
+  - [x] **Step 5: Commit**
 
     ```bash
     git add scripts/verify_migration.py tests/test_verify_migration.py
@@ -288,7 +294,10 @@ DSNs come from the environment, not argv, so neither lands in shell history."
 - **Gate:** none — the source is read-only and the target is disposable until
   Phase 4.
 - **Steps:**
-  - [ ] Merge Task 1 to `main` so the script reaches the VM (`Deploy` rsyncs
+  - [ ] **Skipped deliberately — see Notes, deviation 1.** This would merge
+    the whole branch, not Task 1. The script was staged to the VM and mounted
+    into the app container instead.
+    ~~Merge Task 1 to `main` so the script reaches the VM~~ (`Deploy` rsyncs
     the repo) before it is needed:
 
     ```bash
@@ -296,7 +305,7 @@ DSNs come from the environment, not argv, so neither lands in shell history."
     gh run watch "$(gh run list --workflow=Deploy --limit 1 --json databaseId --jq '.[0].databaseId')"
     ```
 
-  - [ ] Pick a window when nothing is writing. The pipeline runs once a day at
+  - [x] Pick a window when nothing is writing. The pipeline runs once a day at
     19:00 UTC and the deploy only runs on a push, so any time well clear of
     both is fine. Confirm nothing is in flight:
 
@@ -304,7 +313,7 @@ DSNs come from the environment, not argv, so neither lands in shell history."
     gh run list --workflow='Scheduled run' --limit 1
     ```
 
-  - [ ] SSH to the VM, start the stack if the VM was deallocated, and take the
+  - [x] SSH to the VM, start the stack if the VM was deallocated, and take the
     dump. Both `pg_dump` and `psql` run inside the VM's own
     `pgvector/pgvector:pg16` container, so the client versions match the source
     exactly and the VM needs no Postgres packages installed:
@@ -330,7 +339,7 @@ DSNs come from the environment, not argv, so neither lands in shell history."
 
     Expected: 6 `CREATE TABLE` statements.
 
-  - [ ] Restore into the managed instance. `ON_ERROR_STOP=1` so a failure stops
+  - [x] Restore into the managed instance. `ON_ERROR_STOP=1` so a failure stops
     at the first bad statement instead of leaving a half-copied database that
     still counts rows:
 
@@ -346,14 +355,14 @@ DSNs come from the environment, not argv, so neither lands in shell history."
     extension by hand, or the next deployment will silently differ from the
     template.
 
-  - [ ] Shred the dump — it holds the entire listings corpus and every scored
+  - [x] Shred the dump — it holds the entire listings corpus and every scored
     result:
 
     ```bash
     shred -u /tmp/scout-migration.sql 2>/dev/null || rm -f /tmp/scout-migration.sql
     ```
 
-  - [ ] No commit.
+  - [x] No commit.
 
 ### Task 3: Run the verification and read the numbers
 
@@ -361,7 +370,7 @@ DSNs come from the environment, not argv, so neither lands in shell history."
 - **Gate:** none here; the numbers this produces are what Phase 4's gate is
   decided from.
 - **Steps:**
-  - [ ] From the VM, with both DSNs in the environment:
+  - [x] From the VM, with both DSNs in the environment:
 
     ```bash
     cd /opt/job-market-scout
@@ -375,7 +384,7 @@ DSNs come from the environment, not argv, so neither lands in shell history."
     Expected: every row `yes`, the closing line
     `All counts match — safe to proceed to cutover.`, and exit 0.
 
-  - [ ] Spot-check that the vectors survived as vectors rather than as nulls or
+  - [x] Spot-check that the vectors survived as vectors rather than as nulls or
     text — the count alone cannot tell those apart:
 
     ```bash
@@ -400,22 +409,70 @@ DSNs come from the environment, not argv, so neither lands in shell history."
 
     Expected: `dimensions: 384` and a resource title.
 
-  - [ ] Paste the full report into Notes below.
-  - [ ] No commit.
+  - [x] Paste the full report into Notes below.
+  - [x] No commit.
+
+### Task 4: Record the evaluation and tear the instance down
+
+- **Files:** findings recorded in this doc's Notes.
+- **Gate:** ⚠️ human sign-off before deletion — it is irreversible, and it is
+  the point at which the evaluation's cost stops accruing. Confirm the numbers
+  are captured first; they are the whole return on this pass.
+- **Steps:**
+  - [x] Confirm every measurement is written into Notes: the verification
+    report, the observed Postgres and pgvector versions, the TLS result, and
+    the latency figures from phase 2 Task 4. Once the server is gone these
+    cannot be re-derived without paying again.
+  - [x] Confirm nothing points at the instance — `DATABASE_URL` must still name
+    the VM's container, since phase 4 never ran:
+
+    ```bash
+    ssh -i ~/.ssh/scout_vm azureuser@"$VM_HOST"       "cd /opt/job-market-scout && docker compose -f docker-compose.yaml -f docker-compose.prod.yaml         run --rm app python -c \"
+    from urllib.parse import urlparse
+    from scout.config import Settings
+    print(urlparse(Settings().database_url).hostname)\""
+    ```
+
+    Expected: `postgres`. Anything else means a cutover happened and deleting
+    the server would strand data — stop.
+
+  - [x] Delete the server:
+
+    ```bash
+    az postgres flexible-server delete -g "$RESOURCE_GROUP" -n trung6405-scout-pg --yes
+    ```
+
+  - [x] Confirm the cost stopped:
+
+    ```bash
+    az postgres flexible-server list -g "$RESOURCE_GROUP" -o table
+    ```
+
+    Expected: no rows.
+
+  - [x] Leave `infra/postgres.bicep` and its guards committed. The template is
+    the deliverable that makes re-provisioning a dispatch rather than a
+    redesign when the standing cost is funded.
+  - [x] No commit beyond the Notes update.
 
 ---
 
 ## Verification
 
-- [ ] Comparison logic passes: `pytest tests/test_verify_migration.py -v`
-- [ ] Full suite still passes: `pytest -q`
-- [ ] The dump contains 6 `CREATE TABLE` statements
-- [ ] The restore exits 0 under `ON_ERROR_STOP=1`
-- [ ] `python -m scripts.verify_migration` reports every table matching, the
+- [x] Comparison logic passes: `pytest tests/test_verify_migration.py -v` — 8 passed
+- [x] Full suite still passes: `pytest -q` — 602 passed
+- [x] The dump contains 6 `CREATE TABLE` statements
+- [x] The restore exits 0 under `ON_ERROR_STOP=1` — and no ERROR/FATAL in the log
+- [x] `python -m scripts.verify_migration` reports every table matching, the
       embedding count matching, and exits 0
-- [ ] `vector_dims` on the managed instance returns 384 and a nearest-neighbour
-      query returns a row
-- [ ] The VM database is unchanged: the pipeline is still pointed at it and its
+- [ ] **Not satisfiable — `resources` is empty (spec A2)**, so `vector_dims`
+      returns NULL and there is nothing to rank. Replaced by a structural
+      comparison (see Notes): the `embedding` column is still `vector(384)`,
+      and tables, indexes, foreign keys and columns match the source
+      name-by-name.
+      ~~`vector_dims` on the managed instance returns 384 and a
+      nearest-neighbour query returns a row~~
+- [x] The VM database is unchanged: the pipeline is still pointed at it and its
       own counts are the "source" column of the report
 
 ## Rollback
@@ -436,5 +493,163 @@ commit as well and re-approach.
 
 ## Notes / Learnings
 
-*(filled in during execution — paste the full verification report, including
-the exit code and the vector_dims spot-check)*
+### Task 1 — one deviation from the specified implementation *(2026-07-30)*
+
+The comparison logic is as planned. `collect_counts` is not, and the reason is
+worth keeping: **as specified, the script could not produce the report for the
+failure it most exists to catch.**
+
+`compare_counts` renders a label missing from the target as `0`, its docstring
+calls that "precisely the failure this exists to surface", and a test asserts a
+missing table "must read as a row, not a traceback". But nothing could reach
+that path through the real entrypoint: `collect_counts` ran
+`SELECT count(*) FROM resources` against the target before any comparison
+happened, so an absent table raised `UndefinedTableError` out of collection.
+The unit test passed because it called `compare_counts` directly.
+
+That absent table is not an exotic case — it is the likeliest way this copy
+fails. `resources.embedding` is typed `VECTOR(384)`, so the table depends on the
+`vector` type existing; a restore in which `CREATE EXTENSION vector` did not
+succeed leaves `resources` missing entirely. The gate would then have shown a
+traceback where it was supposed to show numbers.
+
+So counting now tolerates a missing table or column (`UndefinedTableError`,
+`UndefinedColumnError`) by omitting the label, which is what makes
+`compare_counts`'s documented behaviour reachable. A test drives it through
+`collect_counts` with a stubbed connection and asserts both `resources` and the
+embedding label come back flagged rather than raising. 8 tests, up from the
+planned 7.
+
+Two smaller notes:
+
+- An unset `SOURCE_DSN` / `TARGET_DSN` exits with a bare `KeyError` naming the
+  variable. Unfriendly but unambiguous; left alone.
+- The report's success line reads "safe to proceed to cutover", which is the
+  wording the plan specified and the test pins. Under spec A1 the next step is
+  teardown, not cutover, so read that line as "the copy is faithful" rather
+  than as an instruction.
+
+### Tasks 2–3 — the copy and the numbers *(2026-07-30)*
+
+**The dump.** 4,618 lines, 5.0 MB, 6 `CREATE TABLE`, and
+`CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public` at line 25 — the
+statement the whole restore hinges on, since `resources.embedding` is typed
+`vector(384)` and the table cannot exist without the type.
+
+**The restore.** `psql` exit 0 under `ON_ERROR_STOP=1`, no `ERROR` or `FATAL`
+anywhere in the log, ending on the indexes and constraints. `CREATE EXTENSION`
+succeeded, so Phase 2's `azure.extensions` allow-list did apply in practice and
+not just in `az` output.
+
+**The report** — every row matching, exit 0:
+
+```
+table                         source      target  ok
+listings                         954         954  yes
+runs                               9           9  yes
+run_listings                     946         946  yes
+listing_gaps                    2175        2175  yes
+listing_tips                       0           0  yes
+resources                          0           0  yes
+resources with embedding           0           0  yes
+
+All counts match — safe to proceed to cutover.
+exit: 0
+```
+
+Note the counts moved since the Phase 2 measurements (880 listings, 8 runs):
+the 19:00 UTC scheduled run landed in between. That is the expected behaviour of
+a live source, not drift — the point of the report is that both columns are read
+in the same instant.
+
+**The planned vector spot-check is vacuous, as A2 predicted.** `vector_dims(...)
+LIMIT 1` over an empty `resources` returns `None`, and the nearest-neighbour
+query has nothing to rank. So it was replaced with what *is* checkable when the
+table is empty, which turns out to be the more useful question anyway — did the
+**schema** survive, given matching row counts cannot tell you:
+
+| Check | Result |
+|---|---|
+| `embedding` column type | **`vector(384)`** — typmod intact, not degraded to bare `vector` or to text |
+| pgvector extension | `0.8.2` |
+| tables / indexes / foreign keys / column count / NOT NULL columns | **all identical to the source**, compared name-by-name rather than by count |
+
+That last row is worth more than the row counts. A restore can drop an index or
+a constraint while every `count(*)` still agrees, and nothing in
+`verify_migration.py` would notice — it counts rows, by design. Both sides were
+snapshotted and compared name-by-name: `tables`, `indexes`, `foreign_keys`,
+`not_null_cols`, `column_count` and `embedding_type` all `MATCH`.
+
+**The source was never written to.** Its counts are the report's `source`
+column, `scout/.env` still holds exactly one `DATABASE_URL` line, and a direct
+`count(*)` on the container afterwards still reads 954 listings.
+
+Two deviations from the task as written:
+
+1. **Task 2 Step 1 (merge to `main` so the script reaches the VM) was skipped.**
+   `gh pr create --fill && gh pr merge --squash` would have merged the entire
+   branch, not Task 1, putting all of P6 on `main` for a trial whose instance is
+   deleted at the end of this phase. The script was staged to the VM and mounted
+   into the app container instead — the image bakes code in via `COPY . .`, and
+   the deployed image predates the script, so mounting also avoided a rebuild
+   that would re-pull torch. Same script, no merge, nothing to undo.
+2. **Credentials went through `PGPASSWORD` / `PGSSLMODE` rather than a DSN in
+   `psql`'s argv.** The plan's `psql "$TARGET_DSN"` keeps the password out of
+   shell history but still puts it in the process list; the environment form
+   avoids both. The dump was shredded afterwards, and the password was never
+   written to the VM's disk.
+
+### Task 4 — teardown, and what the evaluation bought *(2026-07-30)*
+
+**Both gates were checked, not assumed.** The measurements were already committed
+across four commits, so nothing un-re-derivable was riding on a working tree. And
+the pipeline's own `Settings().database_url` was resolved on the VM rather than
+reasoned about: it printed `postgres`, confirming no cutover had happened and
+that deleting the server stranded nothing. That check needed the VM booted, which
+is a cost worth paying at an irreversible step.
+
+**Deleted 2026-07-30T01:32:18Z.** `az postgres flexible-server list` returns 0
+and `show` returns `ResourceNotFound`.
+
+**The evaluation cost $0.07.** Lifetime was 2.02 hours from 2026-07-29T23:31:17Z
+— $0.055 compute at $0.02730/hr plus $0.013 of prorated storage. The $24.57/month
+from A1 is what *keeping* it would cost; standing this up, migrating onto it,
+verifying it and tearing it down cost seven cents. That is the number worth
+remembering when the funded decision comes back: the trial is not the expense,
+the tenancy is.
+
+**What it settled** — five things that were assumptions in the risk table and are
+now measurements:
+
+| Question | Answer |
+|---|---|
+| Real cost on this subscription | $24.57/month, no free allowance (A1) |
+| Does asyncpg honour `sslmode=require` in the DSN? | Yes — TLSv1.3, AES-256-GCM |
+| Does `azure.extensions` actually admit `VECTOR`? | Yes — pgvector 0.8.2, and `CREATE EXTENSION` succeeded during the real restore, not just in a probe |
+| Is the restore faithful? | Yes — all six tables matching, and tables/indexes/foreign keys/columns identical name-by-name, with `embedding` still `vector(384)` |
+| Per-query latency from the VM | 0.67 ms warm median against NFR-CC-2's 100 ms budget |
+
+**What it did not settle, and a funded pass would still have to:**
+
+- **The embedding half is untested** (A2). `resources` is empty, so "embeddings
+  survive the copy" was compared as 0 against 0. The column *type* survived,
+  which is the structural half, but no vector has ever made the trip.
+- **The provisioning workflow has never run green.** `infra-postgres.yml` was
+  authored after the OIDC ref-scoping made a feature-branch dispatch impossible
+  (A3), so the instance was created by a local `az deployment` running the same
+  committed template. Whoever merges this is the first to exercise the workflow.
+- **Latency was measured with `SELECT 1`, not under load.** A pipeline run issues
+  many queries per stage; the per-query figure is sound but the aggregate effect
+  on a full cycle was never observed, because no cycle ran against the instance.
+
+**What stays behind.** `infra/postgres.bicep`, `postgres.bicepparam`,
+`infra-postgres.yml` and their guards remain committed — the point of this pass
+is that re-provisioning is a confirmed dispatch rather than a redesign.
+`scripts/verify_migration.py` stays too, and is direction-agnostic, so it serves
+the migrate-back in phase 4 Task 4 (A5) as well as the outbound copy.
+
+**One loose end:** the `POSTGRES_ADMIN_PASSWORD` repository secret now
+authenticates a server that does not exist. It is inert rather than dangerous,
+but it is stale, and it sits next to `NEON_API_KEY` from the parked Neon branch
+as secrets to clear. Left in place rather than deleted, since Task 4 does not
+call for it and re-provisioning would want a value there.

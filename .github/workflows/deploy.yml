@@ -139,7 +139,23 @@ jobs:
           rsync -az --delete \
             -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new" \
             --exclude '.git' --exclude 'scout/.env' --exclude 'reports' \
+            --exclude 'docker-compose.override.yaml' \
             ./ "$VM_USER@$VM_HOST:$APP_DIR/"
+          # The override pins DATABASE_URL to the VM's own Postgres container,
+          # which is what local development wants and production must never see.
+          # Excluding it stops it shipping from here on, but that is not enough
+          # on its own: --delete deliberately leaves excluded files on the
+          # receiver alone, so the copy rsynced before this exclusion existed
+          # would sit on the VM forever. Remove it explicitly.
+          #
+          # Why it matters: production is safe only because every invocation
+          # passes -f docker-compose.yaml -f docker-compose.prod.yaml, which
+          # suppresses the auto-load. After the P6 cutover, a bare
+          # `docker compose run` on the VM — the natural thing to type when
+          # debugging by hand — would pick the override up and silently read and
+          # write the old container database instead of the system of record.
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "$VM_USER@$VM_HOST" "rm -f '$APP_DIR/docker-compose.override.yaml'"
 
       - name: Render .env on VM
         env:

@@ -1,7 +1,10 @@
 # Plan: Career Coach P6 — Always-On Managed Postgres
 
-> **Status:** Not started
-> **Created:** 2026-07-29 · **Last updated:** 2026-07-29
+> **Status:** Evaluation complete, cutover deferred — phases 1–3 executed and the
+> instance was torn down at the end of phase 3 (spec A1). Phase 4 is written,
+> including the migrate-back exit path (spec A5), and waits on a funded decision
+> to carry the standing cost.
+> **Created:** 2026-07-29 · **Last updated:** 2026-07-30
 > **Spec:** [spec.md](../../specs/career-coach-p6-managed-postgres/spec.md)
 
 ---
@@ -13,9 +16,13 @@ Azure Database for PostgreSQL Flexible Server, so the gap and resource data
 stays queryable during the ~23h/day the VM is deallocated. A fresh instance is
 provisioned and validated while the old database keeps serving; the data is
 copied and row-count-verified; and only then, as a deliberate human step, is
-the stored `DATABASE_URL` secret repointed. Done means a full pipeline cycle
-runs against the managed instance with unchanged behaviour, the pre-move run
-history and corpus are intact on it, and reverting is a one-line secret change.
+the stored `DATABASE_URL` secret repointed.
+
+**Scope of the current pass: evaluation only (spec A1).** Phases 1–3 run and
+the instance is torn down afterwards; phase 4's cutover is deferred until the
+standing cost is funded. Done, for this pass, means the instance was proven
+to work — TLS, pgvector, a faithful restore with matching row counts, and
+measured latency — without the system of record ever moving.
 
 ## Acceptance Criteria
 
@@ -40,7 +47,9 @@ history and corpus are intact on it, and reverting is a one-line secret change.
 
 | Risk / unknown | Impact if wrong | Resolution |
 |----------------|-----------------|------------|
-| Whether this subscription qualifies for the free allowance covering a `Standard_B1ms` Flexible Server, or whether it bills | Standing cost begins without having been accepted | Spike + gate: Phase 2 Task 1 prices it before anything is created; an unacceptable charge stops execution and returns to the human (spec's Neon/Supabase fallback) |
+| ~~Free allowance covering a `Standard_B1ms` Flexible Server~~ | — | **Resolved 2026-07-29 (spec A1):** it does not apply. Azure for Students is a $100 credit, not the free account. Measured $24.57/month ($0.81/day); accepted for a short-lived trial |
+| ~~How long the instance lives~~ | — | **Resolved 2026-07-29 (spec A1):** evaluation only. Phases 1–3 run, then teardown; phase 4 is deferred, so nothing is cut over and no data can be stranded |
+| **The `resources` corpus is empty** (0 rows, 0 embeddings) | Phase 3's embedding check compares 0 to 0 and proves nothing; the resource half of FR-CC-13 stays unanswerable | Accepted (spec A2). The check is kept — it costs nothing and becomes meaningful once aggregation works |
 | Flexible Server availability in `newzealandnorth` — this subscription's region policy already blocked Static Web Apps everywhere (`infra/dashboard.bicep`) | Instance cannot be co-located with the VM; either a policy-allowed but distant region (worse per-query latency) or the non-Azure fallback | Spike: Phase 2 Task 1 runs `az postgres flexible-server list-skus` against the region before provisioning |
 | asyncpg honouring `sslmode=require` supplied in the DSN — assumed from libpq-style parsing, never exercised here | Cutover fails at connect time, or connects unencrypted | Spike: Phase 2 Task 4 connects from the VM using the app's own client and DSN form, before any data moves |
 | `azure.extensions` accepting `VECTOR`, and the server's pgvector supporting `VECTOR(384)` and `<=>` | `CREATE EXTENSION vector` fails, so the `resources` restore fails and the corpus has nowhere to land | Spike: Phase 2 Task 4 creates the extension and runs a probe cosine query before the migration runs |
@@ -70,9 +79,9 @@ history and corpus are intact on it, and reverting is a one-line secret change.
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
 | 1 | Configuration seam | [phase-1-configuration-seam.md](phase-1-configuration-seam.md) | In progress |
-| 2 | Provision the instance | [phase-2-provision-instance.md](phase-2-provision-instance.md) | Not started |
-| 3 | Migrate and verify | [phase-3-migrate-and-verify.md](phase-3-migrate-and-verify.md) | Not started |
-| 4 | Cutover and documentation | [phase-4-cutover-and-docs.md](phase-4-cutover-and-docs.md) | Not started |
+| 2 | Provision the instance | [phase-2-provision-instance.md](phase-2-provision-instance.md) | **Complete** |
+| 3 | Migrate and verify | [phase-3-migrate-and-verify.md](phase-3-migrate-and-verify.md) | **Complete** — instance migrated onto, verified, then deleted (evaluation cost $0.07) |
+| 4 | Cutover, documentation, and the exit | [phase-4-cutover-and-docs.md](phase-4-cutover-and-docs.md) | **Deferred** — needs funded standing cost (spec A1). Now also carries Task 4, the migrate-back and retirement path (spec A5) |
 
 > All phases are planned in advance — every row above has a written,
 > human-approved phase doc before phase 1 execution starts. If executing
@@ -111,6 +120,13 @@ history and corpus are intact on it, and reverting is a one-line secret change.
   container as part of this work. Writes made to the managed instance after
   cutover are lost on rollback; the pipeline is idempotent per run date, so the
   cost of that is at most one re-run.
+
+  That cheap rollback is a **discard**, and it stays acceptable only while the
+  grace period does. To unwind without losing anything — or to retire the
+  managed instance at all once it is the system of record — use **phase 4
+  Task 4**, which copies the data back before touching the secret and deletes
+  the server last. Flipping the secret first would point the pipeline at a
+  stale database while the good copy sat in a resource queued for deletion.
 
 ---
 
@@ -156,9 +172,14 @@ history and corpus are intact on it, and reverting is a one-line secret change.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All phase verification steps pass
-- [ ] Feature verified manually in a running environment (one full cycle post-cutover)
+> **This pass is phases 1–3 only.** The criteria below that depend on cutover
+> — a full cycle on the managed instance, querying while the VM is
+> deallocated, rollback-by-secret — are deferred with phase 4, not abandoned.
+
+- [ ] All acceptance criteria met *(minus the cutover-dependent ones)*
+- [ ] All phase 1–3 verification steps pass
+- [ ] The instance is proven manually: TLS on, pgvector working, row counts
+      matching, latency measured
 - [ ] Docs / README updated where behaviour changed (`infra/README.md`,
       `docs/commands.md`, `README.md`)
 - [ ] The three corrections this phase makes to the umbrella PRS are recorded

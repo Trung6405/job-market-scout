@@ -497,6 +497,26 @@ its previous behaviour. The Task 3 commit is independent and can stay. The
   record. Against a real local Postgres the DB suites still pass unchanged
   (74 tests across `test_db`, `test_coach_db`, `test_coach_retrieval_db`,
   `test_coach_tips_db`, `test_coach_link_health_db`).
+- **A queued workflow run is not safe from cancellation, and this bit us.** The
+  merge to `main` triggered Deploy, whose `deploy` job queued on the `scout-vm`
+  concurrency group behind an already-running Scheduled run. Dispatching a
+  *second* Scheduled run then evicted it: GitHub keeps at most one *pending*
+  run per concurrency group, so a newer entrant cancels the older pending one.
+  `cancel-in-progress: false` protects a job that is **running**, not one that
+  is **queued** — which is not what the workflow's own comment implies.
+
+  The consequence was invisible without looking: the run reported
+  `test: success` with `deploy: cancelled`, and the VM silently never received
+  the merged code. No billing leak, though — the job was cancelled while still
+  pending, so it never reached `Start VM` and had nothing to deallocate.
+
+  Recovery was `gh run rerun <id>` on the cancelled run, which replays the same
+  push event against the same commit — cleaner than a fresh dispatch, and it
+  sidestepped a `gh workflow run --ref main` that was failing with a spurious
+  `HTTP 422: No ref found for: main` despite the branch resolving fine via the
+  API. **Rule for phase 4:** dispatch one VM-touching workflow at a time and
+  confirm it has completed before starting the next. The cutover runs this
+  exact sequence.
 - Full suite before Postgres was running: 465 passed, 114 skipped — the skips
   are exactly the DB-touching tests, which then passed once the container was
   up. Worth knowing that a green local run means much less than it looks like
