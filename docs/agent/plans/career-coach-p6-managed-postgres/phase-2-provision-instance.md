@@ -1,7 +1,8 @@
 # Phase 2: Provision the Instance
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete — all four tasks done, all verification passing. The
+> server is provisioned and billing; Phase 3 ends by deleting it.
 > **Depends on:** Phase 1 complete (the secret is the seam, and it is proven)
 
 ---
@@ -381,7 +382,7 @@ Provisions nothing on its own — infra-provision.yml is manual dispatch."
   billable resource and permanently fixes the networking mode. Do not run it
   until the human has accepted the price recorded in Task 1's Notes.
 - **Steps:**
-  - [ ] Generate an administrator password and store it as a repository secret.
+  - [x] Generate an administrator password and store it as a repository secret.
     Azure rejects passwords containing the login name and requires 8–128 chars
     from three of the four character classes:
 
@@ -393,7 +394,7 @@ Provisions nothing on its own — infra-provision.yml is manual dispatch."
     Keep `$PGPW` in this shell — Tasks 4 and Phase 3 need it, and GitHub will
     not read it back. Store it in the password manager before closing the shell.
 
-  - [ ] Confirm `VM_HOST` is the VM's current static public IP, since it becomes
+  - [x] Confirm `VM_HOST` is the VM's current static public IP, since it becomes
     the firewall rule:
 
     ```bash
@@ -404,7 +405,7 @@ Provisions nothing on its own — infra-provision.yml is manual dispatch."
     Expected: the two match. If not, fix `VM_HOST` first — the deploy and
     scheduled-run workflows use it to reach the VM as well.
 
-  - [ ] Preflight with `what-if` first — it validates against ARM and creates
+  - [x] Preflight with `what-if` first — it validates against ARM and creates
     nothing, so a policy denial or a bad SKU surfaces before any billing
     starts. The dummy password is never used to create anything:
 
@@ -416,21 +417,35 @@ Provisions nothing on its own — infra-provision.yml is manual dispatch."
     the `azure.extensions` configuration and the `allow-scout-vm` firewall
     rule — and nothing else changing.
 
-  - [ ] Dispatch the provisioning workflow and watch it:
+  - [x] Dispatch the provisioning workflow and watch it:
 
     ```bash
     gh workflow run "Provision infra"
     gh run watch "$(gh run list --workflow='Provision infra' --limit 1 --json databaseId --jq '.[0].databaseId')"
     ```
 
-  - [ ] Read the outputs and record the FQDN in Notes:
+    ⚠️ **This does not work from a feature branch, and that is not a transient
+    failure** — the Azure OIDC federated credential is subject-scoped to
+    `refs/heads/main` alone, so the dispatch dies at `azure/login` before any
+    `az deployment` runs. Provisioned instead by running the same committed
+    template and `.bicepparam` from the local `az` CLI, deployment named
+    `postgres` to match what the workflow step would have produced. See Notes.
+
+    ```bash
+    POSTGRES_ADMIN_PASSWORD="$PGPW" VM_HOST="$VM_HOST" \
+      az deployment group create --resource-group "$RESOURCE_GROUP" --name postgres \
+      --template-file infra/postgres.bicep --parameters infra/postgres.bicepparam \
+      --query "properties.outputs" -o json
+    ```
+
+  - [x] Read the outputs and record the FQDN in Notes:
 
     ```bash
     az deployment group show -g "$RESOURCE_GROUP" -n postgres \
       --query properties.outputs -o json
     ```
 
-  - [ ] Confirm the shape actually created matches what was priced:
+  - [x] Confirm the shape actually created matches what was priced:
 
     ```bash
     az postgres flexible-server show -g "$RESOURCE_GROUP" -n trung6405-scout-pg \
@@ -439,7 +454,10 @@ Provisions nothing on its own — infra-provision.yml is manual dispatch."
 
     Expected: `Standard_B1ms`, `Burstable`, `16`, `32`, `Disabled`, `Disabled`.
 
-  - [ ] No commit.
+  - [x] No commit — no code changed. *(But the Notes below record measurements
+    that cannot be re-derived without paying to provision again, and Phase 3's
+    teardown is gated on them being captured, so they should not be left
+    sitting in a working tree.)*
 
 ### Task 4: Prove the pipeline's own client can reach it over TLS with pgvector
 
@@ -447,7 +465,7 @@ Provisions nothing on its own — infra-provision.yml is manual dispatch."
 - **Gate:** none — read-only against the new, still-empty instance. Nothing
   touches the old database.
 - **Steps:**
-  - [ ] From the VM, connect with the app's own client library and DSN form.
+  - [x] From the VM, connect with the app's own client library and DSN form.
     This is the step that settles whether asyncpg honours `sslmode=require`
     supplied in the DSN, and whether the allow-listed extension can actually be
     created — both assumed, neither previously exercised here:
@@ -485,33 +503,50 @@ Provisions nothing on its own — infra-provision.yml is manual dispatch."
     `sslmode` parameter, stop — TLS in transit is a must-have, and the fix
     belongs here rather than after data has moved.
 
-  - [ ] Confirm the firewall genuinely restricts access — the same connect from
+  - [x] Confirm the firewall genuinely restricts access — the same connect from
     somewhere that is not the VM should be refused:
 
     ```bash
     # from your laptop, not the VM
     az postgres flexible-server firewall-rule list -g "$RESOURCE_GROUP" \
-      -s trung6405-scout-pg -o table
+      --server-name trung6405-scout-pg -o table
     ```
 
     Expected: exactly one rule, `allow-scout-vm`, start and end both equal to
     `VM_HOST`. No `AllowAllAzureIps` / `0.0.0.0` rule.
 
-  - [ ] Record the observed server version, pgvector version, and TLS result in
+    Listing the rules only reads the intent, so the refusal was also exercised
+    directly — a TCP connect to the server from the laptop, which is not
+    allow-listed:
+
+    ```bash
+    python -c "
+    import socket
+    s = socket.socket(); s.settimeout(15)
+    s.connect(('trung6405-scout-pg.postgres.database.azure.com', 5432))
+    "
+    ```
+
+    Expected: it does not connect.
+
+  - [x] Record the observed server version, pgvector version, and TLS result in
     Notes.
-  - [ ] No commit.
+  - [x] No commit — no code changed.
 
 ---
 
 ## Verification
 
-- [ ] Template guards pass: `pytest tests/test_infra_postgres_template.py -v`
-- [ ] Template compiles: `az bicep build --file infra/postgres.bicep --stdout > /dev/null`
-- [ ] Full suite still passes: `pytest -q`
-- [ ] `az postgres flexible-server show` reports the priced shape (Task 3)
-- [ ] The probe from the VM reports TLS on, pgvector created, and a cosine
-      distance (Task 4)
-- [ ] Exactly one firewall rule exists, scoped to the VM's IP
+- [x] Template guards pass: `pytest tests/test_infra_postgres_template.py -v`
+      — 8 passed
+- [x] Template compiles: `az bicep build --file infra/postgres.bicep --stdout > /dev/null`
+      — clean, no warnings
+- [x] Full suite still passes: `pytest -q` — 590 passed in 4m16s
+- [x] `az postgres flexible-server show` reports the priced shape (Task 3)
+- [x] The probe from the VM reports TLS on, pgvector created, and a cosine
+      distance (Task 4) — `TLSv1.3`, pgvector `0.8.2`, cosine `1.0`
+- [x] Exactly one firewall rule exists, scoped to the VM's IP — and a connect
+      from a non-allow-listed address was confirmed to time out
 
 ## Rollback
 
@@ -596,5 +631,105 @@ closed listing keeps its description — so the largest table only grows.
 `resources` being empty is spec Amendment A2, and it makes this phase's
 embedding verification vacuous for now.
 
-*(Tasks 2–4 findings filled in during execution — the server FQDN, the observed
-Postgres and pgvector versions, and the TLS probe result)*
+### Task 3 — provisioning *(2026-07-30)*
+
+The server exists and is `Ready`. The deployment reports `Succeeded` at
+**2026-07-29T23:38:09Z** (2026-07-30 09:38 Sydney) after `PT6M52.8S`, so the
+server was created around 23:31Z. **That is the clock the evaluation window
+runs against** — roughly $0.81/day from then — and Phase 3 ends by deleting the
+server.
+
+| | |
+|---|---|
+| FQDN | `trung6405-scout-pg.postgres.database.azure.com` |
+| Admin login | `scoutadmin` |
+| Database | `scout` |
+| Region | New Zealand North — co-located with `scout-vm`, confirmed from `az vm show`, not assumed from the param file |
+
+Shape verified against Task 1's prices, all six pins as written:
+`Standard_B1ms` / `Burstable` / `16` / `32` GiB / HA `Disabled` / geo-redundant
+backup `Disabled`, with `publicNetworkAccess: Enabled`.
+`azure.extensions` reads `VECTOR`, source `user-override` — so the allow-list
+step landed, and Task 4's `CREATE EXTENSION` has what it needs. Exactly one
+firewall rule, `allow-scout-vm`, `172.204.26.218`–`172.204.26.218`; no
+`AllowAllAzureIps` and no `0.0.0.0`. `VM_HOST` was checked against
+`scout-vm-pip` first and already matched.
+
+**The workflow route does not work from a feature branch, and this is
+structural rather than transient.** `az identity federated-credential list`
+shows the `job-market-scout-gha` identity carries exactly one credential,
+`gha-main`, subject `repo:Trung6405/job-market-scout:ref:refs/heads/main`.
+Dispatching `Provision infra` on `feat/career-coach-p6-azure` failed at
+`azure/login` with `AADSTS700213 — No matching federated identity record found
+for presented assertion subject … refs/heads/feat/career-coach-p6-azure`. It
+failed *before* the `az group create` step, so nothing was created and nothing
+billed. Three routes were available — add a branch-scoped credential, merge to
+`main` first, or run the deployment locally — and the local `az` CLI was chosen:
+it runs the identical committed template and `.bicepparam`, so the artifact
+under test is unchanged and only the credential path differs, and it avoids both
+granting a throwaway branch main's infra rights and merging a provisioning step
+that had never deployed successfully. The local ARM `what-if` had already
+succeeded under the same credentials, so authorization was proven beforehand.
+
+Two consequences the rest of this plan has to carry:
+
+1. **The workflow's postgres step is unexercised.** Everything except that
+   step's own `az deployment group create` invocation is proven; the step itself
+   has never run green. Whoever eventually merges this to `main` is the first to
+   exercise it.
+2. **`infra-provision.yml` deploys all four templates in one job, so once the
+   postgres step is on `main`, any later dispatch re-creates this billable
+   server** — including after Phase 3 deletes it, and including dispatches made
+   for an unrelated VM or dashboard change. That is the same silent-cost drift
+   the Task 2 guards were written to prevent, and neither Phase 3 nor the
+   deferred Phase 4 accounts for it. It needs resolving before the merge, not
+   after.
+
+### Task 4 — the probe *(2026-07-30)*
+
+Run from the VM through the app's own container and client library, with the
+explicit `-f docker-compose.yaml -f docker-compose.prod.yaml` pair. **Every
+assumption the plan's risk table flagged came back good.**
+
+| | Observed | Was assumed because |
+|---|---|---|
+| `server_version` | `16.14` | major pinned to 16 to match `pgvector/pgvector:pg16` |
+| `ssl` | `True`, `TLSv1.3`, `TLS_AES_256_GCM_SHA384` | **asyncpg does honour `sslmode=require` given in the DSN** — never previously exercised here, and the acceptance criterion for encryption in transit |
+| `pgvector` | `0.8.2`, created from `CREATE EXTENSION IF NOT EXISTS vector` | the `azure.extensions` allow-list actually admits `VECTOR`; this is the step with no counterpart in the container image |
+| `<=>` on `vector(384)` | `0.0` for two parallel 384-dim vectors, `1.0` for orthogonal 3-dim | the operator and the exact column width `resources.embedding` declares both work, not just 3-dim toys |
+| connect | 137 ms cold (TLS handshake included) | — |
+| warm round-trip | median **0.67 ms** (min 0.65, max 1.43) over 10 `SELECT 1` on an open connection | NFR-CC-2 budgets <100 ms for retrieval, so the network is ~1% of it. Co-location in New Zealand North is what buys this |
+
+**The probe was proved to have hit the managed instance, not the local
+container** — worth doing explicitly, because a DSN that silently fell back
+would have produced a confident-looking pass:
+
+| | host | user | ssl | public tables |
+|---|---|---|---|---|
+| managed | `10.60.0.4` | `scoutadmin` | `True` | **0** — fresh, and the extension adds no tables |
+| VM container | `172.18.0.3` | `scout` | `False` | **6** — untouched, still the system of record |
+
+**The firewall was tested by refusal, not just by reading the rule list.** A TCP
+connect from the laptop, which is not allow-listed, timed out after 15 s, while
+the VM connects in 137 ms. Note the CLI flag in the step above was wrong as
+written: `firewall-rule list` rejects `-s` with `unrecognized arguments` and
+needs `--server-name`.
+
+Two incidental findings, neither caused by this phase but both bearing on it:
+
+1. **`docker-compose.override.yaml` *is* present on the VM**, contradicting
+   Phase 1's note that "the VM never sees the file". `deploy.yml` rsyncs with
+   `--exclude '.git' --exclude 'scout/.env' --exclude 'reports'` and nothing
+   else, so the override ships. Production is still safe *today* for the reason
+   Phase 1 gave — every production invocation passes the `-f` pair, so the
+   override is never auto-loaded — but the safety now rests entirely on that,
+   with a live in-network `DATABASE_URL` pin sitting on the VM's disk. After
+   cutover, any bare `docker compose run/up` on the VM, the natural thing to
+   type when debugging by hand, would silently talk to the old container
+   database instead of the system of record. One `--exclude
+   'docker-compose.override.yaml'` in the rsync closes it; the guard test should
+   assert the exclusion rather than only the `-f` pair.
+2. The probe needed the VM booted (`az vm start`), since the VM is the only
+   allow-listed address. That makes every future manual interaction with the
+   managed instance cost a VM boot — a wrinkle for P7, whose Function will need
+   its own firewall entry rather than borrowing the VM's.

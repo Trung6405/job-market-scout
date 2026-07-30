@@ -76,7 +76,7 @@ measured latency — without the system of record ever moving.
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
 | 1 | Configuration seam | [phase-1-configuration-seam.md](phase-1-configuration-seam.md) | In progress |
-| 2 | Provision the instance | [phase-2-provision-instance.md](phase-2-provision-instance.md) | In progress |
+| 2 | Provision the instance | [phase-2-provision-instance.md](phase-2-provision-instance.md) | **Complete** |
 | 3 | Migrate and verify | [phase-3-migrate-and-verify.md](phase-3-migrate-and-verify.md) | Not started |
 | 4 | Cutover and documentation | [phase-4-cutover-and-docs.md](phase-4-cutover-and-docs.md) | **Deferred** — needs funded standing cost (spec A1) |
 
