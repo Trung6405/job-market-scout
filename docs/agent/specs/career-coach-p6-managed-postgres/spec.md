@@ -320,3 +320,67 @@ Three claims in the approved text are affected:
 Recorded, not fixed. P6 delivers the *reachability* half of FR-CC-13 while the
 resource half stays unanswerable until aggregation actually populates the
 corpus — which P7's `/resources <skill>` will need.
+
+### A3 — Provisioning is its own dispatch, not a step in the shared infra workflow *(2026-07-30)*
+
+Two things surfaced while executing Phase 2 Task 3, and together they change how
+provisioning runs.
+
+**The shared workflow cannot provision from a feature branch, and that is
+structural.** The Azure OIDC federated credential on the `job-market-scout-gha`
+identity is subject-scoped to `refs/heads/main` and is the only credential on it,
+so a `workflow_dispatch` from any other ref fails at `azure/login` with
+`AADSTS700213` before anything deploys. Nothing was created and nothing billed by
+the attempt. The instance was provisioned instead by running the *identical*
+committed template and `.bicepparam` from the local `az` CLI, so the artifact
+under test did not change — only the credential path. The consequence to carry
+forward is that the workflow's own postgres step has never run green; whoever
+merges this branch is the first to exercise it.
+
+**A step deploying it inside `infra-provision.yml` is a standing cost waiting to
+be re-created by accident.** That workflow deploys the VM *and* the dashboard
+storage account in one job, and is dispatched for routine changes to either. With
+a postgres step in it, a dashboard-only dispatch re-creates the billable server
+— including after Phase 3 deletes it, at which point nothing in the repo points
+at the charge and it would simply resume unnoticed. This is the same drift the
+Task 2 shape guards were written to catch, arriving by a wider route than they
+close.
+
+So the postgres deployment moves to `.github/workflows/infra-postgres.yml`:
+`workflow_dispatch` only, with a `confirm_cost` input that must read
+`provision`, checked in the first step *before* the Azure login so an
+unconfirmed run costs and changes nothing. `infra-provision.yml` keeps a comment
+where the step was, saying why it is not there. Two guards pin it — the new
+workflow is dispatch-only and confirmation-gated, and `infra-provision.yml` does
+not reference `infra/postgres.bicep`. This applies the separation principle that
+workflow already states for the VM and dashboard templates to the one template
+carrying a standing cost.
+
+### A4 — The local compose override does ship to the VM *(2026-07-30)*
+
+Phase 1 recorded that `docker-compose.override.yaml` — which pins `DATABASE_URL`
+to the VM's own Postgres container — is a local-development file the VM never
+sees. **It is on the VM.** `deploy.yml` rsyncs with `--exclude '.git' --exclude
+'scout/.env' --exclude 'reports'` and nothing else, so it has shipped with every
+deploy since it was created. Found while running the Phase 2 probe, which needed
+the compose stack on the VM.
+
+Production is not currently wrong, for the reason Phase 1 gave: every production
+invocation passes `-f docker-compose.yaml -f docker-compose.prod.yaml`, and
+Compose auto-loads an override only when no `-f` is given. But that makes the
+`-f` pair the *sole* protection, with a live in-network `DATABASE_URL` sitting on
+the VM's disk. After the Phase 4 cutover, a bare `docker compose run` there —
+the natural thing to type when debugging by hand, and outside the reach of a
+guard that inspects workflow files — silently reads and writes the old container
+database instead of the system of record. That is the exact failure mode this
+phase's design works to make impossible, reachable by a route the tests did not
+cover.
+
+Fixed in the rsync: the file is excluded, **and** removed explicitly. The
+exclusion alone is not enough, which is the non-obvious half — `rsync --delete`
+leaves excluded files on the receiver untouched, so the copy already there would
+have stayed indefinitely. Both halves are pinned by tests. Those tests also
+exposed a flaw in the existing guards worth naming: they matched step text
+including comments, so a step whose *comment* mentioned `rsync` or `docker
+compose` was treated as if it ran them. Comment lines are now stripped before
+matching, since a guard satisfiable by editing a comment is not a guard.

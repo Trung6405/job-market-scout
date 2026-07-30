@@ -84,13 +84,47 @@ def test_no_allow_all_azure_services_rule():
     assert "0.0.0.0" not in _BICEP
 
 
-def test_provision_workflow_deploys_the_postgres_template():
-    workflow = yaml.safe_load(
-        (_ROOT / ".github" / "workflows" / "infra-provision.yml").read_text(
-            encoding="utf-8"
-        )
+def _workflow(name: str) -> dict:
+    return yaml.safe_load(
+        (_ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
     )
-    scripts = "\n".join(
-        step.get("run", "") for step in workflow["jobs"]["provision"]["steps"]
+
+
+def _job_scripts(workflow: dict, job_id: str) -> str:
+    return "\n".join(step.get("run", "") for step in workflow["jobs"][job_id]["steps"])
+
+
+def test_postgres_has_its_own_dispatch_only_workflow():
+    workflow = _workflow("infra-postgres.yml")
+    assert "infra/postgres.bicep" in _job_scripts(workflow, "provision")
+    # `on: workflow_dispatch` parses to {True: {"workflow_dispatch": ...}} because
+    # YAML 1.1 reads a bare `on` as the boolean true.
+    triggers = workflow.get("on", workflow.get(True))
+    assert set(triggers) == {"workflow_dispatch"}, (
+        "provisioning a billable server must never be triggered by a push, "
+        "a schedule, or another workflow"
     )
-    assert "infra/postgres.bicep" in scripts
+
+
+def test_provisioning_requires_confirming_the_standing_cost():
+    """A dispatch that has not typed the confirmation must fail before the Azure
+    login, so an accidental run costs nothing and changes nothing."""
+    workflow = _workflow("infra-postgres.yml")
+    steps = workflow["jobs"]["provision"]["steps"]
+    guard, rest = steps[0], steps[1:]
+
+    assert "inputs.confirm_cost" in guard.get("if", "")
+    assert "exit 1" in guard.get("run", "")
+    assert not any(
+        "azure/login" in str(step.get("uses", "")) for step in [guard]
+    ), "the guard must come before the login, not after it"
+    assert any("azure/login" in str(step.get("uses", "")) for step in rest)
+
+
+def test_shared_infra_workflow_cannot_recreate_the_server():
+    """infra-provision.yml deploys the VM and the dashboard and is dispatched for
+    routine changes to either. A postgres step there means a dashboard tweak
+    re-creates a billable server -- including after Phase 3 deletes it, when
+    nothing in the repo points at the charge. See spec Amendment A3."""
+    scripts = _job_scripts(_workflow("infra-provision.yml"), "provision")
+    assert "infra/postgres.bicep" not in scripts

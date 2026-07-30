@@ -62,25 +62,9 @@ jobs:
             --account-name "$ACCOUNT_NAME" --auth-mode login \
             --static-website --index-document index.html
 
-      - name: Deploy managed Postgres Bicep (postgres.bicep)
-        env:
-          # postgres.bicepparam reads both of these via readEnvironmentVariable()
-          # at compile time. Neither has a default, so a missing secret fails the
-          # deployment rather than provisioning a server with an empty password
-          # or a firewall rule open to everything.
-          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
-          VM_HOST: ${{ vars.VM_HOST }}
-        run: |
-          set -euo pipefail
-          # Separate deployment from main.bicep for the same reason dashboard is
-          # (see the comment atop dashboard.bicep). Deployment name defaults to
-          # the template's base name, matching how `dashboard` is looked up above.
-          #
-          # NOTE: this creates a billable resource — $24.57/month measured, no
-          # free allowance on this subscription (spec Amendment A1). It is
-          # dispatched by hand, never on push.
-          az deployment group create \
-            --resource-group "$RESOURCE_GROUP" \
-            --template-file infra/postgres.bicep \
-            --parameters infra/postgres.bicepparam \
-            --query "properties.outputs" -o json
+      # The managed Postgres (infra/postgres.bicep) is deliberately NOT deployed
+      # here — see .github/workflows/infra-postgres.yml. It briefly was, which
+      # would have meant every dispatch of this workflow, including one made for
+      # a dashboard-only change, re-creating a $24.57/month server: also after
+      # P6 Phase 3 deletes it, when nothing would be pointing at the charge.
+      # Anything with a standing cost gets its own explicitly-confirmed dispatch.

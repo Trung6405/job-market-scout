@@ -683,7 +683,8 @@ Two consequences the rest of this plan has to carry:
    for an unrelated VM or dashboard change. That is the same silent-cost drift
    the Task 2 guards were written to prevent, and neither Phase 3 nor the
    deferred Phase 4 accounts for it. It needs resolving before the merge, not
-   after.
+   after. **Resolved — spec A3:** the deployment moved to a dedicated,
+   confirmation-gated `infra-postgres.yml`.
 
 ### Task 4 — the probe *(2026-07-30)*
 
@@ -726,9 +727,9 @@ Two incidental findings, neither caused by this phase but both bearing on it:
    with a live in-network `DATABASE_URL` pin sitting on the VM's disk. After
    cutover, any bare `docker compose run/up` on the VM, the natural thing to
    type when debugging by hand, would silently talk to the old container
-   database instead of the system of record. One `--exclude
-   'docker-compose.override.yaml'` in the rsync closes it; the guard test should
-   assert the exclusion rather than only the `-f` pair.
+   database instead of the system of record. **Resolved — spec A4:** the rsync
+   now excludes the file *and* removes it explicitly, since `--delete` leaves
+   excluded files on the receiver alone, and both halves are pinned by tests.
 2. The probe needed the VM booted (`az vm start`), since the VM is the only
    allow-listed address. That makes every future manual interaction with the
    managed instance cost a VM boot — a wrinkle for P7, whose Function will need

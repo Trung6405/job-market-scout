@@ -1,0 +1,76 @@
+# Manual: provision the always-on managed Postgres (infra/postgres.bicep).
+#
+# Deliberately NOT a step in "Provision infra". That workflow deploys the VM and
+# the dashboard storage account and is dispatched for routine changes to either,
+# so a postgres step living there means any dashboard tweak re-creates a
+# billable server — including after P6 Phase 3 deletes it, when nothing in the
+# repo would be pointing at it and the charge would just resume unnoticed.
+# This is the same separation principle stated atop infra-provision.yml ("a
+# dashboard-only change never depends on the VM template"), applied to the one
+# template that carries a standing cost.
+#
+# Cost: $24.57/month measured — $19.93 compute + $4.64 storage, with no free
+# allowance on this subscription (career-coach-p6 spec, Amendment A1).
+#
+# Must be dispatched from `main`: the Azure OIDC federated credential is
+# subject-scoped to `repo:<owner>/<repo>:ref:refs/heads/main`, so a dispatch
+# from any other branch fails at `azure/login` with AADSTS700213 before
+# anything is deployed.
+name: Provision managed Postgres
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_cost:
+        description: 'Type "provision" to confirm the standing monthly charge.'
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    env:
+      RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
+    steps:
+      # First, and before the Azure login, so an unconfirmed dispatch costs
+      # nothing and touches nothing.
+      - name: Refuse unless the standing cost was confirmed
+        if: inputs.confirm_cost != 'provision'
+        run: |
+          echo "confirm_cost was '${{ inputs.confirm_cost }}', expected 'provision'." >&2
+          echo "This deployment begins a standing monthly charge and fixes the" >&2
+          echo "server's networking mode permanently. It is not run by accident." >&2
+          exit 1
+
+      - uses: actions/checkout@v7
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy managed Postgres Bicep (postgres.bicep)
+        env:
+          # postgres.bicepparam reads both of these via readEnvironmentVariable()
+          # at compile time. Neither has a default, so a missing secret fails the
+          # deployment rather than provisioning a server with an empty password
+          # or a firewall rule open to everything.
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          VM_HOST: ${{ vars.VM_HOST }}
+        run: |
+          set -euo pipefail
+          # Named explicitly rather than relying on the template's base name, so
+          # `az deployment group show -n postgres` keeps working as the phase
+          # docs' verification steps assume.
+          az deployment group create \
+            --resource-group "$RESOURCE_GROUP" \
+            --name postgres \
+            --template-file infra/postgres.bicep \
+            --parameters infra/postgres.bicepparam \
+            --query "properties.outputs" -o json
