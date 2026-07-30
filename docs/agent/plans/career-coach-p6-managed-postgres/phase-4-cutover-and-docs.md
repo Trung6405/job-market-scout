@@ -12,9 +12,10 @@
 > rolling the `DATABASE_URL` secret back restores the connection, not the data,
 > so any run recorded here would be lost on teardown.
 >
-> Nothing below is wrong — it is the plan for when the cost is funded. What it
-> would additionally need at that point is a migrate-back step, since "delete
-> the instance" stops being free once it holds the only copy of anything.
+> Nothing below is wrong — it is the plan for when the cost is funded. The
+> migrate-back step this deferral note originally called for is now written, as
+> **Task 4**: once the cutover has happened, "delete the instance" stops being
+> free, because the instance holds the only copy of every run recorded since.
 
 ---
 
@@ -285,6 +286,160 @@ EXTENSION can succeed; and NFR-CC-2's latency budget was written against a
 same-host database that no longer exists."
     ```
 
+### Task 4: Migrate back and retire the instance *(only when ending the arrangement)*
+
+- **Files:** none — a procedure. `scripts/verify_migration.py` is reused as-is,
+  with the DSNs swapped; it compares two databases and has no notion of which
+  direction is "forward".
+- **When this runs:** not as part of the cutover. This is the **exit** — the
+  standing cost stops being funded, or the instance has to go for some other
+  reason. Phase 3 could tear an instance down with a one-line command because
+  nothing pointed at it and it held nothing that did not exist elsewhere. After
+  Task 1 both of those stop being true: the managed instance is the system of
+  record, and it is the **only** copy of every run recorded since the cutover.
+  Deleting it then is data loss, not cleanup.
+- **Gate:** ⚠️ human sign-off twice — once before Step 4, which overwrites the
+  VM's pre-cutover copy, and once before Step 9, which deletes the server
+  irreversibly.
+- **The order is Task 1 reversed, and the order is the whole point:** the data
+  comes back first, the secret moves second, the server is deleted last. Any
+  other sequence leaves a window where the only copy of something lives in a
+  resource that is being destroyed.
+- **Steps:**
+
+  - [ ] Pick a window well clear of 19:00 UTC and confirm nothing is in flight:
+
+    ```bash
+    gh run list --workflow='Scheduled run' --limit 1
+    gh run list --workflow=Deploy --limit 1
+    ```
+
+  - [ ] Dump the managed instance. Run from the VM, inside its own
+    `pgvector/pgvector:pg16` container, for the same client-version reason
+    Phase 3 Task 2 gives. Credentials go through the environment, not argv:
+
+    ```bash
+    az vm start -g "$RESOURCE_GROUP" -n scout-vm
+    ssh azureuser@"$VM_HOST"
+    cd /opt/job-market-scout
+    read -rs -p 'managed password: ' PGPASSWORD && export PGPASSWORD PGSSLMODE=require
+    docker compose -f docker-compose.yaml -f docker-compose.prod.yaml \
+      exec -T -e PGPASSWORD -e PGSSLMODE postgres \
+      pg_dump -h trung6405-scout-pg.postgres.database.azure.com -U scoutadmin -d scout \
+      --format=plain --no-owner --no-privileges > /tmp/managed-back.sql
+    grep -c 'CREATE TABLE' /tmp/managed-back.sql
+    ```
+
+    Expected: 6. A dump that is short, empty, or missing tables must stop this
+    task — everything below assumes it is complete.
+
+  - [ ] **Keep the VM's copy before overwriting it.** The container still holds
+    the pre-cutover data, and Step 4 replaces it wholesale. Dump it and copy it
+    *off* the VM, so a mistake in the next step is recoverable from something
+    that is not on the machine being changed:
+
+    ```bash
+    docker compose -f docker-compose.yaml -f docker-compose.prod.yaml exec -T postgres \
+      pg_dump -U scout -d scout --format=plain --no-owner --no-privileges \
+      > /tmp/vm-precutover.sql
+    grep -c 'CREATE TABLE' /tmp/vm-precutover.sql   # expect 6
+    # from the laptop:
+    scp azureuser@"$VM_HOST":/tmp/vm-precutover.sql ./vm-precutover-$(date +%F).sql
+    ```
+
+  - [ ] ⚠️ **Gate, then replace the container's schema with the managed copy.**
+    Drop and recreate rather than restore on top: the managed copy is a superset
+    of the container's, and a plain restore over existing tables fails on
+    duplicate objects and keys rather than merging. This is the destructive
+    step, and it is only safe because of the dump taken above:
+
+    ```bash
+    docker compose -f docker-compose.yaml -f docker-compose.prod.yaml exec -T postgres \
+      psql -U scout -d scout -v ON_ERROR_STOP=1 \
+      -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
+    docker compose -f docker-compose.yaml -f docker-compose.prod.yaml exec -T postgres \
+      psql -U scout -d scout -v ON_ERROR_STOP=1 -f - < /tmp/managed-back.sql
+    ```
+
+    Expected: exit 0, no `ERROR`. `CREATE EXTENSION vector` succeeds here without
+    an allow-list — the container image ships pgvector, which is the asymmetry
+    that made the outbound direction need `azure.extensions` at all.
+
+  - [ ] Verify the copy came back, with the DSNs swapped so the managed instance
+    is now the source:
+
+    ```bash
+    read -rs -p 'managed DSN: ' SOURCE_DSN && export SOURCE_DSN
+    export TARGET_DSN='postgresql://scout:scout@postgres:5432/scout'
+    docker compose -f docker-compose.yaml -f docker-compose.prod.yaml \
+      run --rm -e SOURCE_DSN -e TARGET_DSN app python -m scripts.verify_migration
+    ```
+
+    Expected: every row matching and exit 0. Row counts alone do not prove the
+    schema returned, so repeat Phase 3's structural check too — the `embedding`
+    column must read `vector(384)`, and tables, indexes and foreign keys must
+    match name-by-name.
+
+  - [ ] Move the secret back and redeploy, so the VM's `scout/.env` is
+    re-rendered:
+
+    ```bash
+    gh secret set DATABASE_URL --repo Trung6405/job-market-scout \
+      --body 'postgresql://scout:scout@postgres:5432/scout'
+    gh workflow run Deploy
+    gh run watch "$(gh run list --workflow=Deploy --limit 1 --json databaseId --jq '.[0].databaseId')"
+    ```
+
+  - [ ] Confirm the container resolves the in-network host again, and run one
+    full cycle against it:
+
+    ```bash
+    ssh azureuser@"$VM_HOST" \
+      "cd /opt/job-market-scout && docker compose -f docker-compose.yaml -f docker-compose.prod.yaml \
+        run --rm app python -c \"
+    from urllib.parse import urlparse
+    from scout.config import Settings
+    print(urlparse(Settings().database_url).hostname)\""
+    gh workflow run "Scheduled run"
+    ```
+
+    Expected: `postgres`, then a green run whose new rows land on the container.
+
+  - [ ] If a scheduled run landed on the managed instance between the dump and
+    the secret change, re-run that day. The pipeline is idempotent per run date,
+    so the cost is one re-run — the same argument the cutover's own rollback
+    rests on.
+
+  - [ ] ⚠️ **Gate: delete the server only now**, with the data back on the
+    container, the counts read, and a cycle proven against it. This is
+    irreversible and it is where the standing cost stops:
+
+    ```bash
+    az postgres flexible-server delete -g "$RESOURCE_GROUP" -n trung6405-scout-pg --yes
+    gh secret delete POSTGRES_ADMIN_PASSWORD --repo Trung6405/job-market-scout
+    ```
+
+    The firewall rule and the admin credential die with the server. Re-creating
+    it later is Phase 2 Task 3 again, not a restore — which is the reason
+    `postgres.bicep` and `infra-postgres.yml` stay committed rather than being
+    deleted alongside.
+
+  - [ ] Shred both dumps, on the VM and on the laptop. Between them they hold
+    the entire listings corpus and every scored result:
+
+    ```bash
+    shred -u /tmp/managed-back.sql /tmp/vm-precutover.sql 2>/dev/null || \
+      rm -f /tmp/managed-back.sql /tmp/vm-precutover.sql
+    ```
+
+  - [ ] Reverse Task 3's documentation: the "database lives on managed Postgres"
+    subsection in `infra/README.md` becomes historical, `docker compose down -v`
+    on the VM goes back to being destructive of the live history rather than of a
+    rollback copy, and the PRS amendments table gains a row recording that the
+    move was made and then unwound, with why. Deallocate the VM.
+  - [ ] Record in Notes: the migrate-back date, the swapped-direction report, the
+    total the evaluation cost, and whether anything was lost.
+
 ---
 
 ## Verification
@@ -298,6 +453,15 @@ same-host database that no longer exists."
       job-detail page, gaps, and cited tips
 - [ ] The VM's `postgres` container is still running with its volume intact:
       `ssh azureuser@"$VM_HOST" 'docker ps --filter name=postgres'`
+
+Task 4 only — these apply when the arrangement is being ended, not at cutover:
+
+- [ ] A dump of the VM's pre-cutover container exists **off the VM** before its
+      schema is replaced
+- [ ] `python -m scripts.verify_migration` with the DSNs swapped reports every
+      table matching, and the `embedding` column still reads `vector(384)`
+- [ ] A full cycle has run against the container, and only then is the server
+      deleted
 
 ## Observability
 
@@ -327,6 +491,20 @@ lasts and the volume is intact. Runs recorded on the managed instance after
 cutover do not come back with it; the pipeline is idempotent per run date, so
 re-running the day covers it. The Task 3 documentation commit can be reverted
 separately, or amended to describe the reverted state.
+
+**That is the cheap rollback, and it only stays cheap while the grace period
+holds.** It is a *discard*, not a migration: it works because the container's
+copy is still good enough to resume from, and it silently accepts losing
+whatever the managed instance recorded since the cutover. Two things end that:
+the grace period lapsing far enough that a day or two of lost runs stops being
+acceptable, and the volume no longer being intact.
+
+**To unwind without losing anything, or to retire the instance at all, use
+Task 4.** Once a real amount of history lives only on the managed instance,
+this section's secret-flip is the wrong tool — flipping first would point the
+pipeline at a stale database and leave the good copy in a resource queued for
+deletion. Task 4 exists to get the order right: data back first, secret second,
+deletion last.
 
 ---
 

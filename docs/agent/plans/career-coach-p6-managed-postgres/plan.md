@@ -78,7 +78,7 @@ measured latency — without the system of record ever moving.
 | 1 | Configuration seam | [phase-1-configuration-seam.md](phase-1-configuration-seam.md) | In progress |
 | 2 | Provision the instance | [phase-2-provision-instance.md](phase-2-provision-instance.md) | **Complete** |
 | 3 | Migrate and verify | [phase-3-migrate-and-verify.md](phase-3-migrate-and-verify.md) | Not started |
-| 4 | Cutover and documentation | [phase-4-cutover-and-docs.md](phase-4-cutover-and-docs.md) | **Deferred** — needs funded standing cost (spec A1) |
+| 4 | Cutover, documentation, and the exit | [phase-4-cutover-and-docs.md](phase-4-cutover-and-docs.md) | **Deferred** — needs funded standing cost (spec A1). Now also carries Task 4, the migrate-back and retirement path (spec A5) |
 
 > All phases are planned in advance — every row above has a written,
 > human-approved phase doc before phase 1 execution starts. If executing
@@ -117,6 +117,13 @@ measured latency — without the system of record ever moving.
   container as part of this work. Writes made to the managed instance after
   cutover are lost on rollback; the pipeline is idempotent per run date, so the
   cost of that is at most one re-run.
+
+  That cheap rollback is a **discard**, and it stays acceptable only while the
+  grace period does. To unwind without losing anything — or to retire the
+  managed instance at all once it is the system of record — use **phase 4
+  Task 4**, which copies the data back before touching the secret and deletes
+  the server last. Flipping the secret first would point the pipeline at a
+  stale database while the good copy sat in a resource queued for deletion.
 
 ---
 

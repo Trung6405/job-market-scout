@@ -384,3 +384,38 @@ exposed a flaw in the existing guards worth naming: they matched step text
 including comments, so a step whose *comment* mentioned `rsync` or `docker
 compose` was treated as if it ran them. Comment lines are now stripped before
 matching, since a guard satisfiable by editing a comment is not a guard.
+
+### A5 — Reversing by configuration alone is a discard, not a reversal *(2026-07-30)*
+
+Two approved statements are narrower than they read. The Must-have says
+"rollback to the VM database available throughout a grace period by reverting
+configuration alone, with that database left intact"; the approach section says
+"reversing it is the same change in the other direction". Both are true only
+while losing the runs recorded since the cutover is acceptable.
+
+A1 already noticed the consequence for a short-lived instance — reverting the
+secret "restores the *connection*, not the *data*". What was missing is that
+this is not special to the trial. It is permanently true of the cheap rollback:
+the secret flip works because the container's copy is *good enough to resume
+from*, and it silently drops everything the managed instance recorded. That is
+a fine trade for a day or two of runs and a bad one for months of history, and
+nothing in the plan distinguished the two.
+
+It also makes the naive ordering actively harmful. Flipping the secret first
+points the pipeline at a stale database while the only good copy sits in a
+resource queued for deletion — a rollback that reads as conservative but widens
+the loss.
+
+So phase 4 gains **Task 4: migrate back and retire the instance**, the exit
+path, ordered as Task 1 reversed: data back first, secret second, deletion last.
+Its two non-obvious parts are that the container's pre-cutover copy is dumped
+**off the VM** before being overwritten — the restore is a `DROP SCHEMA
+public CASCADE` because the managed copy is a superset and restoring on top
+would fail on duplicate objects rather than merge — and that the server is
+deleted only after a full cycle has run against the container.
+`scripts/verify_migration.py` is reused unchanged with the DSNs swapped; it
+compares two databases and has no notion of which direction is forward.
+
+The distinction now stands in the plan: the grace-period secret flip stays
+documented as the cheap discard it is, and Task 4 is what "unwind without
+losing anything" means.
