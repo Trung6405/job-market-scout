@@ -93,7 +93,7 @@ jobs:
           submodules: recursive
 
       - name: Azure login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -158,25 +158,35 @@ jobs:
             "$VM_USER@$VM_HOST" "rm -f '$APP_DIR/docker-compose.override.yaml'"
 
       - name: Render .env on VM
+        # Config values come from repository VARIABLES, credentials from
+        # secrets. Storing plain config as secrets had a real cost beyond
+        # tidiness: GitHub masks every occurrence of a secret's value in every
+        # log, and BRIEFING_MAX_MATCHES held "20" — so every "20" in every
+        # Actions log rendered as ***, including "Node.js 20" in annotations.
+        #
+        # A referenced-but-unset vars.X evaluates to the empty string, which is
+        # deliberate: PREFERRED_LOCATIONS and MIN_SALARY are optional and were
+        # empty, and GitHub variables cannot hold an empty value — so they have
+        # no variable at all, and render as the same empty line as before.
         env:
-          JOBSPY_MCP_URL: ${{ secrets.JOBSPY_MCP_URL }}
+          JOBSPY_MCP_URL: ${{ vars.SCOUT_JOBSPY_MCP_URL }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          DEEPSEEK_MODEL: ${{ secrets.DEEPSEEK_MODEL }}
-          SEARCH_ROLES: ${{ secrets.SEARCH_ROLES }}
-          SEARCH_LOCATIONS: ${{ secrets.SEARCH_LOCATIONS }}
-          SEARCH_SITE_NAMES: ${{ secrets.SEARCH_SITE_NAMES }}
-          COUNTRY_INDEED: ${{ secrets.COUNTRY_INDEED }}
-          RESULTS_WANTED: ${{ secrets.RESULTS_WANTED }}
-          HOURS_OLD: ${{ secrets.HOURS_OLD }}
-          PREFERRED_LOCATIONS: ${{ secrets.PREFERRED_LOCATIONS }}
-          REMOTE_ONLY: ${{ secrets.REMOTE_ONLY }}
-          MIN_SALARY: ${{ secrets.MIN_SALARY }}
-          MIN_MATCH_SCORE: ${{ secrets.MIN_MATCH_SCORE }}
-          DESCRIPTION_CHAR_LIMIT: ${{ secrets.DESCRIPTION_CHAR_LIMIT }}
+          DEEPSEEK_MODEL: ${{ vars.SCOUT_DEEPSEEK_MODEL }}
+          SEARCH_ROLES: ${{ vars.SCOUT_SEARCH_ROLES }}
+          SEARCH_LOCATIONS: ${{ vars.SCOUT_SEARCH_LOCATIONS }}
+          SEARCH_SITE_NAMES: ${{ vars.SCOUT_SEARCH_SITE_NAMES }}
+          COUNTRY_INDEED: ${{ vars.SCOUT_COUNTRY_INDEED }}
+          RESULTS_WANTED: ${{ vars.SCOUT_RESULTS_WANTED }}
+          HOURS_OLD: ${{ vars.SCOUT_HOURS_OLD }}
+          PREFERRED_LOCATIONS: ${{ vars.SCOUT_PREFERRED_LOCATIONS }}
+          REMOTE_ONLY: ${{ vars.SCOUT_REMOTE_ONLY }}
+          MIN_SALARY: ${{ vars.SCOUT_MIN_SALARY }}
+          MIN_MATCH_SCORE: ${{ vars.SCOUT_MIN_MATCH_SCORE }}
+          DESCRIPTION_CHAR_LIMIT: ${{ vars.SCOUT_DESCRIPTION_CHAR_LIMIT }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          BRIEFING_MAX_MATCHES: ${{ secrets.BRIEFING_MAX_MATCHES }}
+          BRIEFING_MAX_MATCHES: ${{ vars.SCOUT_BRIEFING_MAX_MATCHES }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
+          DISCORD_CHANNEL_ID: ${{ vars.SCOUT_DISCORD_CHANNEL_ID }}
           GITHUB_PAT: ${{ secrets.SCOUT_GITHUB_PAT }}
         run: |
           set -euo pipefail
