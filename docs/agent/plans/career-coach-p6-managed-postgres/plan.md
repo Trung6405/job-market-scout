@@ -1,7 +1,10 @@
 # Plan: Career Coach P6 — Always-On Managed Postgres
 
-> **Status:** Not started
-> **Created:** 2026-07-29 · **Last updated:** 2026-07-29
+> **Status:** Evaluation complete, cutover deferred — phases 1–3 executed and the
+> instance was torn down at the end of phase 3 (spec A1). Phase 4 is written,
+> including the migrate-back exit path (spec A5), and waits on a funded decision
+> to carry the standing cost.
+> **Created:** 2026-07-29 · **Last updated:** 2026-07-30
 > **Spec:** [spec.md](../../specs/career-coach-p6-managed-postgres/spec.md)
 
 ---
@@ -77,7 +80,7 @@ measured latency — without the system of record ever moving.
 |---|-------|----------|--------|
 | 1 | Configuration seam | [phase-1-configuration-seam.md](phase-1-configuration-seam.md) | In progress |
 | 2 | Provision the instance | [phase-2-provision-instance.md](phase-2-provision-instance.md) | **Complete** |
-| 3 | Migrate and verify | [phase-3-migrate-and-verify.md](phase-3-migrate-and-verify.md) | Not started |
+| 3 | Migrate and verify | [phase-3-migrate-and-verify.md](phase-3-migrate-and-verify.md) | **Complete** — instance migrated onto, verified, then deleted (evaluation cost $0.07) |
 | 4 | Cutover, documentation, and the exit | [phase-4-cutover-and-docs.md](phase-4-cutover-and-docs.md) | **Deferred** — needs funded standing cost (spec A1). Now also carries Task 4, the migrate-back and retirement path (spec A5) |
 
 > All phases are planned in advance — every row above has a written,

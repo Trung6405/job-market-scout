@@ -1,8 +1,9 @@
 # Phase 3: Migrate and Verify
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** In progress — Tasks 1–3 done. Task 4 (record and tear down)
-> is the only step left, and it is gated on human sign-off.
+> **Status:** Complete — all four tasks done. The instance was provisioned,
+> migrated onto, verified, and deleted; the templates that re-create it stay
+> committed.
 > **Depends on:** Phase 2 complete (the instance exists, TLS and pgvector proven)
 >
 > **This is the last phase that executes in the current pass.** Scope is
@@ -418,11 +419,11 @@ DSNs come from the environment, not argv, so neither lands in shell history."
   the point at which the evaluation's cost stops accruing. Confirm the numbers
   are captured first; they are the whole return on this pass.
 - **Steps:**
-  - [ ] Confirm every measurement is written into Notes: the verification
+  - [x] Confirm every measurement is written into Notes: the verification
     report, the observed Postgres and pgvector versions, the TLS result, and
     the latency figures from phase 2 Task 4. Once the server is gone these
     cannot be re-derived without paying again.
-  - [ ] Confirm nothing points at the instance — `DATABASE_URL` must still name
+  - [x] Confirm nothing points at the instance — `DATABASE_URL` must still name
     the VM's container, since phase 4 never ran:
 
     ```bash
@@ -435,13 +436,13 @@ DSNs come from the environment, not argv, so neither lands in shell history."
     Expected: `postgres`. Anything else means a cutover happened and deleting
     the server would strand data — stop.
 
-  - [ ] Delete the server:
+  - [x] Delete the server:
 
     ```bash
     az postgres flexible-server delete -g "$RESOURCE_GROUP" -n trung6405-scout-pg --yes
     ```
 
-  - [ ] Confirm the cost stopped:
+  - [x] Confirm the cost stopped:
 
     ```bash
     az postgres flexible-server list -g "$RESOURCE_GROUP" -o table
@@ -449,10 +450,10 @@ DSNs come from the environment, not argv, so neither lands in shell history."
 
     Expected: no rows.
 
-  - [ ] Leave `infra/postgres.bicep` and its guards committed. The template is
+  - [x] Leave `infra/postgres.bicep` and its guards committed. The template is
     the deliverable that makes re-provisioning a dispatch rather than a
     redesign when the standing cost is funded.
-  - [ ] No commit beyond the Notes update.
+  - [x] No commit beyond the Notes update.
 
 ---
 
@@ -598,5 +599,57 @@ Two deviations from the task as written:
    avoids both. The dump was shredded afterwards, and the password was never
    written to the VM's disk.
 
-*(Task 4 filled in during execution — the teardown and what the evaluation
-concluded)*
+### Task 4 — teardown, and what the evaluation bought *(2026-07-30)*
+
+**Both gates were checked, not assumed.** The measurements were already committed
+across four commits, so nothing un-re-derivable was riding on a working tree. And
+the pipeline's own `Settings().database_url` was resolved on the VM rather than
+reasoned about: it printed `postgres`, confirming no cutover had happened and
+that deleting the server stranded nothing. That check needed the VM booted, which
+is a cost worth paying at an irreversible step.
+
+**Deleted 2026-07-30T01:32:18Z.** `az postgres flexible-server list` returns 0
+and `show` returns `ResourceNotFound`.
+
+**The evaluation cost $0.07.** Lifetime was 2.02 hours from 2026-07-29T23:31:17Z
+— $0.055 compute at $0.02730/hr plus $0.013 of prorated storage. The $24.57/month
+from A1 is what *keeping* it would cost; standing this up, migrating onto it,
+verifying it and tearing it down cost seven cents. That is the number worth
+remembering when the funded decision comes back: the trial is not the expense,
+the tenancy is.
+
+**What it settled** — five things that were assumptions in the risk table and are
+now measurements:
+
+| Question | Answer |
+|---|---|
+| Real cost on this subscription | $24.57/month, no free allowance (A1) |
+| Does asyncpg honour `sslmode=require` in the DSN? | Yes — TLSv1.3, AES-256-GCM |
+| Does `azure.extensions` actually admit `VECTOR`? | Yes — pgvector 0.8.2, and `CREATE EXTENSION` succeeded during the real restore, not just in a probe |
+| Is the restore faithful? | Yes — all six tables matching, and tables/indexes/foreign keys/columns identical name-by-name, with `embedding` still `vector(384)` |
+| Per-query latency from the VM | 0.67 ms warm median against NFR-CC-2's 100 ms budget |
+
+**What it did not settle, and a funded pass would still have to:**
+
+- **The embedding half is untested** (A2). `resources` is empty, so "embeddings
+  survive the copy" was compared as 0 against 0. The column *type* survived,
+  which is the structural half, but no vector has ever made the trip.
+- **The provisioning workflow has never run green.** `infra-postgres.yml` was
+  authored after the OIDC ref-scoping made a feature-branch dispatch impossible
+  (A3), so the instance was created by a local `az deployment` running the same
+  committed template. Whoever merges this is the first to exercise the workflow.
+- **Latency was measured with `SELECT 1`, not under load.** A pipeline run issues
+  many queries per stage; the per-query figure is sound but the aggregate effect
+  on a full cycle was never observed, because no cycle ran against the instance.
+
+**What stays behind.** `infra/postgres.bicep`, `postgres.bicepparam`,
+`infra-postgres.yml` and their guards remain committed — the point of this pass
+is that re-provisioning is a confirmed dispatch rather than a redesign.
+`scripts/verify_migration.py` stays too, and is direction-agnostic, so it serves
+the migrate-back in phase 4 Task 4 (A5) as well as the outbound copy.
+
+**One loose end:** the `POSTGRES_ADMIN_PASSWORD` repository secret now
+authenticates a server that does not exist. It is inert rather than dangerous,
+but it is stale, and it sits next to `NEON_API_KEY` from the parked Neon branch
+as secrets to clear. Left in place rather than deleted, since Task 4 does not
+call for it and re-provisioning would want a value there.
