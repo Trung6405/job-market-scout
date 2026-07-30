@@ -2,13 +2,20 @@
 
 | | |
 |---|---|
-| **Version** | 2.1 |
+| **Version** | 2.2 |
 | **Status** | Draft |
 | **Author** | Trung |
 | **Reviewer** | Anh Phuc |
-| **Last updated** | 2026-07-23 |
+| **Last updated** | 2026-07-29 |
 
-> **Revision history:** v2.0 reflects the `advisor-report` initiative
+> **Revision history:** v2.2 catches the spec up with three shipped
+> changes it had never absorbed: the daily briefing is delivered via a
+> **Discord bot notification**, not Gmail email (#20); pipeline
+> orchestration is **plain Python classes** — the Google ADK dependency
+> was removed (#22); and the **Coach** stage (Career Coach Agent,
+> Stage 1) runs between Advisor and Persistence/Report, making the
+> pipeline seven stages — its requirements live in
+> `career-coach-agent-prs.md`. v2.0 reflects the `advisor-report` initiative
 > (a persisted Advisor stage, score bands, gap analysis, rendered HTML
 > reports) that was out of scope in v1.0. v2.1 reflects `profile.json`
 > becoming the single, required candidate source (retiring `resume.txt`)
@@ -18,19 +25,19 @@
 > deviation record of what changed and why, see
 > `product-requirements-spec-amendments.md`.
 
-> **Note for AI coding assistants (Claude Code):** This document is the source of truth for scope, pipeline order, naming, and design decisions. Where code or older documents conflict with this file, this file wins. For current module-level architecture detail, see `docs/project/architecture-pipeline-overview.md` (living document, updates with the code). Key conventions: the matching stage is named **Scorer** (formerly "Matcher" in earlier drafts); the **Tracker is deterministic code, not an LLM agent**; match scores, bands, and gaps **are persisted** (this reverses v1.0 Decision D4 — see amendments doc); **`profile.json` is the single required candidate source** for scoring, briefing, and gap detection — `resume.txt` no longer exists (D8); the pipeline **runs on an automated daily schedule**, not manually (§7).
+> **Note for AI coding assistants (Claude Code):** This document is the source of truth for scope, pipeline order, naming, and design decisions. Where code or older documents conflict with this file, this file wins. For current module-level architecture detail, see `docs/project/architecture-pipeline-overview.md` (living document, updates with the code). Key conventions: the matching stage is named **Scorer** (formerly "Matcher" in earlier drafts); the **Tracker is deterministic code, not an LLM agent**; match scores, bands, and gaps **are persisted** (this reverses v1.0 Decision D4 — see amendments doc); **`profile.json` is the single required candidate source** for scoring, briefing, and gap detection — `resume.txt` no longer exists (D8); the pipeline **runs on an automated daily schedule**, not manually (§7); the daily briefing is delivered via **Discord**, not email; orchestration is **plain Python** — there is no Google ADK dependency.
 
 ---
 
 ## 1. Overview
 
-Job Market Scout is a personal, configurable multi-agent system that automates the repetitive part of a job search. Once a day it scrapes job listings from job boards and career pages, detects which listings are new, changed, or closed, scores the relevant ones against the user's profile and preferences using an LLM, extracts each listing's requirements to flag skill gaps against that same profile, and emails the user a concise daily briefing linking to a rendered report of the run.
+Job Market Scout is a personal, configurable multi-agent system that automates the repetitive part of a job search. Once a day it scrapes job listings from job boards and career pages, detects which listings are new, changed, or closed, scores the relevant ones against the user's profile and preferences using an LLM, extracts each listing's requirements to flag skill gaps against that same profile (with grounded coaching tips pointing at real learning resources per gap), and sends the user a concise daily briefing via Discord linking to a rendered report of the run.
 
 The system is generalised: nothing about the pipeline is hard-coded to a specific role or industry. A file-based configuration layer (target roles, keywords, locations, profile, preferences) drives both scraping and scoring, so the same system can scout for any job type by changing config, not code.
 
 ### 1.1 Problem statement
 
-Manually checking multiple job boards daily is slow, repetitive, and easy to neglect. Relevant listings get missed, closed listings waste attention, and comparing every listing against the candidate's profile is tedious. A raw match score alone also doesn't answer *why* a job is a good or bad fit, or what skills to develop for the ones that aren't. Job Market Scout compresses the daily check to one email, and turns each score into an explained, browsable report.
+Manually checking multiple job boards daily is slow, repetitive, and easy to neglect. Relevant listings get missed, closed listings waste attention, and comparing every listing against the candidate's profile is tedious. A raw match score alone also doesn't answer *why* a job is a good or bad fit, or what skills to develop for the ones that aren't. Job Market Scout compresses the daily check to one Discord message, and turns each score into an explained, browsable report.
 
 ### 1.2 Target user
 
@@ -42,25 +49,26 @@ A single job seeker (initially the author). Single-user by design in this versio
 
 ### 2.1 In scope
 
-- Six-stage pipeline: **Scraper → Tracker → Scorer → Advisor → Persistence/Report → Briefing**, run as Google ADK agents
+- Seven-stage pipeline: **Scraper → Tracker → Scorer → Advisor → Coach → Persistence/Report → Briefing**, orchestrated as plain Python stage classes (the Google ADK dependency was removed — see amendments)
 - One automated run per day, triggered by a scheduled GitHub Actions workflow (see §7)
 - Scraping listings from job boards and the web (e.g. LinkedIn, Seek, company career pages)
 - Listing lifecycle tracking in PostgreSQL: new / changed / closed, with deduplication
 - LLM-based match scoring (DeepSeek via LiteLLM) of relevant listings against the configured profile and preferences
 - Classifying each score into a qualitative band (`strong_match` / `competitive` / `reach`)
 - Extracting each listing's requirements and flagging skill gaps against the user's `profile.json`
-- Persisting each run's listings, scores, bands, and gaps to PostgreSQL
+- Grounded coaching tips per gap, citing real learning resources from an auto-aggregated corpus (Career Coach Agent Stage 1 — scoped and specified in `career-coach-agent-prs.md`)
+- Persisting each run's listings, scores, bands, gaps, and tips to PostgreSQL
 - Rendering a per-run HTML report (dashboard, job detail, history, profile) from persisted data
-- Daily briefing generated by an LLM, delivered by email (Gmail), linking to that run's rendered report
+- Daily briefing generated by an LLM, delivered as a Discord bot notification, linking to that run's rendered report
 - File-based configuration layer: roles/keywords, locations, profile, preferences
 - Reports dashboard hosted on an Azure Storage static website, reachable 24/7 independent of whether the VM is running (see §7)
 
 ### 2.2 Out of scope (this version)
 
 - Automatic job applications or cover-letter generation
-- Embeddings-based matching (scoring is prompt-based via the LLM)
+- Embeddings-based **matching** (scoring is prompt-based via the LLM; the Career Coach's resource retrieval does use local embeddings + pgvector, but that is retrieval, not match scoring)
 - Market trend analysis (the history report shows past runs, not trend analytics)
-- Teams or other non-email delivery channels
+- Email, Teams, or other delivery channels beyond the single Discord channel
 - Multi-user support
 - A configuration UI (config is edited as files)
 
@@ -70,7 +78,7 @@ A single job seeker (initially the author). Single-user by design in this versio
 
 The Scout App runs as a single containerised process. Stage-by-stage
 responsibilities, module structure, and external services (DeepSeek,
-PostgreSQL, Gmail, job board sources) are documented and kept current in
+PostgreSQL, Discord, GitHub, job board sources) are documented and kept current in
 `docs/project/architecture-pipeline-overview.md` — that document tracks
 the code directly and is updated whenever a stage changes, so it isn't
 duplicated here.
@@ -85,7 +93,7 @@ four-stage flow; treat them as historical until refreshed.
 
 | ID | Requirement |
 |---|---|
-| FR-1 | The system SHALL run the full pipeline (Scraper → Tracker → Scorer → Advisor → Persistence/Report → Briefing) once per day, triggered automatically by a scheduled GitHub Actions workflow (manual `workflow_dispatch` also available). |
+| FR-1 | The system SHALL run the full pipeline (Scraper → Tracker → Scorer → Advisor → Coach → Persistence/Report → Briefing) once per day, triggered automatically by a scheduled GitHub Actions workflow (manual `workflow_dispatch` also available). The Coach stage's own requirements are FR-CC-1..13 in `career-coach-agent-prs.md`. |
 | FR-2 | The Scraper SHALL fetch job listings from the configured sources for the configured roles, keywords, and locations. |
 | FR-3 | The Tracker SHALL persist **all** scraped listings to PostgreSQL, not only relevant ones. |
 | FR-4 | The Tracker SHALL detect and skip duplicate listings. |
@@ -95,9 +103,9 @@ four-stage flow; treat them as historical until refreshed.
 | FR-8 | The Scorer SHALL NOT restate or copy listing content; listing data flows downstream from Tracker's pipeline state, and later stages join scores to listings by job ID. |
 | FR-9 | The Advisor SHALL classify each score into a band (`strong_match` / `competitive` / `reach`) via a deterministic threshold function. |
 | FR-10 | The Advisor SHALL extract structured requirements per listing and flag skill gaps against the user's `profile.json`. Since the profile is required (FR-15), gap detection always runs — there is no missing-profile skip path. |
-| FR-11 | The Persistence/Report stage SHALL persist each run's listings, scores, bands, and gaps to PostgreSQL (`runs` / `run_listings` / `listing_gaps`), and render a per-run HTML report (dashboard, job detail, history, profile) from that data. |
+| FR-11 | The Persistence/Report stage SHALL persist each run's listings, scores, bands, gaps, and grounded tips to PostgreSQL (`runs` / `run_listings` / `listing_gaps` / `listing_tips`), and render a per-run HTML report (dashboard, job detail, history, profile) from that data. (The `resources` corpus table is written by the Coach aggregator, outside the daily run — see `career-coach-agent-prs.md`.) |
 | FR-12 | The Briefing SHALL generate a concise daily summary of the top-matching listings, including at minimum title, company, link, and score for each, with a link to that run's rendered report. |
-| FR-13 | The Notification module SHALL send the briefing to the user's email address via Gmail. |
+| FR-13 | The Notification module SHALL post the briefing to the configured Discord channel via the briefing bot (originally Gmail email; replaced in #20 — see amendments). |
 | FR-14 | All scraping and scoring behaviour SHALL be driven by the file-based config (roles/keywords, locations, profile, preferences) with no role-specific logic in code. |
 | FR-15 | `profile.json` SHALL be the single, required candidate source used by scoring, the briefing, and gap detection; the system SHALL fail fast at startup with a clear error if it is missing or invalid. |
 | FR-16 | The rendered reports dashboard (`reports/`) SHALL be published to a static website host after each run, so it remains reachable while the VM is deallocated. |
@@ -127,7 +135,7 @@ four-stage flow; treat them as historical until refreshed.
 | NFR-1 | The application SHALL run as a single Docker container. |
 | NFR-2 | A full daily run SHALL complete unattended (no interactive input). |
 | NFR-3 | LLM usage SHALL be limited to relevant (new/changed) listings to control API cost — unchanged listings are not re-scored. |
-| NFR-4 | Secrets (DB credentials, LLM API key, Gmail credentials) SHALL NOT be committed to the repository; they are supplied via environment variables. |
+| NFR-4 | Secrets (DB credentials, LLM API key, Discord bot token, GitHub PAT) SHALL NOT be committed to the repository; they are supplied via environment variables. |
 | NFR-5 | The database schema SHALL target PostgreSQL. |
 
 ---
@@ -138,7 +146,8 @@ four-stage flow; treat them as historical until refreshed.
 |---|---|
 | Scout App code + Dockerfile (repo) | **Built** |
 | PostgreSQL | **Built** — provisioned via `docker-compose.yaml`, wired up in `scout/shared/db.py` |
-| End-to-end pipeline orchestration (all six stages wired together) | **Built** — `ScoutPipelineAgent` (`scout/agent.py`) runs Scraper → Tracker → Scorer → Advisor → Persistence/Report → Briefing in one pass; `scout/main.py` is the batch entrypoint the Dockerfile's `CMD` runs |
+| End-to-end pipeline orchestration (all seven stages wired together) | **Built** — `ScoutPipelineAgent` (`scout/agent.py`) runs Scraper → Tracker → Scorer → Advisor → Coach → Persistence/Report → Briefing in one pass; `scout/main.py` is the batch entrypoint the Dockerfile's `CMD` runs |
+| Career Coach corpus jobs (weekly aggregator, daily link-health) | **Built** — `scout/coach_aggregator.py` / `scout/coach_link_health.py`, wired into `scheduled-run.yml`; see `career-coach-agent-prs.md` §8 |
 | Scheduler (daily trigger) | **Built** — GitHub Actions `.github/workflows/scheduled-run.yml`, cron-triggered daily at 19:00 UTC (05:00 Melbourne time the next morning); also runnable manually via `workflow_dispatch` |
 | Cloud host | **Built** — Azure VM `scout-vm`, provisioned via `infra/main.bicep`; started and deallocated around each scheduled run to minimize cost (~1h/day billed) |
 | CI/CD | **Built** — `infra-provision.yml` applies Bicep infra changes, `deploy.yml` rsyncs app code to the VM, `scheduled-run.yml` starts the VM, runs the pipeline over SSH, publishes the dashboard, then deallocates the VM |
@@ -150,25 +159,28 @@ Source is hosted on GitHub. Scheduled runs happen automatically via GitHub Actio
 
 - Python, managed with `uv`
 - Developed on Windows (PowerShell)
-- Google ADK (`BaseAgent`, `ScoutPipelineAgent`) for pipeline orchestration; LiteLLM for the DeepSeek integration
+- Plain-Python pipeline orchestration (`ScoutPipelineAgent`, `scout/agent.py`); the original Google ADK dependency was removed in the pipeline-efficiency work (#22). LiteLLM for the DeepSeek integration
 - Local runs via Docker
 
 ---
 
 ## 8. Deferred / future work
 
-- Embeddings-based matching
+- Embeddings-based match scoring
 - Trend analysis over stored listings
-- Additional delivery channels (e.g. Teams)
+- Additional delivery channels (e.g. Teams, email)
 - Multi-user support and a config UI
 - Moving `profile.json` out of git into a secret (open question carried from `docs/agent/specs/profile-candidate-source/spec.md`)
-- Moving orchestration off GitHub Actions to an Azure-native scheduler, and moving Postgres to a managed Azure Database for PostgreSQL (both explicitly deferred during `static-dashboard-hosting` to keep added cost at $0)
+- Moving orchestration off GitHub Actions to an Azure-native scheduler (explicitly deferred during `static-dashboard-hosting` to keep added cost at $0)
+- Moving Postgres to a managed Azure Database for PostgreSQL — now owned by the Career Coach PRS as its gated Stage 2 (P6, D-CC-8 in `career-coach-agent-prs.md`)
+- Career Coach Stage 2: interactive Discord coach bot (P7 in `career-coach-agent-prs.md`)
 
 ---
 
 ## 9. Related documents
 
 - Current architecture and module structure: `docs/project/architecture-pipeline-overview.md` (living document)
+- Career Coach Agent (Coach stage, corpus, grounded tips, Stage 2 roadmap): `career-coach-agent-prs.md`
 - What changed since v1.0 of this PRS, and why: `product-requirements-spec-amendments.md`
 - Architecture diagrams: `job-market-scout-simplified.drawio` (pages: High-Level Architecture, User Journey, Deployment) — predate the Advisor/Persistence/Report stages, treat as historical
 - Stage-by-stage design rationale: `docs/agent/specs/<stage>/spec.md`

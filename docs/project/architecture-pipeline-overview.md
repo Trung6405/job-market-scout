@@ -30,17 +30,18 @@ Scraper → Tracker → Scorer → Advisor → Coach → Persistence/Report → 
 
 | Stage | Type | Module | Responsibility |
 |---|---|---|---|
-| **Scraper** | 🤖 | `scout/sub_agents/scraper/` | Fetch current job listings for the configured roles/locations from job boards and the web. |
+| **Scraper** | 🤖 | `scout/sub_agents/scraper/` | Fetch current job listings for the configured roles/locations via the vendored `jobspy-mcp-server` (`mcp_client.py` talks to it; `normalize.py` deterministically normalizes what comes back). |
 | **Tracker** | ⚙️ | `scout/sub_agents/tracker/` | Diff scraped listings against the DB; persist all listings; mark new/changed/closed; dedupe; pass only new/changed listings downstream. |
 | **Scorer** | 🤖 | `scout/sub_agents/scorer/` | LLM-score every relevant listing 0–100 against the configured profile, batched. Preference-neutral: `remote_only`/`preferred_locations`/`min_salary` are not scoring inputs, so a listing the student wouldn't want still gets a fair score and a place on the dashboard — preferences narrow the Briefing instead (see below). |
 | **Advisor** | 🤖 + ⚙️ | `scout/sub_agents/advisor/` | Turn raw scores into personalized guidance — see below. |
 | **Coach** | 🤖 + ⚙️ | `scout/sub_agents/coach/` | Turn each listing's unmet skill gaps into short, actionable tips that cite only real learning resources from the curated `resources` corpus — see below. |
-| **Briefing** | 🤖 | `scout/sub_agents/briefing/` | Filter scored matches to the ones passing the student's preferences (`scout/sub_agents/briefing/filters.py::passes_preferences`) and the minimum score, summarize the top matches, and send the daily briefing, linking to the rendered report. |
+| **Persistence/Report** | ⚙️ | `scout/shared/db.py` + `scout/sub_agents/advisor/report.py` | Persist the run (scores, bands, gaps, tips) in a single transaction and render the HTML report pages from that data — see Persistence below. |
+| **Briefing** | 🤖 | `scout/sub_agents/briefing/` | Filter scored matches to the ones passing the student's preferences (`scout/sub_agents/briefing/filters.py::passes_preferences`) and the minimum score, summarize the top matches, and post the daily briefing to Discord, linking to the rendered report. |
 
 ## Why the Advisor stage exists
 
 The Scorer only produces a number (0–100) per listing, used once for
-the email and then discarded. That's not enough to answer "why is this
+the daily briefing and then discarded. That's not enough to answer "why is this
 job a good/bad match for me" or to let a student browse past runs. The
 Advisor stage exists to close that gap. It has four responsibilities:
 
@@ -77,9 +78,15 @@ invent study material:
 - **`runner.py` (+ `bootstrap.py`, `github_search.py`, `tagging.py`,
   `embeddings.py`)** — the corpus aggregator: it harvests candidate learning
   resources for the skills that actually show up as gaps, skill-tags and
-  embeds them into the `resources` table. It runs on a weekly cadence,
-  separately from `ScoutPipelineAgent`, so the daily run only ever *reads*
-  the corpus.
+  embeds them into the `resources` table. It runs on a weekly cadence
+  (entrypoint `scout/coach_aggregator.py`), separately from
+  `ScoutPipelineAgent` — the daily *pipeline* run only ever reads the corpus.
+- **`link_health.py`** — `run_link_health()` (entrypoint
+  `scout/coach_link_health.py`), a daily job that re-verifies recently
+  surfaced resources' URLs and writes `last_verified` /
+  `consecutive_failures` / `dead_since` on `resources`; a resource marked
+  dead drops out of retrieval until it verifies again. See
+  `docs/agent/specs/career-coach-p5-link-health/spec.md`.
 - **`retriever.py`** — `retrieve_for_skills(conn, skills, ...)` embeds each
   *distinct* gap skill once for the whole run and pulls its top-k resources,
   so a skill that is a gap on twenty listings costs one embedding.
@@ -145,6 +152,14 @@ each carrying the `cited_urls` it was validated against). This is what
 makes `history.html` real instead of hardcoded sample data — see `docs/agent/specs/advisor-report/spec.md` for the original
 problem statement and success criteria.
 
+The full schema (`scout/shared/schema.sql`) also holds `listings` — every
+listing the Tracker has ever seen, with lifecycle state and `content_hash` —
+and the Coach's `resources` corpus (pgvector `embedding` column via the
+`vector` extension, plus the link-health columns `last_verified` /
+`consecutive_failures` / `dead_since`). `listings` is written by the Tracker
+each run; `resources` is written only by the weekly aggregator and the daily
+link-health job, never by the pipeline.
+
 ### Run identity & idempotency
 
 `runs` is keyed by the **local** `run_date` (`UNIQUE (run_date)`), so any
@@ -180,7 +195,11 @@ used. `.github/workflows/scheduled-run.yml` cron-triggers once daily
    Azure Storage Account configured for static website hosting
    (`infra/dashboard.bicep`), via `az storage blob upload-batch`
    reusing the workflow's OIDC login — no separate deploy-token secret.
-4. Deallocates the VM (`if: always()`, so a failed run still stops
+4. Runs the Coach corpus aggregator (`scout/coach_aggregator.py`) —
+   weekly only, the step self-limits to Sundays UTC — and the link-health
+   check (`scout/coach_link_health.py`) daily. Both are
+   `continue-on-error: true`, so a corpus hiccup never fails the run.
+5. Deallocates the VM (`if: always()`, so a failed run still stops
    billing).
 
 `deploy.yml` drives the **same single VM** through the same
@@ -203,11 +222,21 @@ replaced with a Storage static website (region policy on this
 subscription doesn't offer Static Web Apps anywhere it allows
 deployment).
 
+## Entrypoints
+
+- `scout/main.py` — the daily batch run (the Dockerfile's `CMD`)
+- `scout/rerender.py` — rebuild every report page from the DB; no scrape, no LLM calls
+- `scout/coach_aggregator.py` — weekly Coach corpus aggregation
+- `scout/coach_link_health.py` — daily Coach link-health check
+- `scout/backfill_hashes.py` — one-off maintenance after a `content_hash` definition change
+
+See `docs/commands.md` for how to invoke each.
+
 ## Where to go next
 
 - Stage-by-stage design rationale and requirements: `docs/agent/specs/<stage>/spec.md`
 - Phased implementation history: `docs/agent/plans/<stage>/plan.md` (+ `phase-N.md`)
-- Current product scope: `docs/project/specification/product-requirements-spec.md`; for the v1.0 → v2.0 → v2.1 change history, see its `product-requirements-spec-amendments.md`
+- Current product scope: `docs/project/specification/product-requirements-spec.md`; for the v1.0 → v2.0 → v2.1 → v2.2 change history, see its `product-requirements-spec-amendments.md`
 - Candidate-source consolidation: `docs/agent/specs/profile-candidate-source/spec.md`
 - Dashboard hosting: `docs/agent/plans/static-dashboard-hosting/plan.md`
 - Static HTML mockups the Advisor's templates now replace: `docs/project/prototypes/`

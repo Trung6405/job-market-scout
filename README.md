@@ -1,5 +1,5 @@
 # job-market-scout
-Multi-agent job market scout, scrapes listings, matches them to a resume, tracks changes, and briefs daily
+Multi-agent job market scout, scrapes listings, matches them to your profile, tracks changes, and briefs daily
 
 ## Getting started
 
@@ -30,20 +30,13 @@ Multi-agent job market scout, scrapes listings, matches them to a resume, tracks
    `DISCORD_CHANNEL_ID`. Adjust `SEARCH_ROLES`, `SEARCH_LOCATIONS`,
    `PREFERRED_LOCATIONS`, `REMOTE_ONLY`, `MIN_SALARY`, and
    `MIN_MATCH_SCORE` to taste.
-3. Copy the resume template and replace it with your own resume:
-   ```
-   cp scout/resume.txt.example scout/resume.txt
-   ```
-4. (Optional) `scout/profile.json` ships with a placeholder profile so the
-   Advisor report has something to render out of the box. Replace it with
-   your own tech stack, domain knowledge, and background — `scout/profile.json.example`
-   shows the expected shape:
-   ```
-   cp scout/profile.json.example scout/profile.json
-   ```
-   The pipeline scores and posts matches to Discord either way; an accurate
-   profile just makes skill-gap detection in the Advisor report meaningful.
-5. Run the pipeline:
+3. Put your own details in `scout/profile.json` — it is the single,
+   **required** candidate source for scoring, the briefing, and skill-gap
+   detection (the pipeline fails fast at startup if it is missing or
+   invalid). Replace the checked-in profile with your own tech stack, domain
+   knowledge, and background; `scout/profile.json.example` shows the
+   expected shape.
+4. Run the pipeline:
    ```
    docker compose up --build
    ```
