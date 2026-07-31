@@ -34,6 +34,21 @@ logger = logging.getLogger("scout.coach.runner")
 # rather than bursting through it (see plan.md's Risks & Unknowns).
 _SEARCH_THROTTLE_SECONDS = 2.5
 
+# Skipping a failed candidate is right for one bad response and wrong for a bad
+# run: a revoked token, a provider outage or a broken prompt fails every
+# candidate alike, and a run that skipped all of them would report success
+# having written nothing. Both parts of the threshold earn their place — the
+# floor stops a run aborting on its first few candidates, when any failure is
+# 100% of what has been processed, and the rate is what actually catches a
+# systemic fault in a long run.
+#
+# Tuned against a single observation (one malformed response in ~920), so it is
+# a starting point, not a measurement. The failed count is in the run summary
+# precisely so the next few runs characterise it; both values are module
+# constants because changing them should be a one-line edit.
+_MIN_FAILURES_BEFORE_ABORT = 10
+_ABORT_FAILURE_RATE = 0.2
+
 
 def _title_from_url(url: str) -> str:
     return url.removeprefix("https://github.com/").rstrip("/")
@@ -287,6 +302,18 @@ async def run_coach_aggregator(settings: Settings | None = None) -> CoachSummary
                         type(exc).__name__,
                         exc,
                     )
+                    # Raised from inside the handler so the traceback keeps the
+                    # last failure as its cause — the abort says how many, and
+                    # the chained exception says what they looked like.
+                    if failed > max(
+                        _MIN_FAILURES_BEFORE_ABORT, position * _ABORT_FAILURE_RATE
+                    ):
+                        raise RuntimeError(
+                            f"Aborting aggregation: {failed} of {position} "
+                            f"candidates processed have failed, which looks "
+                            f"systemic rather than incidental. "
+                            f"{inserted} resource(s) were inserted before this."
+                        ) from exc
                     continue
                 if result == "new":
                     inserted += 1

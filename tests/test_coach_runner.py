@@ -204,6 +204,77 @@ async def test_run_coach_aggregator_isolates_a_candidate_that_fails_to_tag(
     assert stored == ["https://github.com/org/after", "https://github.com/org/before"]
 
 
+def _mock_pipeline_failing(monkeypatch, urls: list[str], fails) -> None:
+    """Wire the ingest pipeline so `fails(url)` decides which candidates raise.
+
+    Used by the systemic-abort tests, where what varies between them is only
+    *how many* of the candidates fail.
+    """
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.search_candidates",
+        lambda skill, settings: urls,
+    )
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.fetch_readme",
+        lambda url, settings: f"# {url}",
+    )
+    monkeypatch.setattr("scout.sub_agents.coach.runner.embed", lambda text: [0.1] * 384)
+
+    async def _fake_tag_readme(readme_text, settings):
+        if fails(readme_text.removeprefix("# ")):
+            ResourceTags.model_validate({"skills": "not a list"})
+        return ResourceTags(
+            skills=["kubernetes"],
+            resource_type="repo",
+            level="intermediate",
+            summary="Container orchestration platform.",
+        )
+
+    monkeypatch.setattr("scout.sub_agents.coach.runner.tag_readme", _fake_tag_readme)
+
+
+@pytest.mark.asyncio
+async def test_run_coach_aggregator_aborts_when_failures_look_systemic(
+    db_pool, listing_factory, match_factory, monkeypatch
+):
+    """Skipping is right for a bad candidate and wrong for a bad *run*.
+
+    A revoked token, a provider outage or a broken prompt fails every candidate
+    alike. Left to skip, the run would report success having written nothing —
+    the silent-degradation mode this whole area exists to close.
+    """
+    await _seed_kubernetes_gap(db_pool, listing_factory, match_factory)
+    urls = [f"https://github.com/org/repo-{index}" for index in range(15)]
+    _mock_pipeline_failing(monkeypatch, urls, fails=lambda url: True)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        await runner.run_coach_aggregator(_test_settings())
+
+    # The threshold is max(10, 20% of processed), so with everything failing
+    # the 11th failure is the one that trips it. The count belongs in the
+    # message: the workflow step surfaces only this string.
+    assert "11" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_run_coach_aggregator_does_not_abort_on_a_few_systemic_lookalikes(
+    db_pool, listing_factory, match_factory, monkeypatch
+):
+    """The companion to the abort test, and the one that stops the threshold
+    being tuned into uselessness. Occasional malformed output is expected — if
+    a handful of failures aborted the run, this change would be a regression on
+    the skip-and-continue behaviour it just added."""
+    await _seed_kubernetes_gap(db_pool, listing_factory, match_factory)
+    urls = [f"https://github.com/org/repo-{index}" for index in range(20)]
+    _mock_pipeline_failing(
+        monkeypatch, urls, fails=lambda url: url.endswith(("-3", "-7", "-11"))
+    )
+
+    summary = await runner.run_coach_aggregator(_test_settings())
+
+    assert summary.inserted == 17
+
+
 @pytest.mark.asyncio
 async def test_run_coach_aggregator_skips_when_github_pat_unset(db_pool):
     summary = await runner.run_coach_aggregator(_test_settings(github_pat=""))

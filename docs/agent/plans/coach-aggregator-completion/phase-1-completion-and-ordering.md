@@ -64,16 +64,16 @@ and search-derived candidates are ingested ahead of awesome-list survivors.
   `tests/test_coach_runner.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: a run where every candidate raises aborts once
+  - [x] Write failing test: a run where every candidate raises aborts once
         failures exceed `max(10, 20% of processed)`, and the raised error names
         the failure count — plus a companion asserting that a small number of
         failures does *not* abort
-  - [ ] Verify it fails (`python -m pytest tests/test_coach_runner.py -k systemic -q`)
-  - [ ] Implement: track `failed` against the threshold inside the loop; raise
+  - [x] Verify it fails (`python -m pytest tests/test_coach_runner.py -k systemic -q`)
+  - [x] Implement: track `failed` against the threshold inside the loop; raise
         a clear exception when crossed. Threshold as module constants beside
         the throttle constant
-  - [ ] Verify it passes (`python -m pytest tests/test_coach_runner.py -q`)
-  - [ ] Commit: `feat(coach): abort the run when candidate failures look systemic`
+  - [x] Verify it passes (`python -m pytest tests/test_coach_runner.py -q`)
+  - [x] Commit: `feat(coach): abort the run when candidate failures look systemic`
 
 ### Task 4: Keep rate limits fatal through the isolation layer
 
@@ -185,3 +185,26 @@ The assertion that carries the test is the candidate *after* the failure being
 stored. "The failing one was skipped" is also true of a run that died on it.
 
 Verification: 12 passed.
+
+### Task 3 — systemic abort *(2026-07-31)*
+
+`_MIN_FAILURES_BEFORE_ABORT = 10` and `_ABORT_FAILURE_RATE = 0.2`, beside the
+throttle constant. Both halves earn their place: the floor stops a run aborting
+on its first candidates, when one failure is 100% of what has been processed;
+the rate is what catches a systemic fault in a long run. With everything
+failing, the 11th failure trips it.
+
+Raised from inside the `except` handler and chained with `from exc`, so the
+traceback carries the last failure as its cause. The abort says *how many*, the
+chain says *what they looked like* — a bare count would leave the operator
+guessing whether it was the token, the provider or the prompt.
+
+The abort message names the inserted count too. An aborted run is not
+necessarily an empty one, and the difference decides whether anything needs
+re-running.
+
+Threshold honesty: it is tuned against exactly one observation (one malformed
+response in ~920), which is why the failed count goes into the run summary in
+Task 5. The next few runs are what will actually characterise it.
+
+Verification: 14 passed.
