@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import NamedTuple
 
 import requests
@@ -133,26 +134,48 @@ def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:
     dropped = 0
     unavailable = 0
     filter_started = time.monotonic()
-    for position, url in enumerate(harvested, start=1):
-        metadata = fetch_repo_metadata(url, settings)
-        if metadata is None:
-            unavailable += 1
-            continue
-        if not passes_quality_bar(metadata):
-            dropped += 1
-            continue
-        bootstrap.append(url)
-        if position % 100 == 0 or position == len(harvested):
-            logger.info(
-                "Bootstrap filter: %d/%d checked, %d kept, %d below the bar, "
-                "%d gone or inaccessible, %.1f min elapsed.",
-                position,
-                len(harvested),
-                len(bootstrap),
-                dropped,
-                unavailable,
-                (time.monotonic() - filter_started) / 60,
-            )
+    # Threads rather than asyncio: `fetch_repo_metadata` is blocking `requests`
+    # IO and this whole function already runs inside a worker thread, so there
+    # is no event loop here to await on.
+    #
+    # `executor.map` yields in submission order, which is what keeps the
+    # kept-order stable — the ingest loop walks that order, so shuffling it
+    # would undo phase 1's ordering work. An exception surfaces when its result
+    # is read, so a rate-limited filter still propagates rather than silently
+    # dropping every remaining candidate.
+    filter_width = max(1, settings.coach_ingest_concurrency)
+    executor = ThreadPoolExecutor(max_workers=filter_width)
+    try:
+        metadata_results = executor.map(
+            lambda url: fetch_repo_metadata(url, settings), harvested
+        )
+        for position, (url, metadata) in enumerate(
+            zip(harvested, metadata_results), start=1
+        ):
+            if metadata is None:
+                unavailable += 1
+                continue
+            if not passes_quality_bar(metadata):
+                dropped += 1
+                continue
+            bootstrap.append(url)
+            if position % 100 == 0 or position == len(harvested):
+                logger.info(
+                    "Bootstrap filter: %d/%d checked, %d kept, %d below the bar, "
+                    "%d gone or inaccessible, %.1f min elapsed.",
+                    position,
+                    len(harvested),
+                    len(bootstrap),
+                    dropped,
+                    unavailable,
+                    (time.monotonic() - filter_started) / 60,
+                )
+    finally:
+        # `cancel_futures=True` matters: `map` submits every URL up front, so
+        # without it a rate limit raised on the first result would still let the
+        # remaining hundreds of requests run — hammering an API that has already
+        # said stop. A plain `with` block cannot do this; it waits instead.
+        executor.shutdown(wait=False, cancel_futures=True)
     logger.info(
         "Bootstrap filter done in %.1f min: %d of %d harvested links kept "
         "(%d below the bar — that many LLM tagging calls avoided — and "

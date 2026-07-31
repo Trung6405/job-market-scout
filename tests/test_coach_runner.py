@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
+import time
 from datetime import date
 
 import pytest
@@ -750,6 +752,61 @@ def test_gather_returns_search_derived_candidates_before_bootstrap_ones(monkeypa
         "https://github.com/org/bootstrap-a",
         "https://github.com/org/bootstrap-b",
     ]
+
+
+def test_filter_concurrency_asks_once_per_url_and_keeps_kept_order(monkeypatch):
+    """The bootstrap filter is one blocking metadata call per harvested link,
+    serially — the slowest part of the gather phase after the search throttle.
+
+    Making it concurrent must not change what it produces: still exactly one
+    call per unique URL, and still the same kept-order, because that order is
+    what the ingest loop walks.
+
+    No `time.sleep` patch here on purpose. `runner.time` *is* the `time` module,
+    so patching it would also silence this test's own delay and leave nothing
+    to overlap. Passing no skills means the throttle never runs anyway.
+    """
+    urls = [f"https://github.com/org/repo-{index}" for index in range(6)]
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.harvest_awesome_list",
+        lambda list_url, settings: urls,
+    )
+    lock = threading.Lock()
+    in_flight = 0
+    peak = 0
+    calls: list[str] = []
+
+    def _fake_metadata(url, settings):
+        nonlocal in_flight, peak
+        with lock:
+            in_flight += 1
+            peak = max(peak, in_flight)
+            calls.append(url)
+        time.sleep(0.05)
+        with lock:
+            in_flight -= 1
+        # One link gone from GitHub, to prove a dropped candidate doesn't
+        # shift the survivors' order.
+        return None if url.endswith("-3") else _repo_payload()
+
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.fetch_repo_metadata", _fake_metadata
+    )
+
+    candidates = runner._gather_candidate_urls(
+        _test_settings(
+            coach_awesome_lists=["https://github.com/org/awesome-x"],
+            coach_ingest_concurrency=3,
+        ),
+        [],
+    )
+
+    # >= 2 rather than == 3: overlap is the property under test, and pinning an
+    # exact peak would make thread start-up jitter look like a regression.
+    assert peak >= 2, "metadata lookups ran one at a time"
+    assert sorted(calls) == sorted(urls)
+    assert len(calls) == len(urls), "a URL was asked about more than once"
+    assert candidates == [url for url in urls if not url.endswith("-3")]
 
 
 def test_gather_asks_github_once_per_unique_harvested_url(monkeypatch):

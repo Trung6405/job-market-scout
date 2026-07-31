@@ -1,6 +1,6 @@
 # Plan: Coach Aggregator Completion & Ordering
 
-> **Status:** In progress — phase 1 complete
+> **Status:** In progress — phases 1 and 2 complete; phase 3 blocked on merge
 > **Created:** 2026-07-30 · **Last updated:** 2026-07-31
 > **Spec:** [spec.md](../../specs/coach-aggregator-completion/spec.md)
 
@@ -68,7 +68,7 @@ skills.
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
 | 1 | Completion and ordering | [phase-1-completion-and-ordering.md](phase-1-completion-and-ordering.md) | **Complete** |
-| 2 | Concurrent ingest | [phase-2-concurrent-ingest.md](phase-2-concurrent-ingest.md) | Not started |
+| 2 | Concurrent ingest | [phase-2-concurrent-ingest.md](phase-2-concurrent-ingest.md) | **Complete** |
 | 3 | Seed and verify in production | [phase-3-seed-and-verify.md](phase-3-seed-and-verify.md) | Not started |
 
 > All phases are planned in advance — every row above has a written,

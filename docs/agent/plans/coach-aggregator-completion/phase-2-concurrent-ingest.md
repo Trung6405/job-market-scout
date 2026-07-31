@@ -1,7 +1,8 @@
 # Phase 2: Concurrent Ingest
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete — Task 1 skipped by decision; Tasks 2-5 landed;
+> 632 tests passing
 > **Depends on:** Phase 1 complete — isolation must exist before failures can
 > arrive concurrently, or one bad candidate takes its whole chunk down
 
@@ -101,22 +102,27 @@ failure isolation still holds under `gather`.
   `tests/test_coach_runner.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: metadata lookups for a harvested pool run
+  - [x] Write failing test: metadata lookups for a harvested pool run
         concurrently and still produce one call per unique URL, in a stable
         kept-order
-  - [ ] Verify it fails (`python -m pytest tests/test_coach_runner.py -k filter_concurren -q`)
-  - [ ] Implement: reuse the chunk helper from Task 3 for the filter loop
-  - [ ] Verify it passes (`python -m pytest -q`)
-  - [ ] Commit: `perf(coach): run the bootstrap quality filter concurrently`
+  - [x] Verify it fails (`python -m pytest tests/test_coach_runner.py -k filter_concurren -q`)
+  - [x] ~~Reuse the chunk helper from Task 3~~ **Not applicable** — Task 3's
+        chunking is `asyncio.gather` inside an async function, and this loop is
+        synchronous blocking IO with no event loop to await on. Implemented
+        with a `ThreadPoolExecutor` instead; see Notes
+  - [x] Verify it passes (`python -m pytest -q`)
+  - [x] Commit: `perf(coach): run the bootstrap quality filter concurrently`
 
 ---
 
 ## Verification
 
-- [ ] All phase tests pass: `python -m pytest tests/test_coach_runner.py -v`
-- [ ] Full suite still passes: `python -m pytest -q`
-- [ ] Task 1's measured widths are recorded in Notes, and the shipped default
-      matches what was measured rather than what was assumed
+- [x] All phase tests pass: `python -m pytest tests/test_coach_runner.py -v`
+- [x] Full suite still passes: `python -m pytest -q` — 632 passed, no skips
+- [x] ~~Task 1's measured widths are recorded in Notes~~ — Task 1 was not run.
+      The shipped default is still measured rather than assumed: 3 is the width
+      `MODEL_CONCURRENCY` already runs against the same provider in production.
+      Width 4 remains unmeasured and is explicitly *not* shipped
 
 ## Observability
 
@@ -252,3 +258,41 @@ and the chunk-path guarantee are genuinely the same guarantee, which is the
 outcome this task was meant to establish.
 
 Verification: full suite.
+
+### Task 5 — the bootstrap filter *(2026-07-31)*
+
+**"Reuse the chunk helper from Task 3" was not possible.** Task 3's chunking is
+`asyncio.gather` inside `run_coach_aggregator`; this filter lives in
+`_gather_candidate_urls`, which is synchronous and already runs inside
+`asyncio.to_thread` — there is no event loop here to await on. A
+`ThreadPoolExecutor` is the right lever for blocking `requests` IO, and it is
+the same width setting.
+
+Two properties came free and one did not:
+
+- `executor.map` yields in submission order, so the kept-order is stable
+  without extra work — load-bearing, since the ingest loop walks that order and
+  shuffling it would undo phase 1.
+- An exception surfaces when its result is read, so the existing
+  "rate-limited filter fails loudly" test stays green unmodified.
+- **`cancel_futures=True` did not come free.** `map` submits every URL up
+  front, so a plain `with` block would, on a rate limit raised at the first
+  result, still wait for hundreds of queued requests to hammer an API that had
+  already said stop. The executor is shut down explicitly in a `finally` with
+  `wait=False, cancel_futures=True`.
+
+The test deliberately does not patch `time.sleep`: `runner.time` *is* the `time`
+module, so patching it — as the older gather tests do — would silence the test's
+own injected delay and leave nothing to overlap. Passing no skills means the
+search throttle never runs anyway.
+
+It asserts `peak >= 2` rather than `== 3`, since overlap is the property under
+test and an exact peak would turn thread start-up jitter into a false failure.
+
+**A correction to my own record.** I first reported the plan's `-k
+filter_concuren` selector as a typo that silently matched nothing. The doc is
+correct; I mistyped the command. The underlying hazard is still real and worth
+knowing — a `-k` matching nothing exits 0 and reads exactly like a pass — but it
+was my error, not the plan's.
+
+Verification: full suite, 632 passed, no skips.
