@@ -32,15 +32,15 @@ and search-derived candidates are ingested ahead of awesome-list survivors.
   `tests/test_coach_runner.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: `_gather_candidate_urls` returns search-derived
+  - [x] Write failing test: `_gather_candidate_urls` returns search-derived
         URLs before awesome-list URLs, with both stubbed, so a truncated
         ingest reaches gap-relevant candidates first
-  - [ ] Verify it fails (`python -m pytest tests/test_coach_runner.py -k ordering -q`)
-  - [ ] Implement: assemble the returned list search-first. Keep the bootstrap
+  - [x] Verify it fails (`python -m pytest tests/test_coach_runner.py -k ordering -q`)
+  - [x] Implement: assemble the returned list search-first. Keep the bootstrap
         filter running before the skill loop — only the returned order changes,
         so the metadata calls still happen once per unique URL
-  - [ ] Verify it passes (`python -m pytest tests/test_coach_runner.py -q`)
-  - [ ] Commit: `fix(coach): ingest gap-matched candidates before bootstrap ones`
+  - [x] Verify it passes (`python -m pytest tests/test_coach_runner.py -q`)
+  - [x] Commit: `fix(coach): ingest gap-matched candidates before bootstrap ones`
 
 ### Task 2: Isolate per-candidate failures
 
@@ -110,8 +110,12 @@ and search-derived candidates are ingested ahead of awesome-list survivors.
 
 - [ ] All phase tests pass: `python -m pytest tests/test_coach_runner.py -v`
 - [ ] Full suite still passes: `python -m pytest -q`
-- [ ] The ten pre-existing runner tests pass unmodified — a run with no
-      failures must behave exactly as before
+- [ ] ~~The ten pre-existing runner tests pass unmodified~~ **Corrected during
+      execution.** Nine pass unmodified;
+      `test_gather_filters_bootstrap_candidates_through_the_quality_bar` pins
+      the assembled order and had to flip, because that order is precisely what
+      Task 1 changes. The claim holds as written for Tasks 2-5, where a run
+      with no failures must behave exactly as before
 
 ## Observability
 
@@ -137,4 +141,29 @@ behaviour against the same rows.
 
 ## Notes / Learnings
 
-<Filled in during execution.>
+### Task 1 — ordering *(2026-07-31)*
+
+The two pools are now accumulated in separate lists and the function returns
+`searched + bootstrap`. Nothing about filtering or dedup moved: `seen` still
+spans both pools, the quality bar still runs on the deduped harvest, and the
+metadata calls still happen once per unique URL.
+
+**The phase's "ten pre-existing tests pass unmodified" claim was wrong for this
+task** and is corrected in Verification above.
+`test_gather_filters_bootstrap_candidates_through_the_quality_bar` asserts the
+assembled order, which is the one thing Task 1 exists to change. Its expectation
+was flipped and a comment added saying it pins *which* links survive, not the
+order — an assertion edited to match new behaviour is worth explaining, since
+that edit is indistinguishable from papering over a regression.
+
+**A limitation the ordering does not fix.** Because `seen` spans both pools, a
+repo that is both harvested and searched stays in the bootstrap half — the
+search loop skips it as already-seen. With the configured lists
+(awesome-python/fastapi/react/typescript/docker) that overlap is real for
+`docker`, `react` and `typescript`. It is not real for `terraform`, `snowflake`,
+`eks` or `bedrock`, which is where the uncovered gaps actually are, so the
+reordering delivers where it matters. Promoting a searched-and-harvested URL out
+of the bootstrap half would be a further improvement; it is deliberately not
+done here rather than added unplanned mid-task.
+
+Verification: 11 passed in `tests/test_coach_runner.py`.

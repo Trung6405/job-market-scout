@@ -268,14 +268,58 @@ def test_gather_filters_bootstrap_candidates_through_the_quality_bar(monkeypatch
         ["kubernetes"],
     )
 
+    # Search-derived first — see the ordering test above. What this test pins
+    # is which links *survive*, not the order they survive in.
     assert candidates == [
-        "https://github.com/org/popular",
         "https://github.com/search/kubernetes",
+        "https://github.com/org/popular",
     ]
     # The bar is asked about harvested links only. Search results already
     # passed the same filters server-side (stars/archived in the query,
     # freshness client-side) — metadata calls for them would be pure waste.
     assert metadata_calls == list(metadata)
+
+
+def test_gather_returns_search_derived_candidates_before_bootstrap_ones(monkeypatch):
+    """Ordering is what makes a *partial* run useful.
+
+    Ingest walks this list serially and can run out of time, be cancelled, or
+    abort. When it does, whatever it got through is the corpus. A run killed at
+    920 of 1534 candidates produced 957 rows and zero tips for cloud gaps,
+    because every one of those 920 came from the awesome-lists — general
+    Python-ecosystem material nobody's gap asked for.
+
+    Search-derived candidates were found *by searching a real unmet gap skill*,
+    so they are the ones a truncated run must reach first.
+    """
+    monkeypatch.setattr(runner.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.harvest_awesome_list",
+        lambda list_url, settings: [
+            "https://github.com/org/bootstrap-a",
+            "https://github.com/org/bootstrap-b",
+        ],
+    )
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.fetch_repo_metadata",
+        lambda url, settings: _repo_payload(),
+    )
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.search_candidates",
+        lambda skill, settings: [f"https://github.com/search/{skill}"],
+    )
+
+    candidates = runner._gather_candidate_urls(
+        _test_settings(coach_awesome_lists=["https://github.com/org/awesome-x"]),
+        ["terraform", "snowflake"],
+    )
+
+    assert candidates == [
+        "https://github.com/search/terraform",
+        "https://github.com/search/snowflake",
+        "https://github.com/org/bootstrap-a",
+        "https://github.com/org/bootstrap-b",
+    ]
 
 
 def test_gather_asks_github_once_per_unique_harvested_url(monkeypatch):

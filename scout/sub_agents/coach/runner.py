@@ -56,7 +56,7 @@ def _canonical_skills(skills: list[str]) -> list[str]:
 
 def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:
     seen: set[str] = set()
-    candidates: list[str] = []
+    harvested: list[str] = []
     started = time.monotonic()
     # Throttled at _SEARCH_THROTTLE_SECONDS per skill, serially, so this phase
     # costs roughly len(skills) * the throttle before anything is written.
@@ -71,16 +71,16 @@ def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:
         len(skills) * _SEARCH_THROTTLE_SECONDS / 60,
     )
     for list_url in settings.coach_awesome_lists:
-        before = len(candidates)
+        before = len(harvested)
         for url in harvest_awesome_list(list_url, settings):
             if url not in seen:
                 seen.add(url)
-                candidates.append(url)
+                harvested.append(url)
         logger.info(
             "Harvested %s: +%d new candidate(s) (%d total).",
             list_url,
-            len(candidates) - before,
-            len(candidates),
+            len(harvested) - before,
+            len(harvested),
         )
     # Filter the bootstrap pool to FR-CC-2's bar before anything is tagged.
     # The per-skill searches push those filters into the query and get them for
@@ -91,8 +91,7 @@ def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:
     #
     # Deliberately after the cross-list dedup above, so a repo linked from two
     # awesome-lists is asked about once.
-    harvested = candidates
-    candidates = []
+    bootstrap: list[str] = []
     dropped = 0
     unavailable = 0
     filter_started = time.monotonic()
@@ -104,14 +103,14 @@ def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:
         if not passes_quality_bar(metadata):
             dropped += 1
             continue
-        candidates.append(url)
+        bootstrap.append(url)
         if position % 100 == 0 or position == len(harvested):
             logger.info(
                 "Bootstrap filter: %d/%d checked, %d kept, %d below the bar, "
                 "%d gone or inaccessible, %.1f min elapsed.",
                 position,
                 len(harvested),
-                len(candidates),
+                len(bootstrap),
                 dropped,
                 unavailable,
                 (time.monotonic() - filter_started) / 60,
@@ -121,13 +120,15 @@ def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:
         "(%d below the bar — that many LLM tagging calls avoided — and "
         "%d gone or inaccessible, which would have died at the README fetch).",
         (time.monotonic() - filter_started) / 60,
-        len(candidates),
+        len(bootstrap),
         len(harvested),
         dropped,
         unavailable,
     )
 
-    bootstrap_total = len(candidates)
+    # Accumulated separately from the bootstrap pool, because the *returned*
+    # order decides what a truncated ingest gets through. See the return below.
+    searched: list[str] = []
     last_search_at: float | None = None
     for index, skill in enumerate(skills, start=1):
         if last_search_at is not None:
@@ -147,7 +148,7 @@ def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:
         for url in skill_urls:
             if url not in seen:
                 seen.add(url)
-                candidates.append(url)
+                searched.append(url)
         # Periodic, not per-skill: hundreds of skills would bury the log.
         if index % 25 == 0 or index == len(skills):
             elapsed = time.monotonic() - started
@@ -157,19 +158,29 @@ def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:
                 "%.1f min elapsed, ~%.1f min of throttle left.",
                 index,
                 len(skills),
-                len(candidates),
+                len(bootstrap) + len(searched),
                 elapsed / 60,
                 remaining / 60,
             )
     logger.info(
-        "Gather phase done in %.1f min: %d candidate(s) (%d from awesome lists, "
-        "%d from skill search).",
+        "Gather phase done in %.1f min: %d candidate(s) — %d from skill search "
+        "(ingested first) then %d from awesome lists.",
         (time.monotonic() - started) / 60,
-        len(candidates),
-        bootstrap_total,
-        len(candidates) - bootstrap_total,
+        len(searched) + len(bootstrap),
+        len(searched),
+        len(bootstrap),
     )
-    return candidates
+    # Search-derived first, deliberately. Ingest walks this list serially and
+    # may not finish: it can time out, be cancelled, or abort. Whatever it got
+    # through is the corpus, so the candidates found by searching a real unmet
+    # gap skill have to come before general awesome-list material. The run that
+    # produced 957 rows and zero cloud tips died at 920/1534 — entirely inside
+    # the bootstrap pool, having never reached a single gap-matched repo.
+    #
+    # Only the order changes. Both pools are still filtered and deduplicated
+    # exactly as before, and `seen` still spans both, so a repo that is both
+    # harvested and searched is tagged once.
+    return searched + bootstrap
 
 
 async def run_coach_aggregator(settings: Settings | None = None) -> CoachSummary:
