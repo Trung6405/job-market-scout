@@ -146,6 +146,65 @@ async def test_run_coach_aggregator_second_run_inserts_nothing_new(
 
 
 @pytest.mark.asyncio
+async def test_run_coach_aggregator_isolates_a_candidate_that_fails_to_tag(
+    db_pool, listing_factory, match_factory, monkeypatch
+):
+    """One malformed LLM response must not cost the rest of the run.
+
+    `complete_json` validates the model's output against `ResourceTags`, so a
+    response with prose where a list belongs raises `ValidationError` out of
+    `tag_readme`. Unhandled, it propagated through the ingest loop and ended the
+    run — which is how a run that had already worked through 920 of 1534
+    candidates stopped writing anything further.
+
+    Skipping loses nothing durable: dedup is by URL, so the next weekly run
+    tries this candidate again.
+    """
+    await _seed_kubernetes_gap(db_pool, listing_factory, match_factory)
+
+    urls = [
+        "https://github.com/org/before",
+        "https://github.com/org/malformed",
+        "https://github.com/org/after",
+    ]
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.search_candidates",
+        lambda skill, settings: urls,
+    )
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.fetch_readme",
+        lambda url, settings: f"# {url}",
+    )
+    monkeypatch.setattr("scout.sub_agents.coach.runner.embed", lambda text: [0.1] * 384)
+
+    async def _fake_tag_readme(readme_text, settings):
+        if "malformed" in readme_text:
+            # A real ValidationError, raised the way the provider's output
+            # would raise it, rather than a stand-in exception.
+            ResourceTags.model_validate({"skills": "kubernetes, not a list"})
+        return ResourceTags(
+            skills=["kubernetes"],
+            resource_type="repo",
+            level="intermediate",
+            summary="Container orchestration platform.",
+        )
+
+    monkeypatch.setattr("scout.sub_agents.coach.runner.tag_readme", _fake_tag_readme)
+
+    summary = await runner.run_coach_aggregator(_test_settings())
+
+    assert summary.inserted == 2
+    async with db_pool.acquire() as conn:
+        stored = [
+            record["url"]
+            for record in await conn.fetch("SELECT url FROM resources ORDER BY url")
+        ]
+    # The candidate *after* the failure is the one that matters: it proves the
+    # loop resumed rather than unwinding.
+    assert stored == ["https://github.com/org/after", "https://github.com/org/before"]
+
+
+@pytest.mark.asyncio
 async def test_run_coach_aggregator_skips_when_github_pat_unset(db_pool):
     summary = await runner.run_coach_aggregator(_test_settings(github_pat=""))
     assert summary == type(summary)(candidates_seen=0, inserted=0, duplicates=0)

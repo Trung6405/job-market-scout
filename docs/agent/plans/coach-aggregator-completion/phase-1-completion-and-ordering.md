@@ -48,15 +48,15 @@ and search-derived candidates are ingested ahead of awesome-list survivors.
   `tests/test_coach_runner.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: one candidate whose `tag_readme` raises
+  - [x] Write failing test: one candidate whose `tag_readme` raises
         `ValidationError` is skipped and counted, while the candidates after it
         are still inserted — asserting the run returns a summary rather than
         propagating
-  - [ ] Verify it fails (`python -m pytest tests/test_coach_runner.py -k isolat -q`)
-  - [ ] Implement: wrap the per-candidate body so any non-rate-limit exception
+  - [x] Verify it fails (`python -m pytest tests/test_coach_runner.py -k isolat -q`)
+  - [x] Implement: wrap the per-candidate body so any non-rate-limit exception
         is logged with the URL, counted as `failed`, and skipped
-  - [ ] Verify it passes (`python -m pytest tests/test_coach_runner.py -q`)
-  - [ ] Commit: `fix(coach): skip a candidate that fails to tag instead of ending the run`
+  - [x] Verify it passes (`python -m pytest tests/test_coach_runner.py -q`)
+  - [x] Commit: `fix(coach): skip a candidate that fails to tag instead of ending the run`
 
 ### Task 3: Abort on a systemic failure rate
 
@@ -167,3 +167,21 @@ of the bootstrap half would be a further improvement; it is deliberately not
 done here rather than added unplanned mid-task.
 
 Verification: 11 passed in `tests/test_coach_runner.py`.
+
+### Task 2 — per-candidate isolation *(2026-07-31)*
+
+The per-candidate body is wrapped; anything it raises is logged at WARNING with
+the URL and exception type, counted, and skipped. The test raises a genuine
+`ValidationError` via `ResourceTags.model_validate({...})` rather than a stand-in
+exception, so it exercises the actual failure the corpus hit.
+
+`except Exception` is deliberate over `except BaseException`:
+`asyncio.CancelledError` derives from `BaseException`, so a cancelled workflow
+step still unwinds instead of being recorded as one skipped candidate per
+remaining URL. That distinction matters here specifically — cancelled dispatches
+are how the earlier diagnosis went wrong twice.
+
+The assertion that carries the test is the candidate *after* the failure being
+stored. "The failing one was skipped" is also true of a run that died on it.
+
+Verification: 12 passed.

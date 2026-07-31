@@ -220,6 +220,7 @@ async def run_coach_aggregator(settings: Settings | None = None) -> CoachSummary
         inserted = 0
         duplicates = 0
         no_readme = 0
+        failed = 0
         ingest_started = time.monotonic()
         # One connection for the whole ingest loop rather than one
         # acquire/release per row; the blocking README fetch goes through a
@@ -242,28 +243,51 @@ async def run_coach_aggregator(settings: Settings | None = None) -> CoachSummary
                         per_item,
                         per_item * (len(new_urls) - position) / 60,
                     )
-                readme = await asyncio.to_thread(
-                    fetch_readme, url, active_settings
-                )
-                if readme is None:
-                    no_readme += 1
+                # One bad candidate is noise, not a reason to end the run. The
+                # commonest case is the tagger returning output that fails
+                # `ResourceTags` validation; unhandled, that one exception threw
+                # away every candidate still queued behind it.
+                #
+                # Skipping loses nothing durable: dedup is by URL, so the next
+                # weekly run tries this candidate again. That is also why there
+                # is no retry here — a retry policy has its own budget and
+                # failure modes, and buys little over waiting a week.
+                try:
+                    readme = await asyncio.to_thread(
+                        fetch_readme, url, active_settings
+                    )
+                    if readme is None:
+                        no_readme += 1
+                        continue
+                    tags = await tag_readme(readme, active_settings)
+                    resource = Resource(
+                        url=url,
+                        title=_title_from_url(url),
+                        resource_type=tags.resource_type,
+                        skills=_canonical_skills(tags.skills),
+                        level=tags.level,
+                        summary=tags.summary,
+                        source="github",
+                    )
+                    # Off the event loop, for the reason the fetch above already
+                    # is: embedding is CPU-bound local inference (D-CC-4), and
+                    # the first call also loads the model. Called inline it
+                    # blocked the loop while the asyncpg pool was open.
+                    embedding = await asyncio.to_thread(embed, tags.summary)
+                    result = await insert_resource(conn, resource, embedding)
+                except Exception as exc:
+                    failed += 1
+                    # WARNING with the URL and the exception type: a skipped
+                    # candidate has to be legible in the run log, or "silently
+                    # thinner corpus" becomes indistinguishable from "nothing
+                    # matched".
+                    logger.warning(
+                        "Skipping candidate %s — %s: %s",
+                        url,
+                        type(exc).__name__,
+                        exc,
+                    )
                     continue
-                tags = await tag_readme(readme, active_settings)
-                resource = Resource(
-                    url=url,
-                    title=_title_from_url(url),
-                    resource_type=tags.resource_type,
-                    skills=_canonical_skills(tags.skills),
-                    level=tags.level,
-                    summary=tags.summary,
-                    source="github",
-                )
-                # Off the event loop, for the reason the fetch above already is:
-                # embedding is CPU-bound local inference (D-CC-4), and the first
-                # call also loads the model. Called inline it blocked the loop
-                # while the asyncpg pool was open.
-                embedding = await asyncio.to_thread(embed, tags.summary)
-                result = await insert_resource(conn, resource, embedding)
                 if result == "new":
                     inserted += 1
                 else:
