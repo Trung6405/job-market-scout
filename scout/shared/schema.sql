@@ -96,3 +96,10 @@ CREATE TABLE IF NOT EXISTS resources (
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS consecutive_failures INT NOT NULL DEFAULT 0;
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS dead_since TIMESTAMPTZ;
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS last_check_error TEXT;
+
+-- Serves the retrieval pre-filter, which was deliberately written as
+-- `skills @> ARRAY[q.skill]` (the containment form GIN can use) rather than
+-- `= ANY(skills)` — this index was its documented follow-up. It runs first
+-- and over every row on each retrieval, so it gets the index even while the
+-- corpus is small.
+CREATE INDEX IF NOT EXISTS idx_resources_skills_gin ON resources USING gin (skills);

@@ -93,7 +93,7 @@ def block_real_network(monkeypatch):
 
 
 @pytest_asyncio.fixture
-async def db_pool():
+async def db_pool(request):
     dev_database_url = Settings().database_url
     if not _is_local_dsn(dev_database_url):
         pytest.fail(
@@ -107,6 +107,17 @@ async def db_pool():
             dsn=_test_database_url(dev_database_url), timeout=2
         )
     except (OSError, asyncpg.PostgresError) as exc:
+        # A bare `pytest` degrades gracefully when Postgres is down — but that
+        # same silence repeatedly masked broken tests as "passing" runs during
+        # PR #50. Naming `db` in -m is an explicit request to run these tests,
+        # so there an unreachable Postgres is a failure, not a shrug. (`-m
+        # "not db"` never reaches here: the marker deselects the test.)
+        markexpr = request.config.option.markexpr or ""
+        if "db" in markexpr:
+            pytest.fail(
+                f"-m {markexpr!r} explicitly selected DB tests, but Postgres "
+                f"is unreachable: {exc}"
+            )
         pytest.skip(f"Postgres unreachable: {exc}")
     await apply_schema(pool)
     async with pool.acquire() as conn:

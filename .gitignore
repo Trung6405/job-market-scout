@@ -234,3 +234,7 @@ agent_docs/
 
 # Personal daily worklog (kept private; mirrored to job-market-scout-worklog)
 docs/project/worklog/
+
+# Personal candidate profile (CV data). CI copies profile.json.example into
+# place; the VM keeps its own copy, which deploy's rsync excludes.
+scout/profile.json

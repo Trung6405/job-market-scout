@@ -30,12 +30,12 @@ Multi-agent job market scout, scrapes listings, matches them to your profile, tr
    `DISCORD_CHANNEL_ID`. Adjust `SEARCH_ROLES`, `SEARCH_LOCATIONS`,
    `PREFERRED_LOCATIONS`, `REMOTE_ONLY`, `MIN_SALARY`, and
    `MIN_MATCH_SCORE` to taste.
-3. Put your own details in `scout/profile.json` — it is the single,
-   **required** candidate source for scoring, the briefing, and skill-gap
-   detection (the pipeline fails fast at startup if it is missing or
-   invalid). Replace the checked-in profile with your own tech stack, domain
-   knowledge, and background; `scout/profile.json.example` shows the
-   expected shape.
+3. Create `scout/profile.json` — it is the single, **required** candidate
+   source for scoring, the briefing, and skill-gap detection (the pipeline
+   fails fast at startup if it is missing or invalid). Copy
+   `scout/profile.json.example` and fill in your own tech stack, domain
+   knowledge, and background. The file is gitignored: it holds personal CV
+   data and never belongs in the repo.
 4. Run the pipeline:
    ```
    docker compose up --build
