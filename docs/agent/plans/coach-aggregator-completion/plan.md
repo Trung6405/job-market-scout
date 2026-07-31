@@ -54,6 +54,13 @@ skills.
 - **Code that will change:** `scout/sub_agents/coach/runner.py`, `tests/`, and
   in phase 2 only, `scout/config.py` for the concurrency setting. Phase 3 may
   touch `.github/workflows/scheduled-run.yml` (comment only).
+- **Amended 2026-07-31 — `scout/sub_agents/coach/embeddings.py` added.** Phase
+  2's concurrency exposed an unguarded lazy model load in `_get_model`, which
+  cost two candidates in the first production run
+  (`NotImplementedError: Cannot copy out of meta tensor`). The fix belongs in
+  the file that owns the global, not worked around in the caller, so the radius
+  is widened rather than the bug being papered over. Recorded here because a
+  regression introduced by this plan is this plan's to fix.
 - **Existing behaviour that could break:** the weekly `Run coach aggregator`
   step; the ingest loop's insert path; nothing in the read path (retriever,
   tips, report) is touched.

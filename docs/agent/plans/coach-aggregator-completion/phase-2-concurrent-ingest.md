@@ -296,3 +296,33 @@ knowing — a `-k` matching nothing exits 0 and reads exactly like a pass — bu
 was my error, not the plan's.
 
 Verification: full suite, 632 passed, no skips.
+
+### Post-merge — a regression this phase introduced *(2026-07-31)*
+
+The first production run under concurrency lost two candidates to
+`NotImplementedError: Cannot copy out of meta tensor; no data!`, both in the
+**first chunk**, before the first progress line.
+
+Cause: `embeddings._get_model` did unguarded lazy init. Callers reach it from
+worker threads via `asyncio.to_thread`, so once ingest became concurrent several
+threads saw `_model is None` at the same moment and all began constructing.
+sentence-transformers initialises on a meta device and moves weights across;
+the losers of that race get a meta tensor with no data.
+
+**Serial ingest could not have exposed this**, which is why no test caught it —
+and it would recur on the first chunk of every cold process. `embed_many` shares
+the same path, so the retriever was exposed too.
+
+Fixed with a double-checked lock in `_get_model`, and a test that runs four
+concurrent callers against a deliberately slow fake constructor. It fails
+`assert 4 == 1` without the lock — all four threads constructed their own model.
+The inner re-check matters: without it, every thread queued at the lock would
+construct in turn, which is the same bug taking longer.
+
+This widened the plan's Blast Radius to `embeddings.py`, amended in `plan.md`
+rather than worked around in the caller. The global belongs to that file, and a
+regression introduced by this plan is this plan's to fix.
+
+Cost: 2 of 755 candidates (0.26%). Cheap, but it recurs every run, and the
+five *genuine* tagging failures in the same run are the ones the failure budget
+was designed for — conflating the two would have mistuned it.
