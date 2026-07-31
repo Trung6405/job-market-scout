@@ -64,6 +64,10 @@ jobs:
         # The persist path assumes tables already exist (schema is normally applied
         # inside track_listings, which the entrypoint test mocks). Apply it up front.
         run: PGPASSWORD=scout psql -h localhost -p 5433 -U scout -d scout -f scout/shared/schema.sql
+      - name: Provide a profile
+        # profile.json is gitignored (personal CV data), but importing scout.config
+        # loads it at startup. Tests only use it structurally, so the example works.
+        run: cp scout/profile.json.example scout/profile.json
       - name: Install deps and run pytest
         run: |
           python -m pip install --upgrade pip
@@ -152,9 +156,14 @@ jobs:
       - name: Rsync repo to VM
         run: |
           set -euo pipefail
+          # scout/profile.json is excluded like scout/.env: it is gitignored
+          # (personal CV data), so it is absent from this checkout, and the
+          # exclusion keeps --delete from wiping the VM's real copy — which
+          # is now managed on the VM itself (SSH in to update it).
           rsync -az --delete \
             -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new" \
             --exclude '.git' --exclude 'scout/.env' --exclude 'reports' \
+            --exclude 'scout/profile.json' \
             --exclude 'docker-compose.override.yaml' \
             ./ "$VM_USER@$VM_HOST:$APP_DIR/"
           # The override pins DATABASE_URL to the VM's own Postgres container,
