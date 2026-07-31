@@ -1,7 +1,7 @@
 # Phase 2: Backfill Stored Tokens
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** In progress — Tasks 1-2 done; Task 3 (the gated production run) next
 > **Depends on:** Phase 1 complete — the table must exist before rows can be
 > rewritten through it, and until this phase runs the corpus disagrees with the
 > code
@@ -34,18 +34,18 @@ second run of the backfill changes nothing, and the coverage delta is recorded.
   `tests/test_backfill_skill_aliases.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: given rows whose `skills` hold pre-alias tokens,
+  - [x] Write failing test: given rows whose `skills` hold pre-alias tokens,
         the script computes the rewritten arrays, leaves already-canonical rows
         untouched, and preserves order and de-duplicates if two tokens collapse
         onto one
-  - [ ] Verify it fails
+  - [x] Verify it fails
         (`python -m pytest tests/test_backfill_skill_aliases.py -q`)
-  - [ ] Implement: read `id, skills`, apply `normalize_skills` to each stored
+  - [x] Implement: read `id, skills`, apply `normalize_skills` to each stored
         token, write back only rows that actually change. DSN from the
         environment, never argv, matching `scripts/verify_migration.py`
-  - [ ] Verify it passes
+  - [x] Verify it passes
         (`python -m pytest tests/test_backfill_skill_aliases.py -q`)
-  - [ ] Commit: `feat(scripts): backfill resources.skills through the alias table`
+  - [x] Commit: `feat(scripts): backfill resources.skills through the alias table`
 
 ### Task 2: Idempotency and a dry run
 
@@ -53,14 +53,14 @@ second run of the backfill changes nothing, and the coverage delta is recorded.
   `tests/test_backfill_skill_aliases.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: a second pass over already-rewritten rows reports
+  - [x] Write failing test: a second pass over already-rewritten rows reports
         zero changes; and a `--dry-run` flag reports what would change without
         writing
-  - [ ] Verify it fails
+  - [x] Verify it fails
         (`python -m pytest tests/test_backfill_skill_aliases.py -k idempot -q`)
-  - [ ] Implement both
-  - [ ] Verify it passes (`python -m pytest -q`)
-  - [ ] Commit: `feat(scripts): make the alias backfill idempotent and dry-runnable`
+  - [x] Implement both
+  - [x] Verify it passes (`python -m pytest -q`)
+  - [x] Commit: `feat(scripts): make the alias backfill idempotent and dry-runnable`
 
 ### Task 3: Run it against production
 
@@ -129,5 +129,23 @@ the restored tokens and the rules agree again.
 
 ## Notes / Learnings
 
-<Filled in during execution — record the dry-run counts, a sample of rewrites,
-and the coverage delta.>
+### Tasks 1-2 — the script *(2026-07-31)*
+
+`scripts/backfill_skill_aliases.py`, ten tests. The planning logic is what is
+tested; the database round-trip is two thin statements exercised for real in
+Task 3. A rewrite that touched every row would look identical to one that
+touched the right rows until it corrupted something, so `plan_changes` excludes
+no-ops and that exclusion is pinned.
+
+Three properties fell out of `normalize_skills` rather than needing code:
+order is preserved (load-bearing — the retriever pairs names positionally with
+query embeddings), two stale spellings collapsing onto one token deduplicate,
+and unknown tokens pass through untouched.
+
+The script verifies idempotency **against the database** after writing, not just
+in tests: it re-plans from what is now stored and exits non-zero if anything
+remains non-canonical, since that would mean the alias table has a cycle and no
+fixed point. That check is the difference between "safe to re-run" as a claim
+and as a fact.
+
+Verification: 629 passed, up 10.
