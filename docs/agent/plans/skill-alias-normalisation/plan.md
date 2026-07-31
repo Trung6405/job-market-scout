@@ -1,6 +1,6 @@
 # Plan: Skill Alias Normalisation
 
-> **Status:** Not started
+> **Status:** Complete
 > **Created:** 2026-07-30 · **Last updated:** 2026-07-30
 > **Spec:** [spec.md](../../specs/skill-alias-normalisation/spec.md)
 
@@ -18,17 +18,17 @@ rows agree with what fresh tagging would produce.
 
 ## Acceptance Criteria
 
-- [ ] `normalize_skill` maps each observed variant family to one token —
+- [x] `normalize_skill` maps each observed variant family to one token —
       verified for GCP/Google Cloud Platform, Node.js/NodeJS, REST API(s)/
       RESTful APIs, CI/CD(+pipelines), Infrastructure as Code(+hyphenated),
       Vue.js/VueJS, TypeScript/Typescript.
-- [ ] `C`, `C++`, `C#`, `Java` and `JavaScript` remain five distinct tokens.
-- [ ] Every alias entry corresponds to a spelling actually observed in gap or
+- [x] `C`, `C++`, `C#`, `Java` and `JavaScript` remain five distinct tokens.
+- [x] Every alias entry corresponds to a spelling actually observed in gap or
       resource data.
-- [ ] After backfill, no row in `resources.skills` contains a token that the
+- [x] After backfill, no row in `resources.skills` contains a token that the
       current rules would map elsewhere.
-- [ ] Running the backfill twice reports zero changes the second time.
-- [ ] A before/after count shows how many distinct gap skills have at least one
+- [x] Running the backfill twice reports zero changes the second time.
+- [x] A before/after count shows how many distinct gap skills have at least one
       matching corpus token.
 
 ---
@@ -61,8 +61,8 @@ rows agree with what fresh tagging would produce.
 
 | # | Phase | Document | Status |
 |---|-------|----------|--------|
-| 1 | Alias table from data | [phase-1-alias-table.md](phase-1-alias-table.md) | Not started |
-| 2 | Backfill stored tokens | [phase-2-backfill.md](phase-2-backfill.md) | Not started |
+| 1 | Alias table from data | [phase-1-alias-table.md](phase-1-alias-table.md) | **Complete** |
+| 2 | Backfill stored tokens | [phase-2-backfill.md](phase-2-backfill.md) | **Complete** |
 
 > All phases are planned in advance — every row above has a written,
 > human-approved phase doc before phase 1 execution starts. If executing
@@ -142,11 +142,11 @@ rows agree with what fresh tagging would produce.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All phase verification steps pass
-- [ ] Backfill run against the production database and verified idempotent
-- [ ] Coverage delta recorded, including if it is zero
-- [ ] No new lint or type-check warnings
+- [x] All acceptance criteria met
+- [x] All phase verification steps pass
+- [x] Backfill run against the production database and verified idempotent
+- [x] Coverage delta recorded, including if it is zero
+- [x] No new lint or type-check warnings
 
 ## Update Rules
 

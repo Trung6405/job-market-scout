@@ -1,7 +1,7 @@
 # Phase 2: Backfill Stored Tokens
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** In progress — Tasks 1-2 done; Task 3 (the gated production run) next
+> **Status:** Complete — backfill applied and verified idempotent; coverage delta recorded
 > **Depends on:** Phase 1 complete — the table must exist before rows can be
 > rewritten through it, and until this phase runs the corpus disagrees with the
 > code
@@ -68,47 +68,47 @@ second run of the backfill changes nothing, and the coverage delta is recorded.
 - **Gate:** ⚠️ human sign-off required before the write pass — it rewrites the
   corpus in place. The dry run and the dump come first
 - **Steps:**
-  - [ ] Confirm nothing is scheduled to run: `gh run list --limit 3`, and check
+  - [x] Confirm nothing is scheduled to run: `gh run list --limit 3`, and check
         the time against the 19:00 UTC cron
-  - [ ] Boot the VM and take a dump of the current database, copied off the VM,
+  - [x] Boot the VM and take a dump of the current database, copied off the VM,
         exactly as the P6 phase-3 procedure does — this is the rollback
-  - [ ] Run with `--dry-run` and record in Notes how many rows would change and
+  - [x] Run with `--dry-run` and record in Notes how many rows would change and
         a sample of the rewrites
-  - [ ] Read the sample: any rewrite that merges two technologies wrongly stops
+  - [x] Read the sample: any rewrite that merges two technologies wrongly stops
         this task and returns to phase 1 Task 2
-  - [ ] Run the write pass, then immediately re-run it and confirm it reports
+  - [x] Run the write pass, then immediately re-run it and confirm it reports
         zero changes
-  - [ ] Shred the dump copy on the VM; keep the laptop copy until the next
+  - [x] Shred the dump copy on the VM; keep the laptop copy until the next
         successful pipeline run
-  - [ ] No commit
+  - [x] No commit
 
 ### Task 4: Measure and record the coverage delta
 
 - **Files:** none — findings recorded in this doc's Notes
 - **Gate:** none — read-only
 - **Steps:**
-  - [ ] Count distinct unmet gap skills that have at least one matching corpus
+  - [x] Count distinct unmet gap skills that have at least one matching corpus
         token, before and after — the before figure comes from the dump taken
         in Task 3, the after from the live table
-  - [ ] Record the delta in Notes, **including if it is zero**. A zero delta
+  - [x] Record the delta in Notes, **including if it is zero**. A zero delta
         here is an honest result, not a failure: most fragmented families are
         cloud technologies the corpus does not hold yet, and the correctness
         argument for the change stands independently of today's numbers
-  - [ ] Record which families gained matches and which are still waiting on the
+  - [x] Record which families gained matches and which are still waiting on the
         corpus, so coach-aggregator-completion phase 3 can check them again
         after seeding
-  - [ ] No commit
+  - [x] No commit
 
 ---
 
 ## Verification
 
-- [ ] All phase tests pass:
+- [x] All phase tests pass:
       `python -m pytest tests/test_backfill_skill_aliases.py -v`
-- [ ] Full suite still passes: `python -m pytest -q`
-- [ ] The second production run reports zero changes
-- [ ] A dump taken before the write pass exists off the VM
-- [ ] The coverage delta is recorded in Notes, zero or not
+- [x] Full suite still passes: `python -m pytest -q`
+- [x] The second production run reports zero changes
+- [x] A dump taken before the write pass exists off the VM
+- [x] The coverage delta is recorded in Notes, zero or not
 
 ## Observability
 
@@ -149,3 +149,45 @@ fixed point. That check is the difference between "safe to re-run" as a claim
 and as a fact.
 
 Verification: 629 passed, up 10.
+
+### Tasks 3-4 — the production run and what it bought *(2026-07-31)*
+
+Ran in a 17-hour window clear of the 19:00 UTC cron, with
+`pre-backfill-20260731T020310Z.sql` (11,456,396 bytes, complete-marker
+verified) copied off the VM first.
+
+**Dry run: 10 of 957 rows.** `restapi`->`rest` 5, `nodejs`->`node` 3,
+`googlecloudplatform`->`gcp` 1, `googlecloud`->`gcp` 1. Every line was read for
+wrong merges. Two details confirmed the entries are narrow enough:
+`realtimeapi` survived untouched sitting directly beside `restapi` in id=811,
+and `aws` / `azure` / `awslightsail` / `microsoftazure` all survived beside the
+Google rewrites. Order preserved in every row.
+
+**Write pass: exit 0**, and the post-write re-plan reported *"a second pass
+finds nothing left to change"*. An independent dry run afterwards agreed —
+0 of 957 — and a direct query for the ten stale tokens returned nothing.
+Consolidation arithmetic is exact: `node` 29+3=32, `rest` 6+5=11, `gcp`
+1+1+1=3.
+
+**The first coverage measurement was wrong and reported a delta of zero.** It
+normalised gap skills with the *new* rules on both sides while varying only the
+token set, so `RESTful APIs` counted as already-covered because `rest` existed —
+when under the old rules it normalised to `restfulapis` and matched nothing.
+Both halves have to move together. Recomputed properly:
+
+| | Before | After |
+|---|---|---|
+| Gap skills with >=1 match | 193 | **199** |
+| Reachable (gap, resource) pairs | 1,266 | **1,368** |
+| Coverage lost | — | **0** |
+
+Six gap skills went from *zero* matches to matching: `.NET Core`,
+`CI/CD Pipelines`, `CI/CD pipelines`, `REST APIs`, `RESTful APIs`, `VueJS`.
+Nothing lost coverage, which is the check that matters most — no merge pulled a
+gap away from resources it was already finding.
+
+Modest, and expected to be: only 10 of 957 rows held affected spellings because
+the corpus is Python-ecosystem. The families that fragment hardest are cloud
+technologies the corpus does not hold yet, so the real payoff arrives after the
+coach-aggregator-completion seeding run — which is precisely why this landed
+first rather than after.
