@@ -1,7 +1,7 @@
 # Phase 1: Completion and Ordering
 
 > **Parent plan:** [plan.md](plan.md)
-> **Status:** Not started
+> **Status:** Complete — all five tasks landed; 624 tests passing
 > **Depends on:** nothing
 
 ---
@@ -96,20 +96,20 @@ and search-derived candidates are ingested ahead of awesome-list survivors.
   `scout/shared/schemas.py`, `tests/test_coach_runner.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: `CoachSummary` carries a `failed` count and the
+  - [x] Write failing test: `CoachSummary` carries a `failed` count and the
         completion log line reports inserted, duplicate, no-README and failed
-  - [ ] Verify it fails (`python -m pytest tests/test_coach_runner.py -k summary -q`)
-  - [ ] Implement: add the field with a default so existing constructions keep
+  - [x] Verify it fails (`python -m pytest tests/test_coach_runner.py -k summary -q`)
+  - [x] Implement: add the field with a default so existing constructions keep
         working; include all four counts in the summary log
-  - [ ] Verify it passes (`python -m pytest tests/ -q`)
-  - [ ] Commit: `feat(coach): report skipped and failed candidates in the run summary`
+  - [x] Verify it passes (`python -m pytest tests/ -q`)
+  - [x] Commit: `feat(coach): report skipped and failed candidates in the run summary`
 
 ---
 
 ## Verification
 
-- [ ] All phase tests pass: `python -m pytest tests/test_coach_runner.py -v`
-- [ ] Full suite still passes: `python -m pytest -q`
+- [x] All phase tests pass: `python -m pytest tests/test_coach_runner.py -v`
+- [x] Full suite still passes: `python -m pytest -q` — 624 passed
 - [ ] ~~The ten pre-existing runner tests pass unmodified~~ **Corrected during
       execution.** Nine pass unmodified;
       `test_gather_filters_bootstrap_candidates_through_the_quality_bar` pins
@@ -234,3 +234,22 @@ Pre-existing and out of scope here, but worth its own fix: a skip on
 infrastructure failure is indistinguishable from a test that was never written.
 
 Verification: 16 passed.
+
+### Task 5 — the run summary *(2026-07-31)*
+
+`CoachSummary.failed`, defaulted to 0 so existing constructions keep working,
+and all four counts in the completion line. The mid-run progress line gained
+`failed` too — the completion line is no use for a run that is still going, and
+a run whose failures are climbing is exactly the one worth interrupting.
+
+The wording changed from `%d candidate(s) without a README` to
+`%d without a README`, matching the format this doc's Observability section
+already specified.
+
+`scout/coach_aggregator.py` also logs a summary line and still reports only
+seen/inserted/duplicates. It is outside this plan's Blast Radius and the
+runner's line is logged at INFO through the same handler, so both appear in the
+workflow log — the count is not hidden. Adding it there is a one-line follow-up
+for the human to approve.
+
+Verification: full suite, 624 passed.

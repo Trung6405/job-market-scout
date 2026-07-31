@@ -269,13 +269,14 @@ async def run_coach_aggregator(settings: Settings | None = None) -> CoachSummary
                     per_item = elapsed / position
                     logger.info(
                         "Ingest progress: %d/%d candidates, %d inserted, "
-                        "%d duplicate(s), %d without a README, %.1f min elapsed "
-                        "(%.1fs each, ~%.1f min left).",
+                        "%d duplicate(s), %d without a README, %d failed, "
+                        "%.1f min elapsed (%.1fs each, ~%.1f min left).",
                         position,
                         len(new_urls),
                         inserted,
                         duplicates,
                         no_readme,
+                        failed,
                         elapsed / 60,
                         per_item,
                         per_item * (len(new_urls) - position) / 60,
@@ -346,19 +347,24 @@ async def run_coach_aggregator(settings: Settings | None = None) -> CoachSummary
                     inserted += 1
                 else:
                     duplicates += 1
+        # Every candidate lands in exactly one of these buckets, so the four
+        # counts plus the already-stored ones account for the whole run. That
+        # is what makes a degraded run legible without opening the code.
         logger.info(
             "Aggregation complete in %.1f min: %d inserted, %d duplicate(s), "
-            "%d candidate(s) without a README, out of %d seen.",
+            "%d without a README, %d failed, out of %d seen.",
             (time.monotonic() - ingest_started) / 60,
             inserted,
             duplicates,
             no_readme,
+            failed,
             len(candidate_urls),
         )
         return CoachSummary(
             candidates_seen=len(candidate_urls),
             inserted=inserted,
             duplicates=duplicates,
+            failed=failed,
         )
     finally:
         await pool.close()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 import pytest
@@ -334,6 +335,39 @@ async def test_run_coach_aggregator_still_skips_a_plain_403(
     summary = await runner.run_coach_aggregator(_test_settings())
 
     assert summary.inserted == 0
+
+
+@pytest.mark.asyncio
+async def test_run_coach_aggregator_summary_reports_every_disposition(
+    db_pool, listing_factory, match_factory, monkeypatch, caplog
+):
+    """Every candidate ends up in exactly one bucket, and the run says so.
+
+    Without the failed count, a thin corpus and a working one produce the same
+    log line, and the systemic threshold has nothing to be tuned against — it
+    is currently set from a single observation.
+    """
+    await _seed_kubernetes_gap(db_pool, listing_factory, match_factory)
+    urls = [
+        "https://github.com/org/before",
+        "https://github.com/org/malformed",
+        "https://github.com/org/after",
+    ]
+    _mock_pipeline_failing(
+        monkeypatch, urls, fails=lambda url: url.endswith("malformed")
+    )
+
+    with caplog.at_level(logging.INFO, logger="scout.coach.runner"):
+        summary = await runner.run_coach_aggregator(_test_settings())
+
+    assert summary.failed == 1
+    completion = next(
+        record.getMessage()
+        for record in caplog.records
+        if record.getMessage().startswith("Aggregation complete")
+    )
+    for expected in ("2 inserted", "0 duplicate(s)", "0 without a README", "1 failed"):
+        assert expected in completion
 
 
 @pytest.mark.asyncio

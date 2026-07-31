@@ -288,6 +288,12 @@ class CoachSummary(BaseModel):
     candidates_seen: int
     inserted: int
     duplicates: int
+    # Candidates skipped after raising — usually a tagging response that failed
+    # validation. Defaulted so existing constructions keep working, and reported
+    # because a thin corpus and a healthy one otherwise log identically. It is
+    # also the number the run's systemic-abort threshold is waiting to be tuned
+    # against.
+    failed: int = 0
 
 
 # healthy: the URL resolves. gone: permanently removed (404/410) — excludes on
