@@ -3,7 +3,19 @@ from __future__ import annotations
 import re
 
 # Known equivalences that a substring/punctuation strip alone can't collapse.
-# Keys and values are in normalized (lowercase, alphanumeric-only) form.
+# Keys and values are in normalized (lowercase, alphanumeric-only) form — which
+# is also what lets the same table be applied to already-stored
+# ``resources.skills`` tokens, so a rules change is a lookup rather than a
+# re-tagging run.
+#
+# Every entry below the original six comes from a spelling counted in real gap
+# or resource data. They are curated, never derived: a stem-based attempt at
+# the same job merged C, C++ and C# into one token, and a ``LIKE '%google%'``
+# survey swept in Cloud Run and Cloud Storage, which are different products.
+#
+# Direction is arbitrary for correctness — gaps and resources both pass through
+# here — so each canonical form is simply the commonest existing corpus
+# spelling, which keeps the backfill's churn low.
 _SKILL_ALIASES = {
     "js": "javascript",
     "ts": "typescript",
@@ -11,6 +23,26 @@ _SKILL_ALIASES = {
     "postgre": "postgresql",
     "k8s": "kubernetes",
     "golang": "go",
+    # The corpus itself was split across these: node 29 / nodejs 3,
+    # rest 6 / restapi 5. A resource was invisible to half its own corpus.
+    "nodejs": "node",
+    "restapi": "rest",
+    "restapis": "rest",
+    "restfulapi": "rest",
+    "restfulapis": "rest",
+    "vuejs": "vue",
+    # gcp / googlecloud / googlecloudplatform were 1 resource each — no
+    # frequency signal, so the shortest form is canonical.
+    "googlecloud": "gcp",
+    "googlecloudplatform": "gcp",
+    "cicdpipeline": "cicd",
+    "cicdpipelines": "cicd",
+    "iac": "infrastructureascode",
+    # ".NET Core" reaches here as "netcore": the punctuated-name table keys on
+    # ".net" and the whitespace squeeze makes this ".netcore", which misses it.
+    # "ASP.NET Core" lands on "aspnetcore" and deliberately stays separate,
+    # matching the existing ASP.NET/.NET separation.
+    "netcore": "dotnet",
 }
 
 # Framework version suffixes stripped before comparison ("React.js" -> "react").

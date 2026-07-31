@@ -88,6 +88,46 @@ def test_normalize_skill_keeps_dotnet_distinct_from_net():
     assert normalize_skill("ASP.NET") != normalize_skill(".NET")
 
 
+def test_normalize_skill_collapses_observed_spelling_variants():
+    """Every family here was measured in real gap or resource data, not guessed.
+
+    The corpus is fragmented on its own side too, which is what makes these
+    load-bearing rather than cosmetic: the tagger emitted both ``node`` (29
+    resources) and ``nodejs`` (3), and both ``rest`` (6) and ``restapi`` (5),
+    so a resource was invisible to a gap spelled the other way -- and to half
+    the corpus.
+    """
+    assert normalize_skill("NodeJS") == normalize_skill("Node.js")
+    assert (
+        normalize_skill("REST API")
+        == normalize_skill("RESTful APIs")
+        == normalize_skill("REST")
+    )
+    assert (
+        normalize_skill("GCP")
+        == normalize_skill("Google Cloud")
+        == normalize_skill("Google Cloud Platform")
+    )
+    assert normalize_skill("CI/CD pipelines") == normalize_skill("CI/CD")
+    assert normalize_skill("VueJS") == normalize_skill("Vue.js")
+    assert normalize_skill("IaC") == normalize_skill("Infrastructure as Code")
+    assert normalize_skill(".NET Core") == normalize_skill(".NET")
+
+
+def test_normalize_skill_keeps_lookalike_neighbours_separate():
+    """The separations the new aliases put at risk.
+
+    A first attempt at deriving these families with ``LIKE '%google%'`` swept in
+    Cloud Run and Cloud Storage -- different products, not spellings of GCP.
+    ``Cloud Security`` is a specialisation of ``Security``, not a variant of it,
+    so merging would let general material answer a cloud-specific gap.
+    """
+    assert normalize_skill("Google Cloud Run") != normalize_skill("GCP")
+    assert normalize_skill("Google Cloud Storage") != normalize_skill("GCP")
+    assert normalize_skill("ASP.NET Core") != normalize_skill(".NET")
+    assert normalize_skill("Cloud Security") != normalize_skill("Security")
+
+
 def test_normalize_skill_still_strips_framework_suffixes():
     """Regression guard: the C-family fix must not disturb the common case."""
     assert normalize_skill("React.js") == normalize_skill("React")

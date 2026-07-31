@@ -37,7 +37,7 @@ rows agree with what fresh tagging would produce.
 
 | Risk / unknown | Impact if wrong | Resolution |
 |----------------|-----------------|------------|
-| Canonical direction per family is guessed rather than measured — picking `gcp` when the tagger emits `Google Cloud Platform` moves the mismatch instead of fixing it | Aliases land but retrieval improves less than expected, or regresses for families that were previously consistent | Spike: Phase 1 Task 1 reads the actual `resources.skills` distribution and fixes each direction from data |
+| ~~Canonical direction per family is guessed rather than measured~~ **Resolved by the Phase 1 Task 1 spike, and the premise was wrong.** Direction cannot move a mismatch: gaps and resources both pass through `normalize_skill`, and the backfill rewrites stored tokens through the same table, so any consistent choice matches. Direction affects only readability and how many rows the backfill touches | None — the concern does not exist | Resolved. Directions chosen for the commonest corpus spelling to minimise backfill churn: `node`(29), `rest`(6), `vue`(21), `dotnet`(6), `cicd`(2), `infrastructureascode`(2). Google has no signal (1/1/1) so it is a free choice |
 | An alias merges two technologies that are genuinely distinct | Retrieval precision degrades silently — the failure D-CC-3 and `_PUNCTUATED_SKILLS` both exist to prevent, and which previously marked a C++ requirement met against plain C | Every entry hand-inspected against real spellings; guard tests pin the known-dangerous separations; the spec forbids algorithmic derivation |
 | `.NET` vs `.NET Core` may not be equivalent for retrieval purposes | Either a missed match or a wrong one, depending on which way it is decided | Open question in the spec — Phase 1 Task 2 surfaces the data and the human decides before the entry is written |
 | Backfill rewrites rows that other code reads concurrently | A run reading mid-rewrite sees mixed tokens | Accepted risk, bounded: the aggregator runs weekly and the backfill is a single short statement set; run it while nothing else is scheduled, as Phase 2 Task 3 specifies |
@@ -106,9 +106,12 @@ rows agree with what fresh tagging would produce.
 - **Aliases are normalised-to-normalised**, which is what makes the backfill a
   lookup rather than a re-tagging exercise. This is a constraint on the table's
   shape, not an implementation detail.
-- **Canonical direction follows the corpus**, because the resource side cannot
-  be re-asked without spending LLM calls, whereas gap strings are re-extracted
-  every run.
+- **Canonical direction is arbitrary for correctness.** Both sides normalise
+  through the same table and the backfill rewrites stored tokens through it
+  too, so any consistent choice matches. Directions are picked for the
+  commonest existing corpus spelling purely to minimise backfill churn. (An
+  earlier draft claimed the resource side "cannot be re-asked" — untrue, since
+  remapping is a lookup, and the Task 1 spike disproved it.)
 - **Merging affects matching, never display** (spec A1). `listing_gaps.skill`
   keeps the raw extracted string and the report renders it, so a gap shown as
   `.NET Core` finds a `.NET` resource while still reading `.NET Core` on the
