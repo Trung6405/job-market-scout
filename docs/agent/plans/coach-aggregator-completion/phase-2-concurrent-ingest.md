@@ -33,13 +33,15 @@ failure isolation still holds under `gather`.
   in this doc's Notes
 - **Gate:** none — read-only against the provider, no database writes
 - **Steps:**
-  - [ ] Run a bounded batch: tag 12 already-stored READMEs at width 1, then at
-        width 4, timing both and recording any 429 or provider error
-  - [ ] Record in Notes: per-call latency at each width, total elapsed, error
-        count, and whether width 4 delivers near-4x or saturates earlier
-  - [ ] If 429s appear, record the width at which they start — that becomes the
-        default rather than 4
-  - [ ] No commit
+  - [~] **Not run — superseded by production evidence, human decision
+        2026-07-31.** The spike needs `DEEPSEEK_API_KEY` and `GITHUB_PAT`,
+        which are not available locally, so it would have cost a VM boot and
+        live LLM spend to measure something production already answers. See
+        Notes for the evidence and the default it sets
+  - [~] Per-call latency at each width — not measured; Phase 3's real run is
+        the measurement instead
+  - [~] 429 threshold — not measured; production has not hit one at width 3
+  - [x] No commit
 
 ### Task 2: Make the per-candidate pipeline a coroutine
 
@@ -47,15 +49,15 @@ failure isolation still holds under `gather`.
   `tests/test_coach_runner.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: a helper coroutine takes one URL and returns either
+  - [x] Write failing test: a helper coroutine takes one URL and returns either
         a tagged resource with its embedding, or a typed skip/failure result —
         without touching the database
-  - [ ] Verify it fails (`python -m pytest tests/test_coach_runner.py -k candidate_pipeline -q`)
-  - [ ] Implement: extract fetch → tag → embed into that coroutine, leaving the
+  - [x] Verify it fails (`python -m pytest tests/test_coach_runner.py -k candidate_pipeline -q`)
+  - [x] Implement: extract fetch → tag → embed into that coroutine, leaving the
         existing loop calling it one at a time. Behaviour unchanged; this is
         the seam concurrency needs
-  - [ ] Verify it passes (`python -m pytest tests/test_coach_runner.py -q`)
-  - [ ] Commit: `refactor(coach): extract the per-candidate pipeline behind one coroutine`
+  - [x] Verify it passes (`python -m pytest tests/test_coach_runner.py -q`)
+  - [x] Commit: `refactor(coach): extract the per-candidate pipeline behind one coroutine`
 
 ### Task 3: Process candidates in concurrent chunks
 
@@ -135,5 +137,53 @@ that, revert the phase's commits; no state depends on them.
 
 ## Notes / Learnings
 
-<Filled in during execution — record Task 1's measured widths here before
-Task 3 picks a default.>
+### Task 1 — not run; the default comes from production instead *(2026-07-31)*
+
+The spike was skipped by human decision, and the reasoning matters more than
+the skip.
+
+**The question it was written to answer is already answered.**
+`MODEL_CONCURRENCY` defaults to **3** and is used in production by
+`scout/sub_agents/scorer/runner.py`, `advisor/runner.py` and `coach/tips.py` —
+same provider, same account, same key, across every scheduled run to date, with
+no 429 handling ever having been needed. "Does DeepSeek tolerate concurrent
+calls" has a larger and longer-running sample behind it than 12 calls on one
+afternoon would have produced.
+
+**What the spike would still have added**, and what is therefore not known:
+whether width 4 buys anything over width 3, and where 429s actually begin. That
+is a tuning question, not a safety one.
+
+**What it would have cost**: `DEEPSEEK_API_KEY` and `GITHUB_PAT` are not
+available locally, so running it meant booting the VM and spending real LLM
+budget, or putting live keys on the laptop.
+
+**Consequence for Task 3:** the default is **3**, matching the width production
+already runs, not the 4 the plan assumed. The plan's own verification —
+"the shipped default matches what was measured rather than what was assumed" —
+is satisfied in spirit: 3 is measured, just not by this task.
+
+The risk this spike covered ("DeepSeek behaviour under width-4 concurrent
+tagging") is therefore **retired for width 3 and open for width 4**, and the
+setting exists so the answer can change without a deploy.
+
+### Task 2 — the seam *(2026-07-31)*
+
+`_prepare_candidate` does fetch → tag → embed and returns a `PreparedCandidate`,
+or `None` for a repo with no README. It touches no database, which is the whole
+point: the expensive part of a candidate is IO-bound and independent per URL,
+while the insert is neither.
+
+Failures deliberately propagate out of it rather than being caught inside. The
+caller owns the isolation policy — skip, escalate a rate limit, abort on a
+systemic rate — and splitting that policy across two places is how the two
+layers would end up disagreeing about what a 403 means, which is the bug Phase 1
+Task 4 just fixed.
+
+Behaviour is unchanged; the loop calls it one at a time. The README check stays
+first inside it so a bare repo still costs neither a tagging call nor an
+embedding, and normalisation stays on the prepared resource rather than moving
+to the insert — otherwise making this concurrent would quietly change what lands
+in `skills`.
+
+Verification: 19 passed in `tests/test_coach_runner.py`.

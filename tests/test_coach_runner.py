@@ -436,6 +436,71 @@ def test_gather_candidate_urls_skips_skill_on_rate_limit_and_continues(monkeypat
     ]
 
 
+@pytest.mark.asyncio
+async def test_candidate_pipeline_prepares_everything_but_the_write(monkeypatch):
+    """The seam concurrency needs: fetch, tag and embed one URL, no database.
+
+    Splitting here is what lets the expensive, independent, IO-bound part of a
+    candidate overlap while inserts stay serial on the one open connection.
+    """
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.fetch_readme",
+        lambda url, settings: "# Kubernetes\n\nContainer orchestration.",
+    )
+    monkeypatch.setattr("scout.sub_agents.coach.runner.embed", lambda text: [0.5] * 384)
+
+    async def _fake_tag_readme(readme_text, settings):
+        return ResourceTags(
+            skills=["K8s", "  Postgres "],
+            resource_type="repo",
+            level="intermediate",
+            summary="Container orchestration platform.",
+        )
+
+    monkeypatch.setattr("scout.sub_agents.coach.runner.tag_readme", _fake_tag_readme)
+
+    prepared = await runner._prepare_candidate(
+        "https://github.com/kubernetes/kubernetes", _test_settings()
+    )
+
+    assert prepared.url == "https://github.com/kubernetes/kubernetes"
+    assert prepared.resource.title == "kubernetes/kubernetes"
+    # Normalisation belongs to the prepared resource, not the insert, or moving
+    # the work concurrent would quietly change what lands in the column.
+    assert prepared.resource.skills == ["kubernetes", "postgresql"]
+    assert prepared.embedding == [0.5] * 384
+
+
+@pytest.mark.asyncio
+async def test_candidate_pipeline_returns_nothing_for_a_repo_without_a_readme(
+    monkeypatch,
+):
+    """No README is a skip, and it must cost neither a tagging call nor an
+    embedding — that ordering is the reason `fetch_readme` doubles as the
+    filter."""
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.fetch_readme", lambda url, settings: None
+    )
+    spent: list[str] = []
+
+    async def _unexpected_tag(readme_text, settings):
+        spent.append("tag")
+        raise AssertionError("tagging a candidate with no README")
+
+    monkeypatch.setattr("scout.sub_agents.coach.runner.tag_readme", _unexpected_tag)
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.embed",
+        lambda text: spent.append("embed"),
+    )
+
+    prepared = await runner._prepare_candidate(
+        "https://github.com/org/bare", _test_settings()
+    )
+
+    assert prepared is None
+    assert spent == []
+
+
 def _repo_payload(stars: int = 5_000, archived: bool = False) -> dict:
     """A metadata payload that clears the quality bar unless a test says not."""
     from datetime import datetime, timedelta, timezone

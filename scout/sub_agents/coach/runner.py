@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from typing import NamedTuple
 
 import requests
 
@@ -220,6 +221,50 @@ def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:
     return searched + bootstrap
 
 
+class PreparedCandidate(NamedTuple):
+    """One candidate fetched, tagged and embedded — everything but the write."""
+
+    url: str
+    resource: Resource
+    embedding: list[float]
+
+
+async def _prepare_candidate(
+    url: str, settings: Settings
+) -> PreparedCandidate | None:
+    """Fetch, tag and embed one candidate. Returns None if it has no README.
+
+    Deliberately touches no database. This is the seam concurrency needs: the
+    expensive part of a candidate is IO-bound and independent per URL, while
+    the insert is neither, so this can overlap while writes stay serial on the
+    single open connection.
+
+    Failures propagate rather than being caught here. The caller owns the
+    isolation policy — skip a bad candidate, escalate a rate limit, abort on a
+    systemic rate — and that policy has to stay in one place.
+    """
+    readme = await asyncio.to_thread(fetch_readme, url, settings)
+    if readme is None:
+        # Doubles as the "has a README" filter, and it comes first so a bare
+        # repo costs neither a tagging call nor an embedding.
+        return None
+    tags = await tag_readme(readme, settings)
+    resource = Resource(
+        url=url,
+        title=_title_from_url(url),
+        resource_type=tags.resource_type,
+        skills=_canonical_skills(tags.skills),
+        level=tags.level,
+        summary=tags.summary,
+        source="github",
+    )
+    # Off the event loop, for the reason the fetch above already is: embedding
+    # is CPU-bound local inference (D-CC-4), and the first call also loads the
+    # model. Called inline it blocked the loop while the asyncpg pool was open.
+    embedding = await asyncio.to_thread(embed, tags.summary)
+    return PreparedCandidate(url=url, resource=resource, embedding=embedding)
+
+
 async def run_coach_aggregator(settings: Settings | None = None) -> CoachSummary:
     active_settings = settings or default_settings
     if not active_settings.github_pat:
@@ -291,28 +336,13 @@ async def run_coach_aggregator(settings: Settings | None = None) -> CoachSummary
                 # is no retry here — a retry policy has its own budget and
                 # failure modes, and buys little over waiting a week.
                 try:
-                    readme = await asyncio.to_thread(
-                        fetch_readme, url, active_settings
-                    )
-                    if readme is None:
+                    prepared = await _prepare_candidate(url, active_settings)
+                    if prepared is None:
                         no_readme += 1
                         continue
-                    tags = await tag_readme(readme, active_settings)
-                    resource = Resource(
-                        url=url,
-                        title=_title_from_url(url),
-                        resource_type=tags.resource_type,
-                        skills=_canonical_skills(tags.skills),
-                        level=tags.level,
-                        summary=tags.summary,
-                        source="github",
+                    result = await insert_resource(
+                        conn, prepared.resource, prepared.embedding
                     )
-                    # Off the event loop, for the reason the fetch above already
-                    # is: embedding is CPU-bound local inference (D-CC-4), and
-                    # the first call also loads the model. Called inline it
-                    # blocked the loop while the asyncpg pool was open.
-                    embedding = await asyncio.to_thread(embed, tags.summary)
-                    result = await insert_resource(conn, resource, embedding)
                 except Exception as exc:
                     # Checked before the counter moves: a rate limit is not a
                     # failed candidate, it is the end of the run, and counting
