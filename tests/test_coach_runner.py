@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import date
 
@@ -499,6 +500,65 @@ async def test_candidate_pipeline_returns_nothing_for_a_repo_without_a_readme(
 
     assert prepared is None
     assert spent == []
+
+
+@pytest.mark.asyncio
+async def test_ingest_runs_a_chunk_concurrently_and_still_inserts_in_order(
+    db_pool, listing_factory, match_factory, monkeypatch
+):
+    """Overlap where it is safe, sequence where it is not.
+
+    Tagging and embedding are independent per candidate and dominate the run;
+    inserts share one connection and must stay serial. The peak in-flight count
+    is what proves overlap — a timing assertion would prove the same thing
+    less reliably, since a loaded machine can make a concurrent run look
+    serial.
+    """
+    await _seed_kubernetes_gap(db_pool, listing_factory, match_factory)
+    urls = [f"https://github.com/org/repo-{index}" for index in range(4)]
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.search_candidates",
+        lambda skill, settings: urls,
+    )
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.fetch_readme",
+        lambda url, settings: f"# {url}",
+    )
+    monkeypatch.setattr("scout.sub_agents.coach.runner.embed", lambda text: [0.1] * 384)
+
+    in_flight = 0
+    peak = 0
+
+    async def _fake_tag_readme(readme_text, settings):
+        nonlocal in_flight, peak
+        in_flight += 1
+        peak = max(peak, in_flight)
+        await asyncio.sleep(0.05)
+        in_flight -= 1
+        return ResourceTags(
+            skills=["kubernetes"],
+            resource_type="repo",
+            level="intermediate",
+            summary=f"Summary of {readme_text}.",
+        )
+
+    monkeypatch.setattr("scout.sub_agents.coach.runner.tag_readme", _fake_tag_readme)
+
+    summary = await runner.run_coach_aggregator(
+        _test_settings(coach_ingest_concurrency=4)
+    )
+
+    assert summary.inserted == 4
+    assert peak == 4, "candidates were tagged one at a time, not concurrently"
+    async with db_pool.acquire() as conn:
+        stored = [
+            record["url"]
+            for record in await conn.fetch("SELECT url FROM resources ORDER BY id")
+        ]
+    # Ascending id is insertion order: the writes happened one at a time, and
+    # in the order the candidate list was assembled — which is what makes the
+    # phase-1 ordering guarantee survive concurrency.
+    assert stored == urls
 
 
 def _repo_payload(stars: int = 5_000, archived: bool = False) -> dict:

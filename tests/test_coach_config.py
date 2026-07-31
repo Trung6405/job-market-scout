@@ -20,8 +20,24 @@ def _clear_coach_env(monkeypatch):
         "COACH_LINK_HEALTH_BATCH",
         "COACH_LINK_HEALTH_MAX_FAILURES",
         "COACH_LINK_HEALTH_TIMEOUT_SECONDS",
+        "COACH_INGEST_CONCURRENCY",
     ):
         monkeypatch.delenv(name, raising=False)
+
+
+def test_coach_ingest_concurrency_defaults_to_three():
+    """Three, not four: it matches MODEL_CONCURRENCY, which already drives
+    concurrent calls to the same provider on the same key from the scorer,
+    advisor and tips stages without ever needing 429 handling. Width 4 was the
+    plan's assumption and remains unmeasured."""
+    assert Settings().coach_ingest_concurrency == 3
+
+
+def test_coach_ingest_concurrency_reads_env(monkeypatch):
+    """Settable so a rate limit can be answered without a deploy — setting it
+    to 1 restores fully serial ingest, which is the phase's rollback."""
+    monkeypatch.setenv("COACH_INGEST_CONCURRENCY", "1")
+    assert Settings().coach_ingest_concurrency == 1
 
 
 def test_github_pat_defaults_empty():

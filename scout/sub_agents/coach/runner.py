@@ -307,76 +307,96 @@ async def run_coach_aggregator(settings: Settings | None = None) -> CoachSummary
         # One connection for the whole ingest loop rather than one
         # acquire/release per row; the blocking README fetch goes through a
         # worker thread so the loop's awaits stay serviceable.
+        width = max(1, active_settings.coach_ingest_concurrency)
         async with pool.acquire() as conn:
-            for position, url in enumerate(new_urls, start=1):
-                if position % 20 == 0 or position == len(new_urls):
-                    elapsed = time.monotonic() - ingest_started
-                    per_item = elapsed / position
-                    logger.info(
-                        "Ingest progress: %d/%d candidates, %d inserted, "
-                        "%d duplicate(s), %d without a README, %d failed, "
-                        "%.1f min elapsed (%.1fs each, ~%.1f min left).",
-                        position,
-                        len(new_urls),
-                        inserted,
-                        duplicates,
-                        no_readme,
-                        failed,
-                        elapsed / 60,
-                        per_item,
-                        per_item * (len(new_urls) - position) / 60,
-                    )
-                # One bad candidate is noise, not a reason to end the run. The
-                # commonest case is the tagger returning output that fails
-                # `ResourceTags` validation; unhandled, that one exception threw
-                # away every candidate still queued behind it.
+            position = 0
+            for start in range(0, len(new_urls), width):
+                chunk = new_urls[start : start + width]
+                # Prepare the chunk concurrently, then write it serially. The
+                # split is the whole design: fetch/tag/embed are IO-bound and
+                # independent per URL, while inserts share this one connection.
                 #
-                # Skipping loses nothing durable: dedup is by URL, so the next
-                # weekly run tries this candidate again. That is also why there
-                # is no retry here — a retry policy has its own budget and
-                # failure modes, and buys little over waiting a week.
-                try:
-                    prepared = await _prepare_candidate(url, active_settings)
-                    if prepared is None:
+                # `return_exceptions=True` so one bad candidate does not cancel
+                # its chunk-mates — without it, `gather` propagates the first
+                # exception and the sibling coroutines' work is thrown away,
+                # which would reintroduce phase 1's bug at chunk granularity.
+                outcomes = await asyncio.gather(
+                    *(_prepare_candidate(url, active_settings) for url in chunk),
+                    return_exceptions=True,
+                )
+                for url, outcome in zip(chunk, outcomes):
+                    position += 1
+                    # Unconditional, before any `continue`: a run whose
+                    # candidates are mostly failing or README-less is precisely
+                    # the one whose progress must stay visible.
+                    if position % 20 == 0 or position == len(new_urls):
+                        elapsed = time.monotonic() - ingest_started
+                        # Effective seconds per candidate, not per serial call:
+                        # this is the figure that shows whether concurrency is
+                        # actually working. A width that is silently ineffective
+                        # leaves it unchanged.
+                        per_item = elapsed / position
+                        logger.info(
+                            "Ingest progress: %d/%d candidates, %d inserted, "
+                            "%d duplicate(s), %d without a README, %d failed, "
+                            "%.1f min elapsed (%.1fs each, ~%.1f min left).",
+                            position,
+                            len(new_urls),
+                            inserted,
+                            duplicates,
+                            no_readme,
+                            failed,
+                            elapsed / 60,
+                            per_item,
+                            per_item * (len(new_urls) - position) / 60,
+                        )
+                    if isinstance(outcome, BaseException):
+                        # `return_exceptions=True` turns a raise into a value,
+                        # so every escalation phase 1 established has to be
+                        # re-applied by hand here. Order matters and mirrors
+                        # the serial version exactly.
+                        if not isinstance(outcome, Exception):
+                            # CancelledError and friends. A cancelled step must
+                            # not be recorded as one skipped candidate per
+                            # remaining URL.
+                            raise outcome
+                        if _is_rate_limited(outcome):
+                            # Not a failed candidate — the end of the run. Every
+                            # candidate after it would fail identically.
+                            raise outcome
+                        failed += 1
+                        # WARNING with the URL and the exception type: a skipped
+                        # candidate has to be legible in the run log, or
+                        # "silently thinner corpus" becomes indistinguishable
+                        # from "nothing matched".
+                        logger.warning(
+                            "Skipping candidate %s — %s: %s",
+                            url,
+                            type(outcome).__name__,
+                            outcome,
+                        )
+                        # Chained, so the abort says how many failed and the
+                        # cause says what they looked like.
+                        if failed > max(
+                            _MIN_FAILURES_BEFORE_ABORT, position * _ABORT_FAILURE_RATE
+                        ):
+                            raise RuntimeError(
+                                f"Aborting aggregation: {failed} of {position} "
+                                f"candidates processed have failed, which looks "
+                                f"systemic rather than incidental. "
+                                f"{inserted} resource(s) were inserted before this."
+                            ) from outcome
+                        continue
+                    if outcome is None:
                         no_readme += 1
                         continue
                     result = await insert_resource(
-                        conn, prepared.resource, prepared.embedding
+                        conn, outcome.resource, outcome.embedding
                     )
-                except Exception as exc:
-                    # Checked before the counter moves: a rate limit is not a
-                    # failed candidate, it is the end of the run, and counting
-                    # it would also feed the systemic threshold below.
-                    if _is_rate_limited(exc):
-                        raise
-                    failed += 1
-                    # WARNING with the URL and the exception type: a skipped
-                    # candidate has to be legible in the run log, or "silently
-                    # thinner corpus" becomes indistinguishable from "nothing
-                    # matched".
-                    logger.warning(
-                        "Skipping candidate %s — %s: %s",
-                        url,
-                        type(exc).__name__,
-                        exc,
-                    )
-                    # Raised from inside the handler so the traceback keeps the
-                    # last failure as its cause — the abort says how many, and
-                    # the chained exception says what they looked like.
-                    if failed > max(
-                        _MIN_FAILURES_BEFORE_ABORT, position * _ABORT_FAILURE_RATE
-                    ):
-                        raise RuntimeError(
-                            f"Aborting aggregation: {failed} of {position} "
-                            f"candidates processed have failed, which looks "
-                            f"systemic rather than incidental. "
-                            f"{inserted} resource(s) were inserted before this."
-                        ) from exc
-                    continue
-                if result == "new":
-                    inserted += 1
-                else:
-                    duplicates += 1
+                    if result == "new":
+                        inserted += 1
+                    else:
+                        duplicates += 1
         # Every candidate lands in exactly one of these buckets, so the four
         # counts plus the already-stored ones account for the whole run. That
         # is what makes a degraded run legible without opening the code.

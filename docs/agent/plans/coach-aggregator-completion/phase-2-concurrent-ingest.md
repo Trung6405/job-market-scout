@@ -65,16 +65,18 @@ failure isolation still holds under `gather`.
   `tests/test_coach_runner.py`, `tests/test_coach_config.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: with an injected delay per candidate, a chunk of 4
-        completes in about the time of one — proving overlap, not sequence —
-        and inserts still occur one at a time in list order
-  - [ ] Verify it fails (`python -m pytest tests/test_coach_runner.py -k concurren -q`)
-  - [ ] Implement: `COACH_INGEST_CONCURRENCY` setting (default from Task 1's
-        finding); process candidates in chunks of that width via
-        `gather(return_exceptions=True)`; insert each chunk's successes
-        serially on the open connection before starting the next chunk
-  - [ ] Verify it passes (`python -m pytest tests/test_coach_runner.py -q`)
-  - [ ] Commit: `perf(coach): tag and embed candidates in concurrent chunks`
+  - [x] Write failing test: ~~with an injected delay per candidate, a chunk of 4
+        completes in about the time of one~~ **changed during execution** to
+        assert the *peak in-flight count* instead — same property, without a
+        wall-clock assertion that a loaded machine can fail spuriously (see
+        Notes) — and inserts still occur one at a time in list order
+  - [x] Verify it fails (`python -m pytest tests/test_coach_runner.py -k concurren -q`)
+  - [x] Implement: `COACH_INGEST_CONCURRENCY` setting (default **3**, from
+        production rather than Task 1); process candidates in chunks of that
+        width via `gather(return_exceptions=True)`; insert each chunk's
+        successes serially on the open connection before starting the next chunk
+  - [x] Verify it passes (`python -m pytest tests/test_coach_runner.py -q`)
+  - [x] Commit: `perf(coach): tag and embed candidates in concurrent chunks`
 
 ### Task 4: Prove isolation and the abort still hold under concurrency
 
@@ -187,3 +189,41 @@ to the insert — otherwise making this concurrent would quietly change what lan
 in `skills`.
 
 Verification: 19 passed in `tests/test_coach_runner.py`.
+
+### Task 3 — concurrent chunks *(2026-07-31)*
+
+Chunks of `COACH_INGEST_CONCURRENCY` (default 3) prepared via
+`gather(return_exceptions=True)`, then written serially on the one open
+connection.
+
+**`return_exceptions=True` is load-bearing and also a trap.** Without it,
+`gather` propagates the first exception and its siblings' completed work is
+discarded — phase 1's bug reintroduced at chunk granularity. With it, every
+escalation phase 1 established stops happening by itself, because a raise
+becomes a *value*. All three are re-applied by hand, in the same order as the
+serial version: non-`Exception` (cancellation) re-raised first, then rate
+limits, then count-and-skip, then the systemic threshold.
+
+**The test asserts peak in-flight count, not elapsed time.** The plan asked for
+"a chunk of 4 completes in about the time of one". That is the right property
+but a poor assertion: it fails spuriously when the machine is loaded, and this
+machine demonstrably is — see below. Peak concurrency measures the same thing
+deterministically.
+
+**A regression I introduced and caught before committing.** Moving the loop
+body under the chunk structure left the progress log inside the successful
+insert branch, so a run whose candidates were mostly failing would have gone
+quiet — precisely the run that most needs to be watched. It is now unconditional
+and before any `continue`, matching the serial version.
+
+**Test-infrastructure hazard, now diagnosed.** `tests/conftest.py:93-97` creates
+the pool with `timeout=2` and turns `OSError` into `pytest.skip`. On a loaded
+machine a connect can exceed that budget, so a test is silently *removed* from a
+run that still reports green. Observed three times during this phase, on
+different tests each time. Out of scope here, but it means "N passed" is not by
+itself evidence that N tests ran — check the skip count. Worth its own fix:
+infrastructure failure should fail, not skip.
+
+Verification: 34 passed, 1 skipped (the skip was
+`test_run_coach_aggregator_still_skips_a_plain_403`, a phase 1 test, re-run
+green in isolation — not the concurrency test).

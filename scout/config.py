@@ -181,6 +181,18 @@ class Settings:
             "https://github.com/veggiemonk/awesome-docker",
         )
     )
+    # Candidates fetched, tagged and embedded concurrently during aggregation.
+    # Inserts stay serial regardless — they share one connection.
+    #
+    # 3 rather than 4 because MODEL_CONCURRENCY is already 3 and drives
+    # concurrent calls to the same provider on the same key from the scorer,
+    # advisor and tips stages, without ever having needed 429 handling. That is
+    # a larger sample than a one-off spike would give. Width 4 is unmeasured.
+    #
+    # Set to 1 to restore fully serial ingest without a deploy.
+    coach_ingest_concurrency: int = field(
+        default_factory=partial(_env_int, "COACH_INGEST_CONCURRENCY", 3)
+    )
     # How many resources the retriever returns per gap. The PRS specifies
     # "top 2-3"; 3 gives the grounded-tip stage the widest choice, and it can
     # present fewer.
