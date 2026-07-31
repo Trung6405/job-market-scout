@@ -561,6 +561,86 @@ async def test_ingest_runs_a_chunk_concurrently_and_still_inserts_in_order(
     assert stored == urls
 
 
+@pytest.mark.asyncio
+async def test_chunk_failure_leaves_its_chunk_mates_inserted(
+    db_pool, listing_factory, match_factory, monkeypatch
+):
+    """Isolation has to survive the move to `gather`, and it does not for free.
+
+    A plain `gather` propagates the first exception and discards its siblings'
+    completed work — phase 1's bug back again, one chunk wide instead of one
+    run wide. `return_exceptions=True` prevents that, which is why this test
+    exists at chunk granularity rather than trusting the serial-path test.
+    """
+    await _seed_kubernetes_gap(db_pool, listing_factory, match_factory)
+    urls = [
+        "https://github.com/org/mate-a",
+        "https://github.com/org/malformed",
+        "https://github.com/org/mate-b",
+    ]
+    _mock_pipeline_failing(
+        monkeypatch, urls, fails=lambda url: url.endswith("malformed")
+    )
+
+    summary = await runner.run_coach_aggregator(
+        _test_settings(coach_ingest_concurrency=3)
+    )
+
+    assert summary.inserted == 2
+    assert summary.failed == 1
+    async with db_pool.acquire() as conn:
+        stored = [
+            record["url"]
+            for record in await conn.fetch("SELECT url FROM resources ORDER BY id")
+        ]
+    assert stored == ["https://github.com/org/mate-a", "https://github.com/org/mate-b"]
+
+
+@pytest.mark.asyncio
+async def test_chunk_failure_from_a_rate_limit_still_ends_the_run(
+    db_pool, listing_factory, match_factory, monkeypatch
+):
+    """The escalation that `return_exceptions=True` silently disables.
+
+    It turns a raise into a *value*, so nothing propagates on its own any more
+    — every guarantee phase 1 established has to be re-applied by hand when the
+    gathered results are inspected. A rate limit reaching this point as a value
+    and being counted as one skipped candidate would look exactly like the bug
+    phase 1 task 4 fixed, while all its tests still passed.
+    """
+    await _seed_kubernetes_gap(db_pool, listing_factory, match_factory)
+    urls = [
+        "https://github.com/org/fine",
+        "https://github.com/org/limited",
+        "https://github.com/org/also-fine",
+    ]
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.search_candidates",
+        lambda skill, settings: urls,
+    )
+    monkeypatch.setattr("scout.sub_agents.coach.runner.embed", lambda text: [0.1] * 384)
+
+    def _fetch(url, settings):
+        if url.endswith("limited"):
+            raise _http_error(403, **{"X-RateLimit-Remaining": "0"})
+        return f"# {url}"
+
+    monkeypatch.setattr("scout.sub_agents.coach.runner.fetch_readme", _fetch)
+
+    async def _fake_tag_readme(readme_text, settings):
+        return ResourceTags(
+            skills=["kubernetes"],
+            resource_type="repo",
+            level="intermediate",
+            summary=f"Summary of {readme_text}.",
+        )
+
+    monkeypatch.setattr("scout.sub_agents.coach.runner.tag_readme", _fake_tag_readme)
+
+    with pytest.raises(requests.HTTPError):
+        await runner.run_coach_aggregator(_test_settings(coach_ingest_concurrency=3))
+
+
 def _repo_payload(stars: int = 5_000, archived: bool = False) -> dict:
     """A metadata payload that clears the quality bar unless a test says not."""
     from datetime import datetime, timedelta, timezone

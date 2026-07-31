@@ -83,15 +83,17 @@ failure isolation still holds under `gather`.
 - **Files:** `tests/test_coach_runner.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: within one chunk, one candidate raising leaves its
+  - [x] Write failing test: within one chunk, one candidate raising leaves its
         chunk-mates inserted; and a rate-limit error anywhere in a chunk still
         propagates rather than being swallowed by `return_exceptions=True`
-  - [ ] Verify it fails (`python -m pytest tests/test_coach_runner.py -k chunk_failure -q`)
-  - [ ] Implement whatever the test exposes — most likely explicit
-        re-inspection of gathered exceptions, since `return_exceptions=True`
-        turns a rate limit into a value rather than a raise
-  - [ ] Verify it passes (`python -m pytest tests/ -q`)
-  - [ ] Commit: `test(coach): pin failure isolation and rate-limit escalation under concurrency`
+  - [~] ~~Verify it fails~~ **Could not fail — see Notes.** Task 3 had to ship
+        the re-inspection to be correct at all, so both tests passed on first
+        run. A mutation check was run in place of the red phase
+  - [x] ~~Implement whatever the test exposes~~ — already present from Task 3;
+        the prediction in this step was right about *what* was needed, only
+        wrong about *when*
+  - [x] Verify it passes (`python -m pytest tests/ -q`)
+  - [x] Commit: `test(coach): pin failure isolation and rate-limit escalation under concurrency`
 
 ### Task 5: Apply the same chunking to the bootstrap metadata filter
 
@@ -227,3 +229,26 @@ infrastructure failure should fail, not skip.
 Verification: 34 passed, 1 skipped (the skip was
 `test_run_coach_aggregator_still_skips_a_plain_403`, a phase 1 test, re-run
 green in isolation — not the concurrency test).
+
+### Task 4 — the red phase that could not happen *(2026-07-31)*
+
+Both tests passed on their first run. The plan expected them to fail and then
+drive the implementation, but Task 3 could not have been correct without the
+gathered-exception re-inspection already in place: shipping concurrent chunks
+that swallowed rate limits would have silently undone phase 1 while every phase
+1 test still passed. Writing the escalation there was right; the ordering in
+this plan was wrong.
+
+**A passing test written after the code proves nothing on its own**, so a
+mutation check was run in place of the red phase. Disabling the rate-limit
+re-raise (`if _is_rate_limited(outcome) and False`) failed **both**
+`test_chunk_failure_from_a_rate_limit_still_ends_the_run` and phase 1's
+`test_run_coach_aggregator_lets_a_rate_limit_end_the_run`, then the mutation was
+reverted and `git diff` confirmed the file matched its committed state. The
+tests constrain the implementation.
+
+That the phase 1 test also caught it is worth noting: the serial-path guarantee
+and the chunk-path guarantee are genuinely the same guarantee, which is the
+outcome this task was meant to establish.
+
+Verification: full suite.
