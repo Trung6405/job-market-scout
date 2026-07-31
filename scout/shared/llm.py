@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-from typing import TypeVar
-
 import litellm
 from pydantic import BaseModel
 
 from scout.config import Settings
 from scout.shared.parsing import strip_code_fence
 
-T = TypeVar("T", bound=BaseModel)
 
-
-async def complete_json(
+async def complete_json[T: BaseModel](
     prompt: str,
     schema: type[T],
     settings: Settings,

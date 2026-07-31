@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from scout.shared.schemas import GeneratedTip, GeneratedTips, GroundedTip, Listing, RunListingDetail
+from scout.shared.schemas import (
+    GeneratedTip,
+    GeneratedTips,
+    GroundedTip,
+    RunListingDetail,
+)
 
 
 def test_grounded_tip_carries_skill_text_and_citations():

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+import contextlib
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -135,7 +136,7 @@ def _make_listing(**overrides):
         is_remote=True,
         url="https://www.linkedin.com/jobs/view/1",
         description="Build backend systems.",
-        scraped_at=datetime(2026, 7, 15, tzinfo=timezone.utc),
+        scraped_at=datetime(2026, 7, 15, tzinfo=UTC),
     )
     defaults.update(overrides)
     return Listing(**defaults)
@@ -1112,10 +1113,8 @@ async def test_scout_pipeline_agent_rolls_back_on_mid_persist_failure(
     monkeypatch.setattr("scout.agent.render_profile", _fake_render_profile)
     monkeypatch.setattr("scout.agent.finish_run", _boom)
 
-    try:
+    with contextlib.suppress(Exception):
         await _run_pipeline_agent()
-    except Exception:
-        pass
 
     run_date = datetime.now(ZoneInfo("Australia/Melbourne")).date()
     async with db_pool.acquire() as conn:

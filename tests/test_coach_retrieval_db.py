@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -120,7 +120,7 @@ async def test_excludes_stale_and_unrankable_resources(db_pool):
     check. A resource whose last successful check has aged past
     `max_age_days` is excluded independently of link health (FR-CC-10).
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     async with db_pool.acquire() as conn:
         await _seed_resource(conn, "https://example.com/never", ["kubernetes"], _unit(0))
         await _seed_resource(
@@ -155,7 +155,7 @@ async def test_excludes_stale_and_unrankable_resources(db_pool):
 async def test_excludes_dead_resources(db_pool):
     """A resource marked dead by the link-health checker (P5) is never
     returned, even though it is otherwise a perfect, freshly-embedded match."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     async with db_pool.acquire() as conn:
         await _seed_resource(conn, "https://example.com/alive", ["kubernetes"], _unit(0))
         await _seed_resource(
@@ -183,7 +183,7 @@ async def test_skill_with_only_a_dead_resource_maps_to_empty_list(db_pool):
             "https://example.com/onlydead",
             ["rust"],
             _unit(0),
-            dead_since=datetime.now(timezone.utc),
+            dead_since=datetime.now(UTC),
         )
 
         results = await get_resources_for_skills(

@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from scout.config import Settings
-from scout.shared.schemas import RetrievedResource
 from scout.shared.db import vector_text
+from scout.shared.schemas import RetrievedResource
 from scout.shared.skills import normalize_skills
 from scout.sub_agents.coach import retriever
 

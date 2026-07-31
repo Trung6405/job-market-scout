@@ -30,9 +30,9 @@ import logging
 
 from scout.config import settings as default_settings
 from scout.shared.db import create_pool
+from scout.shared.skills import normalize_skills
 from scout.sub_agents.coach.github_search import fetch_readme
 from scout.sub_agents.coach.tagging import tag_readme
-from scout.shared.skills import normalize_skills
 
 logger = logging.getLogger("scripts.retag_punctuated_skills")
 

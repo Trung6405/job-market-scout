@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 import asyncpg
@@ -50,6 +50,19 @@ async def _ensure_test_database(dev_database_url: str) -> None:
             await conn.execute(f'CREATE DATABASE "{_TEST_DB_NAME}"')
     finally:
         await conn.close()
+
+
+def pytest_collection_modifyitems(items):
+    """Auto-mark every test that requests ``db_pool`` with ``@pytest.mark.db``.
+
+    Derived from the fixture rather than hand-applied per test so a new DB
+    test can't silently miss the marker. `pytest -m "not db"` then runs the
+    whole non-DB suite without Postgres — and without paying the db_pool
+    fixture's per-test connection-timeout wait for each skip.
+    """
+    for item in items:
+        if "db_pool" in getattr(item, "fixturenames", ()):
+            item.add_marker(pytest.mark.db)
 
 
 @pytest.fixture(autouse=True)
@@ -119,7 +132,7 @@ def listing_factory():
             salary_min=None,
             salary_max=None,
             date_posted=None,
-            scraped_at=datetime(2026, 7, 24, tzinfo=timezone.utc),
+            scraped_at=datetime(2026, 7, 24, tzinfo=UTC),
         )
         return Listing(**{**defaults, **overrides})
 

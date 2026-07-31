@@ -100,7 +100,17 @@ python -m http.server 8080 --directory reports
 pip install -r requirements.txt
 pytest
 ```
-The suite needs a live Postgres — start it first with `docker compose up -d postgres`.
+The full suite needs a live Postgres — start it first with
+`docker compose up -d postgres`. Tests that touch the database are
+auto-marked `db`, so `pytest -m "not db"` runs everything else without one.
+
+### Lint and type-check
+```
+pip install -r requirements-dev.txt
+ruff check scout scripts tests
+mypy
+```
+Both run in CI ahead of every deploy; config lives in `pyproject.toml`.
 
 ### Command reference
 

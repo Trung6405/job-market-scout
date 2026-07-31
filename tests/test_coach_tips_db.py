@@ -4,7 +4,12 @@ from datetime import date
 
 import pytest
 
-from scout.shared.db import record_listing_tips, record_run_listings, start_run, upsert_listing
+from scout.shared.db import (
+    record_listing_tips,
+    record_run_listings,
+    start_run,
+    upsert_listing,
+)
 from scout.shared.schemas import GroundedTip
 
 pytestmark = pytest.mark.asyncio

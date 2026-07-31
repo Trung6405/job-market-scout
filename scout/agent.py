@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import AsyncGenerator
 from zoneinfo import ZoneInfo
 
 from scout.config import settings as default_settings
@@ -28,7 +28,6 @@ from scout.sub_agents.scorer.results import join_match_results
 from scout.sub_agents.scorer.runner import run_scorer
 from scout.sub_agents.scraper.runner import run_scraper
 from scout.sub_agents.tracker.runner import track_listings
-
 
 logger = logging.getLogger(__name__)
 
@@ -177,19 +176,18 @@ class ScoutPipelineAgent:
             # run's own in-flight rows through the same connection, so it
             # stays inside the transaction; render_profile touches no DB and
             # stays outside.
-            async with pool.acquire() as conn:
-                async with conn.transaction():
-                    await record_run_listings(conn, run_id, banded_matches)
-                    await record_listing_gaps(conn, run_id, checks_by_match)
-                    await record_listing_tips(conn, run_id, tips_by_match)
-                    await record_listing_meta(conn, run_id, matches_with_requirements)
-                    await finish_run(
-                        conn,
-                        run_id,
-                        listings_scraped=len(listings),
-                        listings_scored=len(matches),
-                    )
-                    report_paths = await render_run(conn, run_id, settings)
+            async with pool.acquire() as conn, conn.transaction():
+                await record_run_listings(conn, run_id, banded_matches)
+                await record_listing_gaps(conn, run_id, checks_by_match)
+                await record_listing_tips(conn, run_id, tips_by_match)
+                await record_listing_meta(conn, run_id, matches_with_requirements)
+                await finish_run(
+                    conn,
+                    run_id,
+                    listings_scraped=len(listings),
+                    listings_scored=len(matches),
+                )
+                report_paths = await render_run(conn, run_id, settings)
             # History reads only committed aggregate counts across every run,
             # not this run's own writes, so it doesn't need the transaction
             # or a connection held for the transaction's duration.

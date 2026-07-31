@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import asyncpg
 import pytest
@@ -34,8 +34,8 @@ def _make_listing(**overrides) -> Listing:
         description="Build things.",
         salary_min=100000.0,
         salary_max=150000.0,
-        date_posted=datetime(2026, 7, 1, tzinfo=timezone.utc),
-        scraped_at=datetime(2026, 7, 17, tzinfo=timezone.utc),
+        date_posted=datetime(2026, 7, 1, tzinfo=UTC),
+        scraped_at=datetime(2026, 7, 17, tzinfo=UTC),
     )
     defaults.update(overrides)
     return Listing(**defaults)

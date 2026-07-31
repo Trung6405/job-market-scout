@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from scout.config import Settings
 from scout.config import settings as default_settings
@@ -41,7 +41,7 @@ async def run_scraper(settings: Settings | None = None) -> list[Listing]:
     active_settings = settings or default_settings
     location = ", ".join(active_settings.search_locations)
     site_names = ",".join(active_settings.search_site_names)
-    scraped_at = datetime.now(timezone.utc)
+    scraped_at = datetime.now(UTC)
 
     logger.info(
         "Starting scrape: %d role(s) across sites=%r",

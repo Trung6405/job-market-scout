@@ -17,7 +17,7 @@ silently.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from scout.sub_agents.coach import github_search
 from scout.sub_agents.coach.github_search import (
@@ -29,7 +29,7 @@ from scout.sub_agents.coach.github_search import (
 
 def _repo(**overrides) -> dict:
     """A repo payload that passes, so each test changes one thing."""
-    fresh = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    fresh = (datetime.now(UTC) - timedelta(days=30)).isoformat()
     return {
         "stargazers_count": _MIN_STARS + 500,
         "archived": False,
@@ -58,12 +58,12 @@ def test_an_archived_repo_is_rejected():
 
 
 def test_a_stale_repo_is_rejected():
-    stale = datetime.now(timezone.utc) - _STALE_AFTER - timedelta(days=1)
+    stale = datetime.now(UTC) - _STALE_AFTER - timedelta(days=1)
     assert not passes_quality_bar(_repo(pushed_at=stale.isoformat().replace("+00:00", "Z")))
 
 
 def test_a_repo_pushed_just_inside_the_cutoff_passes():
-    edge = datetime.now(timezone.utc) - _STALE_AFTER + timedelta(hours=1)
+    edge = datetime.now(UTC) - _STALE_AFTER + timedelta(hours=1)
     assert passes_quality_bar(_repo(pushed_at=edge.isoformat().replace("+00:00", "Z")))
 
 

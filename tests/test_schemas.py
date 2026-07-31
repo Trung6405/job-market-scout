@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -26,8 +26,8 @@ def test_listing_accepts_valid_data():
         description="Build backend systems.",
         salary_min=100000.0,
         salary_max=140000.0,
-        date_posted=datetime(2026, 7, 10, tzinfo=timezone.utc),
-        scraped_at=datetime(2026, 7, 15, tzinfo=timezone.utc),
+        date_posted=datetime(2026, 7, 10, tzinfo=UTC),
+        scraped_at=datetime(2026, 7, 15, tzinfo=UTC),
     )
     assert listing.title == "Backend Engineer"
     assert listing.is_remote is True
@@ -43,7 +43,7 @@ def test_listing_allows_missing_optional_salary_and_date():
         is_remote=False,
         url="https://www.linkedin.com/jobs/view/124",
         description="Build frontend systems.",
-        scraped_at=datetime(2026, 7, 15, tzinfo=timezone.utc),
+        scraped_at=datetime(2026, 7, 15, tzinfo=UTC),
     )
     assert listing.salary_min is None
     assert listing.date_posted is None
@@ -59,7 +59,7 @@ def test_listing_requires_title():
             is_remote=True,
             url="https://www.linkedin.com/jobs/view/125",
             description="Missing title.",
-            scraped_at=datetime(2026, 7, 15, tzinfo=timezone.utc),
+            scraped_at=datetime(2026, 7, 15, tzinfo=UTC),
         )
 
 def _make_listing(**overrides):
@@ -72,7 +72,7 @@ def _make_listing(**overrides):
         is_remote=True,
         url="https://www.linkedin.com/jobs/view/123",
         description="Build backend systems.",
-        scraped_at=datetime(2026, 7, 15, tzinfo=timezone.utc),
+        scraped_at=datetime(2026, 7, 15, tzinfo=UTC),
     )
     defaults.update(overrides)
     return Listing(**defaults)

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from scout.sub_agents.scraper.normalize import normalize_job
 
-_SCRAPED_AT = datetime(2026, 7, 20, tzinfo=timezone.utc)
+_SCRAPED_AT = datetime(2026, 7, 20, tzinfo=UTC)
 
 
 def _job(**overrides):
@@ -39,7 +39,7 @@ def test_normalize_job_maps_all_fields():
     assert listing.is_remote is True
     assert listing.salary_min == 100000
     assert listing.salary_max == 120000
-    assert listing.date_posted == datetime(2026, 7, 19, tzinfo=timezone.utc)
+    assert listing.date_posted == datetime(2026, 7, 19, tzinfo=UTC)
     assert listing.scraped_at == _SCRAPED_AT
 
 

@@ -1,7 +1,8 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from scout.shared.schemas import Listing, ListingScore
 from scout.sub_agents.scorer.results import join_match_results
+
 
 def _make_listing(**overrides):
     defaults = dict(
@@ -13,7 +14,7 @@ def _make_listing(**overrides):
         is_remote=False,
         url="https://www.linkedin.com/jobs/view/1",
         description="Build backend systems.",
-        scraped_at=datetime(2026, 7, 15, tzinfo=timezone.utc),
+        scraped_at=datetime(2026, 7, 15, tzinfo=UTC),
     )
     defaults.update(overrides)
     return Listing(**defaults)

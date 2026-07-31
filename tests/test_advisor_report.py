@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timezone
-from pathlib import Path
+from datetime import UTC, date, datetime
 
 import pytest
 
+from scout import rerender
 from scout.config import Settings
 from scout.shared.db import (
     finish_run,
@@ -24,14 +24,13 @@ from scout.shared.schemas import (
     ListingRequirements,
     MatchResult,
     Profile,
-    RequirementItem,
     Project,
+    RequirementItem,
     SkillGap,
     TechCategory,
     TechSkill,
 )
 from scout.sub_agents.advisor.report import render_history, render_profile, render_run
-from scout import rerender
 
 
 def _make_listing(**overrides) -> Listing:
@@ -46,8 +45,8 @@ def _make_listing(**overrides) -> Listing:
         description="Build things.",
         salary_min=95000.0,
         salary_max=110000.0,
-        date_posted=datetime(2026, 7, 19, tzinfo=timezone.utc),
-        scraped_at=datetime(2026, 7, 21, tzinfo=timezone.utc),
+        date_posted=datetime(2026, 7, 19, tzinfo=UTC),
+        scraped_at=datetime(2026, 7, 21, tzinfo=UTC),
     )
     defaults.update(overrides)
     return Listing(**defaults)
