@@ -50,6 +50,28 @@ _MIN_FAILURES_BEFORE_ABORT = 10
 _ABORT_FAILURE_RATE = 0.2
 
 
+def _is_rate_limited(exc: BaseException) -> bool:
+    """Whether an exception is GitHub saying "you are out of quota".
+
+    Deliberately narrow. A 403 *without* an exhausted quota is a private,
+    blocked or DMCA'd repo — one bad candidate, which the ingest loop skips.
+    A 403 *with* one means every candidate after it fails identically, so
+    skipping would leave the corpus quietly short by however long the limit
+    lasted and look exactly like "those repos didn't qualify".
+
+    Mirrors the check `fetch_repo_metadata` already makes, so both layers agree
+    on what a 403 means. The duplication is the cost of leaving
+    `github_search.py` untouched by this phase; a shared predicate would be
+    better and is noted as follow-up work.
+    """
+    response = getattr(exc, "response", None)
+    return (
+        response is not None
+        and response.status_code == 403
+        and response.headers.get("X-RateLimit-Remaining") == "0"
+    )
+
+
 def _title_from_url(url: str) -> str:
     return url.removeprefix("https://github.com/").rstrip("/")
 
@@ -291,6 +313,11 @@ async def run_coach_aggregator(settings: Settings | None = None) -> CoachSummary
                     embedding = await asyncio.to_thread(embed, tags.summary)
                     result = await insert_resource(conn, resource, embedding)
                 except Exception as exc:
+                    # Checked before the counter moves: a rate limit is not a
+                    # failed candidate, it is the end of the run, and counting
+                    # it would also feed the systemic threshold below.
+                    if _is_rate_limited(exc):
+                        raise
                     failed += 1
                     # WARNING with the URL and the exception type: a skipped
                     # candidate has to be legible in the run log, or "silently

@@ -275,6 +275,67 @@ async def test_run_coach_aggregator_does_not_abort_on_a_few_systemic_lookalikes(
     assert summary.inserted == 17
 
 
+def _http_error(status: int, **headers: str) -> requests.HTTPError:
+    response = requests.Response()
+    response.status_code = status
+    response.headers.update(headers)
+    return requests.HTTPError(f"{status} error", response=response)
+
+
+@pytest.mark.asyncio
+async def test_run_coach_aggregator_lets_a_rate_limit_end_the_run(
+    db_pool, listing_factory, match_factory, monkeypatch
+):
+    """Isolation must not absorb a rate limit.
+
+    Every candidate after the limit is hit would fail identically, so skipping
+    turns one recoverable condition into a corpus that is quietly short by
+    however long the limit lasted — indistinguishable from "those repos didn't
+    qualify". `fetch_repo_metadata` already fails loudly on this exact case;
+    the ingest loop has to agree with it, or the two layers disagree about what
+    a 403 means depending on which one sees it.
+    """
+    await _seed_kubernetes_gap(db_pool, listing_factory, match_factory)
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.search_candidates",
+        lambda skill, settings: ["https://github.com/org/repo"],
+    )
+
+    def _rate_limited(url, settings):
+        raise _http_error(403, **{"X-RateLimit-Remaining": "0"})
+
+    monkeypatch.setattr("scout.sub_agents.coach.runner.fetch_readme", _rate_limited)
+
+    with pytest.raises(requests.HTTPError):
+        await runner.run_coach_aggregator(_test_settings())
+
+
+@pytest.mark.asyncio
+async def test_run_coach_aggregator_still_skips_a_plain_403(
+    db_pool, listing_factory, match_factory, monkeypatch
+):
+    """The contrast that stops the escalation being "any HTTPError is fatal".
+
+    A 403 without an exhausted quota is a private, blocked or DMCA'd repo —
+    one bad candidate. A predicate matching every HTTPError would pass the
+    rate-limit test above and silently undo the isolation this phase added.
+    """
+    await _seed_kubernetes_gap(db_pool, listing_factory, match_factory)
+    monkeypatch.setattr(
+        "scout.sub_agents.coach.runner.search_candidates",
+        lambda skill, settings: ["https://github.com/org/blocked"],
+    )
+
+    def _forbidden(url, settings):
+        raise _http_error(403, **{"X-RateLimit-Remaining": "4999"})
+
+    monkeypatch.setattr("scout.sub_agents.coach.runner.fetch_readme", _forbidden)
+
+    summary = await runner.run_coach_aggregator(_test_settings())
+
+    assert summary.inserted == 0
+
+
 @pytest.mark.asyncio
 async def test_run_coach_aggregator_skips_when_github_pat_unset(db_pool):
     summary = await runner.run_coach_aggregator(_test_settings(github_pat=""))

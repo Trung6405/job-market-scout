@@ -81,14 +81,14 @@ and search-derived candidates are ingested ahead of awesome-list survivors.
   `tests/test_coach_runner.py`
 - **Gate:** none
 - **Steps:**
-  - [ ] Write failing test: an `HTTPError` carrying a 403 with
+  - [x] Write failing test: an `HTTPError` carrying a 403 with
         `X-RateLimit-Remaining: 0` propagates out of the ingest loop rather
         than being absorbed as one skipped candidate
-  - [ ] Verify it fails (`python -m pytest tests/test_coach_runner.py -k rate_limit -q`)
-  - [ ] Implement: re-raise rate-limit errors before the general handler.
+  - [x] Verify it fails (`python -m pytest tests/test_coach_runner.py -k rate_limit -q`)
+  - [x] Implement: re-raise rate-limit errors before the general handler.
         Mirrors `fetch_repo_metadata`'s existing treatment so both layers agree
-  - [ ] Verify it passes (`python -m pytest tests/test_coach_runner.py -q`)
-  - [ ] Commit: `fix(coach): let a rate limit end the run rather than skip one candidate`
+  - [x] Verify it passes (`python -m pytest tests/test_coach_runner.py -q`)
+  - [x] Commit: `fix(coach): let a rate limit end the run rather than skip one candidate`
 
 ### Task 5: Report failure counts in the run summary
 
@@ -208,3 +208,29 @@ response in ~920), which is why the failed count goes into the run summary in
 Task 5. The next few runs are what will actually characterise it.
 
 Verification: 14 passed.
+
+### Task 4 — rate limits stay fatal *(2026-07-31)*
+
+`_is_rate_limited` is checked before the failure counter moves, so a rate limit
+neither counts as a failed candidate nor feeds the systemic threshold. It is
+deliberately narrow — 403 **and** `X-RateLimit-Remaining: 0` — because a plain
+403 is a private, blocked or DMCA'd repo, which is one bad candidate.
+
+The plan specified one test; two were written. A predicate as broad as "any
+`HTTPError` is fatal" passes the escalation test while silently undoing Task 2's
+isolation, so `test_run_coach_aggregator_still_skips_a_plain_403` is the one
+that actually constrains the implementation.
+
+**Duplication, flagged rather than fixed.** This mirrors the check inside
+`fetch_repo_metadata`. A shared predicate would be better, but `github_search.py`
+is outside this plan's Blast Radius, so it is left for the human to approve as
+follow-up rather than taken unilaterally.
+
+**An unrelated hazard observed.** One run reported "15 passed, 1 skipped" where
+the re-run gave 16 passed. The cause is `tests/conftest.py:97`, where the
+`db_pool` fixture calls `pytest.skip` when Postgres is briefly unreachable — so
+a transient blip silently removes a test from a run that still reports green.
+Pre-existing and out of scope here, but worth its own fix: a skip on
+infrastructure failure is indistinguishable from a test that was never written.
+
+Verification: 16 passed.
