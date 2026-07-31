@@ -115,9 +115,20 @@ pytest -q                                   # quiet
 pytest tests/test_advisor_report.py         # one file
 pytest tests/test_advisor_report.py -k markdown   # match test names
 pytest -x                                   # stop at first failure
+pytest -m "not db"                          # skip DB-backed tests (no Postgres needed)
+pytest -m db                                # only the DB-backed tests
 ```
 
-If Postgres is unreachable, the DB-backed tests **skip** (they don't fail).
+If Postgres is unreachable, the DB-backed tests **skip** (they don't fail) —
+but `-m "not db"` is faster, since it deselects them instead of waiting out a
+connection timeout in each one.
+
+Lint and type-check (same commands CI runs before every deploy):
+```bash
+pip install -r requirements-dev.txt
+ruff check scout scripts tests
+mypy
+```
 
 ---
 

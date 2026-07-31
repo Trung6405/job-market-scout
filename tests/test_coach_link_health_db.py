@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -61,7 +61,7 @@ async def test_get_resources_to_check_prioritises_never_verified(db_pool):
     async with db_pool.acquire() as conn:
         old_id = await _insert(conn, "https://example.com/old")
         await _set_last_verified(
-            conn, old_id, datetime.now(timezone.utc) - timedelta(days=10)
+            conn, old_id, datetime.now(UTC) - timedelta(days=10)
         )
         never_id = await _insert(conn, "https://example.com/never")
 
@@ -74,7 +74,7 @@ async def test_get_resources_to_check_prioritises_never_verified(db_pool):
 @pytest.mark.asyncio
 async def test_get_resources_to_check_orders_oldest_verified_first(db_pool):
     async with db_pool.acquire() as conn:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         older_id = await _insert(conn, "https://example.com/older")
         await _set_last_verified(conn, older_id, now - timedelta(days=10))
         newer_id = await _insert(conn, "https://example.com/newer")

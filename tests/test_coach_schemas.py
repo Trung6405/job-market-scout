@@ -5,9 +5,9 @@ from pydantic import ValidationError
 
 from scout.shared.schemas import (
     LinkHealthSummary,
-    RetrievedResource,
     Resource,
     ResourceTags,
+    RetrievedResource,
 )
 
 

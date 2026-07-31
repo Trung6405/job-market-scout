@@ -2,21 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Awaitable, Callable, TypeVar
+from collections.abc import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
-R = TypeVar("R")
 
-
-def batches(items: list[T], size: int) -> list[list[T]]:
+def batches[T](items: list[T], size: int) -> list[list[T]]:
     """Split items into consecutive chunks of at most ``size``."""
     step = max(1, size)
     return [items[i : i + step] for i in range(0, len(items), step)]
 
 
-async def run_batches(
+async def run_batches[T, R](
     batch_list: list[list[T]],
     call: Callable[[list[T]], Awaitable[list[R]]],
     *,

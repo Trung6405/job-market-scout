@@ -56,9 +56,8 @@ async def backfill_content_hashes(conn: asyncpg.Connection) -> int:
 async def run_backfill() -> None:
     pool = await create_pool(default_settings)
     try:
-        async with pool.acquire() as conn:
-            async with conn.transaction():
-                updated = await backfill_content_hashes(conn)
+        async with pool.acquire() as conn, conn.transaction():
+            updated = await backfill_content_hashes(conn)
         logger.info("backfilled %d listing hash(es)", updated)
     finally:
         await pool.close()

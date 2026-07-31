@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from scripts.audit_link_health import summarize
 
@@ -27,7 +27,7 @@ def test_summarize_empty_corpus():
 
 
 def test_summarize_counts_live_dead_never_checked_and_failing():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rows = [
         _row(url="https://example.com/live", last_verified=now),
         _row(url="https://example.com/never"),
@@ -50,7 +50,7 @@ def test_summarize_dead_resource_is_not_also_counted_never_checked():
     """A resource dies before its first successful last_verified stamp is
     possible (a `gone` verdict never sets last_verified) — it must count as
     dead, not as never-checked."""
-    rows = [_row(url="https://example.com/dead-unverified", dead_since=datetime.now(timezone.utc))]
+    rows = [_row(url="https://example.com/dead-unverified", dead_since=datetime.now(UTC))]
 
     counts = summarize(rows)
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -18,7 +18,7 @@ def _make_listing(**overrides):
         is_remote=True,
         url="https://www.linkedin.com/jobs/view/1",
         description="Build backend systems.",
-        scraped_at=datetime(2026, 7, 15, tzinfo=timezone.utc),
+        scraped_at=datetime(2026, 7, 15, tzinfo=UTC),
     )
     defaults.update(overrides)
     return Listing(**defaults)

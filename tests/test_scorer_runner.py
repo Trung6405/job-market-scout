@@ -36,7 +36,11 @@ async def test_run_scorer_batches_by_configured_size(monkeypatch, listing_factor
 
     async def _fake_complete_json(prompt, schema, settings, **kwargs):
         call_count["n"] += 1
-        ids = [l.external_id for l in listings if f'"external_id": "{l.external_id}"' in prompt]
+        ids = [
+            item.external_id
+            for item in listings
+            if f'"external_id": "{item.external_id}"' in prompt
+        ]
         return ListingScoreBatch(scores=[_score(external_id=i) for i in ids])
 
     monkeypatch.setattr(runner, "complete_json", _fake_complete_json)

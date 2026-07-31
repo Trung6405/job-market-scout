@@ -43,7 +43,7 @@ def build_embed(
 ) -> dict:
     """Build a Discord message payload (``{"embeds": [...]}``) for the briefing."""
     if not top_matches:
-        embed = {
+        embed: dict[str, object] = {
             "title": "Job Market Scout: no strong matches today",
             "description": "No listings met your match-score threshold today.",
         }

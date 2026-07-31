@@ -24,11 +24,13 @@ def parse_search_jobs_result(result: Any) -> list[dict]:
 
 async def fetch_jobs(url: str, **params: Any) -> list[dict]:
     logger.debug("Connecting to MCP server at %s with params=%r", url, params)
-    async with sse_client(f"{url}/sse") as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            logger.debug("MCP session initialized, calling search_jobs")
-            result = await session.call_tool("search_jobs", params)
-            jobs = parse_search_jobs_result(result)
-            logger.debug("search_jobs returned %d job(s)", len(jobs))
-            return jobs
+    async with (
+        sse_client(f"{url}/sse") as (read, write),
+        ClientSession(read, write) as session,
+    ):
+        await session.initialize()
+        logger.debug("MCP session initialized, calling search_jobs")
+        result = await session.call_tool("search_jobs", params)
+        jobs = parse_search_jobs_result(result)
+        logger.debug("search_jobs returned %d job(s)", len(jobs))
+        return jobs

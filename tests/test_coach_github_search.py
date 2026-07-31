@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import requests
@@ -28,7 +28,7 @@ def _settings(**overrides) -> Settings:
 
 
 def _repo(name: str, days_old: int) -> dict:
-    pushed_at = datetime.now(timezone.utc) - timedelta(days=days_old)
+    pushed_at = datetime.now(UTC) - timedelta(days=days_old)
     return {
         "html_url": f"https://github.com/org/{name}",
         "pushed_at": pushed_at.strftime("%Y-%m-%dT%H:%M:%SZ"),

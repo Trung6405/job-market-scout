@@ -4,7 +4,7 @@ import asyncio
 import logging
 import threading
 import time
-from datetime import date
+from datetime import UTC, date
 
 import pytest
 import requests
@@ -645,9 +645,9 @@ async def test_chunk_failure_from_a_rate_limit_still_ends_the_run(
 
 def _repo_payload(stars: int = 5_000, archived: bool = False) -> dict:
     """A metadata payload that clears the quality bar unless a test says not."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
-    fresh = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    fresh = (datetime.now(UTC) - timedelta(days=30)).isoformat()
     return {
         "stargazers_count": stars,
         "archived": archived,

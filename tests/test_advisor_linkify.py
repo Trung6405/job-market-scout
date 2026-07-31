@@ -208,8 +208,8 @@ def test_url_lexing_stays_in_step_with_the_grounding_validator() -> None:
     rendered unclickable. Asserting on the pattern itself is what turns the
     next such drift into a failing test rather than a review finding.
     """
-    from scout.sub_agents.coach import grounding
     from scout.sub_agents.advisor import report
+    from scout.sub_agents.coach import grounding
 
     assert report._URL_PATTERN.pattern == grounding._URL_PATTERN.pattern
     assert report._URL_PATTERN.flags == grounding._URL_PATTERN.flags

@@ -1,0 +1,6 @@
+# Toolchain for the CI lint job and local development — runtime deps stay in
+# requirements.txt. mypy additionally needs requirements.txt installed (the
+# pydantic plugin and typed third parties), so CI installs both files.
+ruff==0.16.1
+mypy==2.3.0
+types-requests==2.33.0.20260712

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import requests
 
@@ -53,8 +53,8 @@ def passes_quality_bar(repo: dict, *, now: datetime | None = None) -> bool:
     except ValueError:
         return False
     if pushed.tzinfo is None:
-        pushed = pushed.replace(tzinfo=timezone.utc)
-    return pushed >= (now or datetime.now(timezone.utc)) - _STALE_AFTER
+        pushed = pushed.replace(tzinfo=UTC)
+    return pushed >= (now or datetime.now(UTC)) - _STALE_AFTER
 
 
 def fetch_repo_metadata(repo_url: str, settings: Settings) -> dict | None:
@@ -86,22 +86,23 @@ def fetch_repo_metadata(repo_url: str, settings: Settings) -> dict | None:
 
 def search_candidates(skill: str, settings: Settings) -> list[str]:
     """Return up to `coach_top_n_per_skill` candidate repo URLs for `skill`."""
+    params: dict[str, str | int] = {
+        "q": (
+            f"{skill} in:readme,description "
+            f"stars:>{_MIN_STARS} archived:false"
+        ),
+        "sort": "stars",
+        "order": "desc",
+        "per_page": 30,
+    }
     response = _session.get(
         _SEARCH_URL,
         headers=_headers(settings),
-        params={
-            "q": (
-                f"{skill} in:readme,description "
-                f"stars:>{_MIN_STARS} archived:false"
-            ),
-            "sort": "stars",
-            "order": "desc",
-            "per_page": 30,
-        },
+        params=params,
         timeout=10,
     )
     response.raise_for_status()
-    cutoff = datetime.now(timezone.utc) - _STALE_AFTER
+    cutoff = datetime.now(UTC) - _STALE_AFTER
     candidates: list[str] = []
     for repo in response.json().get("items", []):
         if len(candidates) >= settings.coach_top_n_per_skill:

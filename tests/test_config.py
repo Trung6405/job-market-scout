@@ -1,6 +1,6 @@
-from scout.config import Settings
-
 import pytest
+
+from scout.config import Settings
 
 
 def test_settings_loads_profile_object():

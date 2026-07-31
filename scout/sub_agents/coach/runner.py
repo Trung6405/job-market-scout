@@ -150,7 +150,7 @@ def _gather_candidate_urls(settings: Settings, skills: list[str]) -> list[str]:
             lambda url: fetch_repo_metadata(url, settings), harvested
         )
         for position, (url, metadata) in enumerate(
-            zip(harvested, metadata_results), start=1
+            zip(harvested, metadata_results, strict=True), start=1
         ):
             if metadata is None:
                 unavailable += 1
@@ -347,7 +347,7 @@ async def run_coach_aggregator(settings: Settings | None = None) -> CoachSummary
                     *(_prepare_candidate(url, active_settings) for url in chunk),
                     return_exceptions=True,
                 )
-                for url, outcome in zip(chunk, outcomes):
+                for url, outcome in zip(chunk, outcomes, strict=True):
                     position += 1
                     # Unconditional, before any `continue`: a run whose
                     # candidates are mostly failing or README-less is precisely

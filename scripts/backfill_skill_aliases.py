@@ -25,7 +25,8 @@ import argparse
 import asyncio
 import os
 import sys
-from typing import Iterable, NamedTuple
+from collections.abc import Iterable
+from typing import NamedTuple
 
 import asyncpg
 

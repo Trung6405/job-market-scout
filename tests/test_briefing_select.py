@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from scout.config import Settings
 from scout.shared.schemas import Listing, MatchResult
@@ -15,7 +15,7 @@ def _make_match(external_id: str, score: int) -> MatchResult:
         is_remote=True,
         url=f"https://www.linkedin.com/jobs/view/{external_id}",
         description="Build backend systems.",
-        scraped_at=datetime(2026, 7, 15, tzinfo=timezone.utc),
+        scraped_at=datetime(2026, 7, 15, tzinfo=UTC),
     )
     return MatchResult(listing=listing, score=score, reasoning="Good fit.")
 

@@ -22,7 +22,7 @@ class _FakeResponse:
 
 
 class _FakeAsyncClient:
-    instances: list["_FakeAsyncClient"] = []
+    instances: list[_FakeAsyncClient] = []
 
     def __init__(self, *args, **kwargs):
         self.post_calls: list[dict] = []
